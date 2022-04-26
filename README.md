@@ -15,6 +15,8 @@ Phenologs extends the concept of orthologous genes to orthologous phenotypes. By
 
 
 
+
+
 References
 
 [McGary KL, Park TJ, Woods JO, Cha HJ, Wallingford JB, Marcotte EM. Systematic discovery of nonobvious human disease models through orthologous phenotypes. Proc Natl Acad Sci U S A. 2010 Apr 6;107(14):6544-9. doi: 10.1073/pnas.0910200107. Epub 2010 Mar 22. PMID: 20308572; PMCID: PMC2851946.](https://www.pnas.org/doi/10.1073/pnas.0910200107)
