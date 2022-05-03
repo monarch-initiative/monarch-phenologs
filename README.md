@@ -11,6 +11,15 @@ Phenologs extends the concept of orthologous genes to orthologous phenotypes. By
 
 
 
+Methods
+
+Identification of phenologs through gene enrichment analysis
+
+
+Gene candidate predictions by k-nearest neighbors
+Calculation of false discovery rate
+Distance matrix
+Weight matrix
 
 
 
