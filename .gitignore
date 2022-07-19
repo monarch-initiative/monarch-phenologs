@@ -127,5 +127,5 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
-/Datasets/Sources/monarch-kg.tar
-/Datasets/Sources/monarch-kg/
+/datasets/Sources/monarch-kg.tar
+/datasets/Sources/monarch-kg/

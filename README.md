@@ -9,6 +9,21 @@ This repo will contain code to calculate phenologs and gene candidate prediction
 Phenologs 
 Phenologs extends the concept of orthologous genes to orthologous phenotypes. By using a  k-nearest neighbors approach to compare sets of gene-phenotype relationships across species using gene orthology connections.
 
+Inclusion of model organisms into the calculations to generate phenologs is dependent on the availability of gene-phenotype associations as well as gene orthology annotations. For ease of data inclusion, we will attempt to utilize data already ingested and formatted within the Monarch KG.
+
+Source datasets:
+- Mondo
+- Human Phenotype Ontology
+- Mouse Genome Database
+- Zebrafish Information Network
+
+Rat
+Mouse
+Zebrafish
+Worm
+Chicken
+Fission yeast?
+
 
 
 Methods
