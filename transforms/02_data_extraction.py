@@ -82,10 +82,10 @@ Parameters:
 
 pd.set_option('display.max_colwidth', None)
 pd.set_option('display.max_columns', None)
-kg_edges = '../datasets/Sources/monarch_kg/monarch-kg/monarch-kg_edges.tsv'
+kg_edges = '../datasets/sources/monarch_kg/monarch-kg/monarch-kg_edges.tsv'
 edges = pd.read_csv(kg_edges, sep='\t', header=0, low_memory=False)
 
-kg_nodes = '../datasets/Sources/monarch_kg/monarch-kg/monarch-kg_nodes.tsv'
+kg_nodes = '../datasets/sources/monarch_kg/monarch-kg/monarch-kg_nodes.tsv'
 nodes = pd.read_csv(kg_nodes, sep='\t', header=0, low_memory=False)
 
 has_phenotype = 'biolink:has_phenotype'
