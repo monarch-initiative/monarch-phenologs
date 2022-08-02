@@ -6,11 +6,11 @@ Datasets needed:
 -
 
 Rat Genome Database
-- Mouse Genome Database
+- mouse Genome Database
 - Zebrafish Information Network
 
 Rat
-Mouse
+mouse
 Zebrafish
 Worm
 Chicken
