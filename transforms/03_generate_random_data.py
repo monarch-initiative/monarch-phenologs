@@ -39,7 +39,10 @@ Create a randomized dataset for each species where the phenotypes are maintained
 
 Note: Maintain the shape of the species dataframes, meaning keep the phenotypes but randomly draw the orthologs
 
-
+*******
+How should the orthologs be configured? One row for every ortholog link between pairs of genes, one row for every 
+panther family, or multiple rows if more than one gene pair has the same panther family?
+Note that thesis work assembled a distinct list of ortholog IDs, so....
 
 """
 
