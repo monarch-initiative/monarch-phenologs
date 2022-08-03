@@ -59,6 +59,7 @@ def get_edges_from_edges_kg(input_file, subject, object, predicate, output_file)
     edges = edges[(edges["predicate"] == predicate) & (edges["subject"].str.contains(subject, regex=True, na=True)) & (edges["object"].str.contains(object, regex=True, na=True))]
     # edges = edges[edges["predicate"] == predicate & edges["subject"].str.contains(subject, regex=True, na=True) & edges["object"].str.contains(object, regex=True, na=True)]
     edges = edges[["subject","predicate","object"]]
+    edges = edges.rename(columns={'subject': 'gene', 'object': 'phenotype'})
     edges = edges.drop_duplicates()
     pd.DataFrame(edges).to_csv(output_file, sep="\t", index=False)
     return
@@ -77,14 +78,25 @@ Parameters:
 -output file
 '''
 
+def get_panther_edges_from_edges_kg(input_file, subject, object, predicate, output_file):
+    edges = pd.read_csv(input_file, sep='\t', header=0, low_memory=False)
+    edges = edges[(edges["predicate"] == predicate) & (edges["subject"].str.contains(subject, regex=True, na=True)) & (edges["object"].str.contains(object, regex=True, na=True))]
+    # edges = edges[edges["predicate"] == predicate & edges["subject"].str.contains(subject, regex=True, na=True) & edges["object"].str.contains(object, regex=True, na=True)]
+    edges = edges[["subject","predicate","object"]]
+    edges_inverse = edges.rename(columns={'subject': 'geneB', 'object': 'geneA'})
+    edges = edges.rename(columns={'subject': 'geneA', 'object': 'geneB'})
+    edges = pd.concat([edges, edges_inverse])
+    edges = edges.drop_duplicates()
+    pd.DataFrame(edges).to_csv(output_file, sep="\t", index=False)
+    return
 
 pd.set_option('display.max_colwidth', None)
 pd.set_option('display.max_columns', None)
 kg_edges = '../datasets/sources/monarch_kg/monarch-kg/monarch-kg_edges.tsv'
-edges = pd.read_csv(kg_edges, sep='\t', header=0, low_memory=False)
+# edges = pd.read_csv(kg_edges, sep='\t', header=0, low_memory=False)
 
 kg_nodes = '../datasets/sources/monarch_kg/monarch-kg/monarch-kg_nodes.tsv'
-nodes = pd.read_csv(kg_nodes, sep='\t', header=0, low_memory=False)
+# nodes = pd.read_csv(kg_nodes, sep='\t', header=0, low_memory=False)
 
 has_phenotype = 'biolink:has_phenotype'
 has_ortholog = 'biolink:orthologous_to'
@@ -101,7 +113,7 @@ zebrafish_phenotype_prefix = 'ZP:'
 zebrafish_gene_to_phenotype_filepath = "../datasets/intermediate/zebrafish/zebrafish_gene_to_phenotype.tsv"
 get_edges_from_edges_kg(kg_edges, zebrafish_gene_prefix, zebrafish_phenotype_prefix, has_phenotype, zebrafish_gene_to_phenotype_filepath)
 
-# Get rat gene to phenotype -> do we currently have rat phenotypes?
+# Get rat gene to phenotype -> do we currently not have rat phenotypes?
 # rat_gene_prefix = 'RGD:'
 # rat_phenotype_prefix = 'MP:'
 # rat_gene_to_phenotype_filepath = "../datasets/intermediate/rat/rat_gene_to_phenotype.tsv"
@@ -123,4 +135,4 @@ get_edges_from_edges_kg(kg_edges, worm_gene_prefix, worm_phenotype_prefix, has_p
 panther_gene_prefix = '' #
 panther_phenotype_prefix = '' #
 panther_orthologs_filepath = "../datasets/intermediate/panther/panther_orthologs.tsv"
-get_edges_from_edges_kg(kg_edges, panther_gene_prefix, panther_phenotype_prefix, has_ortholog, panther_orthologs_filepath)
+get_panther_edges_from_edges_kg(kg_edges, panther_gene_prefix, panther_phenotype_prefix, has_ortholog, panther_orthologs_filepath)
