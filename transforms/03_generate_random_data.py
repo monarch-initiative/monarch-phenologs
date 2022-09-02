@@ -5,8 +5,14 @@ pd.set_option('display.max_colwidth', None)
 pd.set_option('display.max_columns', None)
 
 
-def generate_random_data():
-
+def generate_random_data(organism1, organism2, df1, df2, orthologs, df_output1, df_output2):
+    """
+    Inputs:
+    -Specify the two species being randomized
+    -Take in both species-specific dataframes
+    -Take in panther orthologs
+    -
+    """
 
 
 
@@ -50,7 +56,8 @@ mouse_gene_to_phenotype_filepath = "../datasets/intermediate/mouse/mouse_gene_to
 mouse_gene_to_phenotype = pd.read_csv(mouse_gene_to_phenotype_filepath, sep='\t', header=0, low_memory=False)
 panther_filepath = "../datasets/intermediate/panther/panther_orthologs.tsv"
 panther = pd.read_csv(panther_filepath, sep='\t', header=0, low_memory=False)
-
+zebrafish_gene_to_phenotype_filepath = "../datasets/intermediate/zebrafish/zebrafish_gene_to_phenotype.tsv"
+zebrafish_gene_to_phenotype = pd.read_csv(zebrafish_gene_to_phenotype_filepath, sep='\t', header=0, low_memory=False)
 
 mouse_v_zebrafish_orthologs = panther[(panther["geneA"].str.contains('MGI:', regex=True, na=True)) & (
     panther["geneB"].str.contains('ZFIN:', regex=True, na=True))]

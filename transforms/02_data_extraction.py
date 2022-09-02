@@ -36,7 +36,7 @@ Zebrafish gene: ZFIN:ZDB-GENE-210324-7
 Zebrafish phenotype: ZP:0002478
 
 Rat gene: RGD:1308009
-Rat Phenotype: ?
+Rat Phenotype: MP?
 
 Worm gene: WB:WBGene00003001
 Worm phenotype: WBPhenotype:0001191
@@ -54,13 +54,20 @@ import os
 import pandas as pd
 
 
-def get_edges_from_edges_kg(input_file, subject, object, predicate, output_file):
-    edges = pd.read_csv(input_file, sep='\t', header=0, low_memory=False)
+def get_gene_phenotype_edges_from_kg(edges_file, nodes_file, subject, object, predicate, output_file):
+    edges = pd.read_csv(edges_file, sep='\t', header=0, low_memory=False)
     edges = edges[(edges["predicate"] == predicate) & (edges["subject"].str.contains(subject, regex=True, na=True)) & (edges["object"].str.contains(object, regex=True, na=True))]
     # edges = edges[edges["predicate"] == predicate & edges["subject"].str.contains(subject, regex=True, na=True) & edges["object"].str.contains(object, regex=True, na=True)]
     edges = edges[["subject","predicate","object"]]
     edges = edges.rename(columns={'subject': 'gene', 'object': 'phenotype'})
+    nodes = pd.read_csv(nodes_file, sep='\t', header=0, low_memory=False)
+    nodes = nodes[['id', 'name']]
+    gene_nodes = nodes.rename(columns={'id': 'gene', 'name': 'gene_name'})
+    phenotype_nodes = nodes.rename(columns={'id': 'phenotype', 'name': 'phenotype_name'})
+    edges = pd.merge(edges, gene_nodes, on='gene', how='left')
+    edges = pd.merge(edges, phenotype_nodes, on='phenotype', how='left')
     edges = edges.drop_duplicates()
+    edges = edges[['gene', 'gene_name', 'predicate', 'phenotype', 'phenotype_name']]
     pd.DataFrame(edges).to_csv(output_file, sep="\t", index=False)
     return
 
@@ -101,29 +108,60 @@ kg_nodes = '../datasets/sources/monarch_kg/monarch-kg/monarch-kg_nodes.tsv'
 has_phenotype = 'biolink:has_phenotype'
 has_ortholog = 'biolink:orthologous_to'
 
+# Get human gene to phenotype TODO: Are there phenotypes with the MONDO prefix as well? Doesn't look like it.
+human_gene_prefix = 'HGNC:'
+human_phenotype_prefix = 'HP:'
+human_gene_to_phenotype_filepath = "../datasets/intermediate/human/human_gene_to_phenotype.tsv"
+get_gene_phenotype_edges_from_kg(kg_edges, kg_nodes, human_gene_prefix, human_phenotype_prefix, has_phenotype, human_gene_to_phenotype_filepath)
+print('Human gene-to-phenotype complete.')
+
+# Get human ORPHA disease to phenotype
+human_disease_prefix = 'ORPHA:'
+human_phenotype_prefix = 'HP:'
+human_orpha_disease_to_phenotype_filepath = "../datasets/intermediate/human/human_orpha_disease_to_phenotype.tsv"
+get_gene_phenotype_edges_from_kg(kg_edges, kg_nodes, human_disease_prefix, human_phenotype_prefix, has_phenotype, human_orpha_disease_to_phenotype_filepath)
+print('Human ORPHA disease-to-phenotype complete.')
+
+# Get human MONDO disease to phenotype
+human_disease_prefix = 'MONDO:'
+human_phenotype_prefix = 'HP:'
+human_mondo_disease_to_phenotype_filepath = "../datasets/intermediate/human/human_mondo_disease_to_phenotype.tsv"
+get_gene_phenotype_edges_from_kg(kg_edges, kg_nodes, human_disease_prefix, human_phenotype_prefix, has_phenotype, human_mondo_disease_to_phenotype_filepath)
+print('Human MONDO disease-to-phenotype complete.')
+
+# Get human MONDO disease to MONDO phenotype
+human_disease_prefix = 'MONDO:'
+human_phenotype_prefix = 'MONDO:'
+human_mondo_disease_to_mondo_phenotype_filepath = "../datasets/intermediate/human/human_mondo_disease_to_mondo_phenotype.tsv"
+get_gene_phenotype_edges_from_kg(kg_edges, kg_nodes, human_disease_prefix, human_phenotype_prefix, has_phenotype, human_mondo_disease_to_mondo_phenotype_filepath)
+print('Human MONDO disease-to-phenotype complete.')
+
 # Get mouse gene to phenotype
 mouse_gene_prefix = 'MGI:'
 mouse_phenotype_prefix = 'MP:'
 mouse_gene_to_phenotype_filepath = "../datasets/intermediate/mouse/mouse_gene_to_phenotype.tsv"
-get_edges_from_edges_kg(kg_edges, mouse_gene_prefix, mouse_phenotype_prefix, has_phenotype, mouse_gene_to_phenotype_filepath)
+get_gene_phenotype_edges_from_kg(kg_edges, kg_nodes, mouse_gene_prefix, mouse_phenotype_prefix, has_phenotype, mouse_gene_to_phenotype_filepath)
+print('Mouse gene-to-phenotype complete.')
 
 # Get zebrafish gene to phenotype
 zebrafish_gene_prefix = 'ZFIN:'
 zebrafish_phenotype_prefix = 'ZP:'
 zebrafish_gene_to_phenotype_filepath = "../datasets/intermediate/zebrafish/zebrafish_gene_to_phenotype.tsv"
-get_edges_from_edges_kg(kg_edges, zebrafish_gene_prefix, zebrafish_phenotype_prefix, has_phenotype, zebrafish_gene_to_phenotype_filepath)
+get_gene_phenotype_edges_from_kg(kg_edges, kg_nodes, zebrafish_gene_prefix, zebrafish_phenotype_prefix, has_phenotype, zebrafish_gene_to_phenotype_filepath)
+print('Zebrafish gene-to-phenotype complete.')
 
 # Get rat gene to phenotype -> do we currently not have rat phenotypes?
-# rat_gene_prefix = 'RGD:'
-# rat_phenotype_prefix = 'MP:'
-# rat_gene_to_phenotype_filepath = "../datasets/intermediate/rat/rat_gene_to_phenotype.tsv"
-# get_edges_from_edges_kg(kg_edges, rat_gene_prefix, rat_phenotype_prefix, has_phenotype, rat_gene_to_phenotype_filepath)
+rat_gene_prefix = 'RGD:'
+rat_phenotype_prefix = 'MP:'
+rat_gene_to_phenotype_filepath = "../datasets/intermediate/rat/rat_gene_to_phenotype.tsv"
+get_gene_phenotype_edges_from_kg(kg_edges, kg_nodes, rat_gene_prefix, rat_phenotype_prefix, has_phenotype, rat_gene_to_phenotype_filepath)
 
 # Get worm gene to phenotype
 worm_gene_prefix = 'WB:'
 worm_phenotype_prefix = 'WBPhenotype:'
 worm_gene_to_phenotype_filepath = "../datasets/intermediate/worm/worm_gene_to_phenotype.tsv"
-get_edges_from_edges_kg(kg_edges, worm_gene_prefix, worm_phenotype_prefix, has_phenotype, worm_gene_to_phenotype_filepath)
+get_gene_phenotype_edges_from_kg(kg_edges, kg_nodes, worm_gene_prefix, worm_phenotype_prefix, has_phenotype, worm_gene_to_phenotype_filepath)
+print('Worm gene-to-phenotype complete.')
 
 # Get PANTHER data
 # Grab all PANTHER data for now, or just for included species?
@@ -132,7 +170,12 @@ get_edges_from_edges_kg(kg_edges, worm_gene_prefix, worm_phenotype_prefix, has_p
 # For reference, panther edges only exist once per edge, meaning that while there will exist a row for:
 # geneA -> orthologous to -> geneB,
 # there will not be an equivalent row pointing in the other direction: geneB -> orthologous to -> geneA.
+# So in order to have a row for every A to B link, we have to duplicate the dataframe, swap columns, and merge
+# OR handle the one-directional nature of the ortholog edges in later steps.
 panther_gene_prefix = '' #
 panther_phenotype_prefix = '' #
 panther_orthologs_filepath = "../datasets/intermediate/panther/panther_orthologs.tsv"
 get_panther_edges_from_edges_kg(kg_edges, panther_gene_prefix, panther_phenotype_prefix, has_ortholog, panther_orthologs_filepath)
+print('PANTHER ortholog extraction complete.')
+
+print('All extractions complete.')
