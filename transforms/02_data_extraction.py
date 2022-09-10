@@ -46,6 +46,10 @@ Yeast phenotype:
 
 Chicken gene:
 Chicken phenotype:
+
+TODO: Refer to the Phenologs paper regarding removal of redundant phenotype sets, collapsing of diseases, etc, if applicable.
+
+
 '''
 
 
@@ -89,9 +93,11 @@ def get_panther_edges_from_edges_kg(input_file, subject, object, predicate, outp
     edges = pd.read_csv(input_file, sep='\t', header=0, low_memory=False)
     edges = edges[(edges["predicate"] == predicate) & (edges["subject"].str.contains(subject, regex=True, na=True)) & (edges["object"].str.contains(object, regex=True, na=True))]
     # edges = edges[edges["predicate"] == predicate & edges["subject"].str.contains(subject, regex=True, na=True) & edges["object"].str.contains(object, regex=True, na=True)]
-    edges = edges[["subject","predicate","object"]]
-    edges_inverse = edges.rename(columns={'subject': 'geneB', 'object': 'geneA'})
-    edges = edges.rename(columns={'subject': 'geneA', 'object': 'geneB'})
+    edges = edges[["subject","predicate","object", "has_evidence"]]
+    # edges = edges["has_evidence"].str.split(':').str[1]
+    edges["has_evidence"] = edges["has_evidence"].str.split(':').str[1]
+    edges_inverse = edges.rename(columns={'subject': 'geneB', 'object': 'geneA', 'has_evidence': 'ortholog_id'})
+    edges = edges.rename(columns={'subject': 'geneA', 'object': 'geneB', 'has_evidence': 'ortholog_id'})
     edges = pd.concat([edges, edges_inverse])
     edges = edges.drop_duplicates()
     pd.DataFrame(edges).to_csv(output_file, sep="\t", index=False)
@@ -107,6 +113,26 @@ kg_nodes = '../datasets/sources/monarch_kg/monarch-kg/monarch-kg_nodes.tsv'
 
 has_phenotype = 'biolink:has_phenotype'
 has_ortholog = 'biolink:orthologous_to'
+
+
+
+# Get PANTHER data
+# Grab all PANTHER data for now, or just for included species?
+# Note, I believe thesis code had to piece together panther links from speciesA -> panther, speciesB -> panther, then lookup ortholog matches.
+# Monarch KG has direct speciesA gene -> orthologous to -> speciesB gene.
+# For reference, panther edges only exist once per edge, meaning that while there will exist a row for:
+# geneA -> orthologous to -> geneB,
+# there will not be an equivalent row pointing in the other direction: geneB -> orthologous to -> geneA.
+# So in order to have a row for every A to B link, we have to duplicate the dataframe, swap columns, and merge
+# OR handle the one-directional nature of the ortholog edges in later steps.
+panther_gene_prefix = '' #
+panther_phenotype_prefix = '' #
+panther_orthologs_filepath = "../datasets/intermediate/panther/panther_orthologs.tsv"
+get_panther_edges_from_edges_kg(kg_edges, panther_gene_prefix, panther_phenotype_prefix, has_ortholog, panther_orthologs_filepath)
+print('PANTHER ortholog extraction complete.')
+
+
+
 
 # Get human gene to phenotype TODO: Are there phenotypes with the MONDO prefix as well? Doesn't look like it.
 human_gene_prefix = 'HGNC:'
@@ -136,6 +162,15 @@ human_mondo_disease_to_mondo_phenotype_filepath = "../datasets/intermediate/huma
 get_gene_phenotype_edges_from_kg(kg_edges, kg_nodes, human_disease_prefix, human_phenotype_prefix, has_phenotype, human_mondo_disease_to_mondo_phenotype_filepath)
 print('Human MONDO disease-to-phenotype complete.')
 
+# Merge human disease to phenotype files:
+mondo_to_hp = pd.read_csv(human_mondo_disease_to_phenotype_filepath, sep='\t', header=0, low_memory=False)
+mondo_to_mondo = pd.read_csv(human_mondo_disease_to_mondo_phenotype_filepath, sep='\t', header=0, low_memory=False)
+all_disease_to_phenotype_filepath = "../datasets/intermediate/human/human_all_disease_to_phenotype.tsv"
+all_human_disease_to_phenotype = pd.concat([mondo_to_hp, mondo_to_mondo])
+all_human_disease_to_phenotype = all_human_disease_to_phenotype.drop_duplicates()
+pd.DataFrame(all_human_disease_to_phenotype).to_csv(all_disease_to_phenotype_filepath, sep="\t", index=False)
+print('Human all disease-to-phenotype merge complete.')
+
 # Get mouse gene to phenotype
 mouse_gene_prefix = 'MGI:'
 mouse_phenotype_prefix = 'MP:'
@@ -163,19 +198,5 @@ worm_gene_to_phenotype_filepath = "../datasets/intermediate/worm/worm_gene_to_ph
 get_gene_phenotype_edges_from_kg(kg_edges, kg_nodes, worm_gene_prefix, worm_phenotype_prefix, has_phenotype, worm_gene_to_phenotype_filepath)
 print('Worm gene-to-phenotype complete.')
 
-# Get PANTHER data
-# Grab all PANTHER data for now, or just for included species?
-# Note, I believe thesis code had to piece together panther links from speciesA -> panther, speciesB -> panther, then lookup ortholog matches.
-# Monarch KG has direct speciesA gene -> orthologous to -> speciesB gene.
-# For reference, panther edges only exist once per edge, meaning that while there will exist a row for:
-# geneA -> orthologous to -> geneB,
-# there will not be an equivalent row pointing in the other direction: geneB -> orthologous to -> geneA.
-# So in order to have a row for every A to B link, we have to duplicate the dataframe, swap columns, and merge
-# OR handle the one-directional nature of the ortholog edges in later steps.
-panther_gene_prefix = '' #
-panther_phenotype_prefix = '' #
-panther_orthologs_filepath = "../datasets/intermediate/panther/panther_orthologs.tsv"
-get_panther_edges_from_edges_kg(kg_edges, panther_gene_prefix, panther_phenotype_prefix, has_ortholog, panther_orthologs_filepath)
-print('PANTHER ortholog extraction complete.')
 
 print('All extractions complete.')
