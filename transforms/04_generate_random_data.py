@@ -101,19 +101,78 @@ panther family, or multiple rows if more than one gene pair has the same panther
 Note that thesis work assembled a distinct list of ortholog IDs, so....
 
 """
+
+panther_filepath = "../datasets/intermediate/panther/panther_orthologs.tsv"
+
+human_gene_prefix = 'HGNC:'
+human_gene_to_phenotype_filepath = "../datasets/intermediate/human/human_gene_to_phenotype.tsv"
+human_random_hvm_filepath = "../datasets/intermediate/random/human/human_hvm_"
+human_random_hvr_filepath = "../datasets/intermediate/random/human/human_hvr_"
+human_random_hvw_filepath = "../datasets/intermediate/random/human/human_hvw_"
+human_random_hvz_filepath = "../datasets/intermediate/random/human/human_hvz_"
+
 mouse_gene_prefix = 'MGI:'
 mouse_gene_to_phenotype_filepath = "../datasets/intermediate/mouse/mouse_gene_to_phenotype.tsv"
-mouse_random_mvz_filepath = "../datasets/intermediate/random/mouse_mvz_"
-panther_filepath = "../datasets/intermediate/panther/panther_orthologs.tsv"
+mouse_random_mvh_filepath = "../datasets/intermediate/random/mouse/mouse_mvh_"
+mouse_random_mvr_filepath = "../datasets/intermediate/random/mouse/mouse_mvr_"
+mouse_random_mvw_filepath = "../datasets/intermediate/random/mouse/mouse_mvw_"
+mouse_random_mvz_filepath = "../datasets/intermediate/random/mouse/mouse_mvz_"
+
+rat_gene_prefix = 'RGD:'
+rat_gene_to_phenotype_filepath = "../datasets/intermediate/rat/rat_gene_to_phenotype.tsv"
+rat_random_rvh_filepath = "../datasets/intermediate/random/rat/rat_rvh_"
+rat_random_rvm_filepath = "../datasets/intermediate/random/rat/rat_rvm_"
+rat_random_rvw_filepath = "../datasets/intermediate/random/rat/rat_rvw_"
+rat_random_rvz_filepath = "../datasets/intermediate/random/rat/rat_rvz_"
+
+worm_gene_prefix = 'WB:'
+worm_gene_to_phenotype_filepath = "../datasets/intermediate/worm/worm_gene_to_phenotype.tsv"
+worm_random_wvh_filepath = "../datasets/intermediate/random/worm/worm_wvh_"
+worm_random_wvm_filepath = "../datasets/intermediate/random/worm/worm_wvm_"
+worm_random_wvr_filepath = "../datasets/intermediate/random/worm/worm_wvr_"
+worm_random_wvz_filepath = "../datasets/intermediate/random/worm/worm_wvz_"
 
 zebrafish_gene_prefix = 'ZFIN:'
 zebrafish_gene_to_phenotype_filepath = "../datasets/intermediate/zebrafish/zebrafish_gene_to_phenotype.tsv"
-zebrafish_random_mvz_filepath = "../datasets/intermediate/random/mouse_mvz.tsv"
+zebrafish_random_zvh_filepath = "../datasets/intermediate/random/zebrafish/zebrafish_zvh_"
+zebrafish_random_zvm_filepath = "../datasets/intermediate/random/zebrafish/zebrafish_zvm_"
+zebrafish_random_zvr_filepath = "../datasets/intermediate/random/zebrafish/zebrafish_zvr_"
+zebrafish_random_zvw_filepath = "../datasets/intermediate/random/zebrafish/zebrafish_zvw_"
 
-# mouse_v_zebrafish_orthologs['ortholog_id'] = mouse_v_zebrafish_orthologs['geneA'] + '_' + mouse_v_zebrafish_orthologs['geneB']
-# print(mouse_v_zebrafish_orthologs)
+# Create all the human randomized datasets:
 
-generate_random_data(mouse_gene_to_phenotype_filepath, panther_filepath, mouse_gene_prefix, zebrafish_gene_prefix, mouse_random_mvz_filepath, limit=1000)
+# generate_random_data(human_gene_to_phenotype_filepath, panther_filepath, human_gene_prefix, mouse_gene_prefix, human_random_hvm_filepath, limit=1000)
+# generate_random_data(human_gene_to_phenotype_filepath, panther_filepath, human_gene_prefix, rat_gene_prefix, human_random_hvr_filepath, limit=1000)
+# generate_random_data(human_gene_to_phenotype_filepath, panther_filepath, human_gene_prefix, worm_gene_prefix, human_random_hvw_filepath, limit=1000)
+# generate_random_data(human_gene_to_phenotype_filepath, panther_filepath, human_gene_prefix, zebrafish_gene_prefix, human_random_hvz_filepath, limit=1000)
+
+# Create all the mouse randomized datasets:
+# generate_random_data(mouse_gene_to_phenotype_filepath, panther_filepath, mouse_gene_prefix, human_gene_prefix, mouse_random_mvh_filepath, limit=1000)
+# generate_random_data(mouse_gene_to_phenotype_filepath, panther_filepath, mouse_gene_prefix, rat_gene_prefix, mouse_random_mvr_filepath, limit=1000)
+# generate_random_data(mouse_gene_to_phenotype_filepath, panther_filepath, mouse_gene_prefix, worm_gene_prefix, mouse_random_mvw_filepath, limit=1000)
+# generate_random_data(mouse_gene_to_phenotype_filepath, panther_filepath, mouse_gene_prefix, zebrafish_gene_prefix, mouse_random_mvz_filepath, limit=1000)  # DONE
+
+# Create all the rat randomized datasets:
+# generate_random_data(rat_gene_to_phenotype_filepath, panther_filepath, rat_gene_prefix, human_gene_prefix, rat_random_rvh_filepath, limit=1000)
+# generate_random_data(rat_gene_to_phenotype_filepath, panther_filepath, rat_gene_prefix, mouse_gene_prefix, rat_random_rvm_filepath, limit=1000)
+# generate_random_data(rat_gene_to_phenotype_filepath, panther_filepath, rat_gene_prefix, worm_gene_prefix, rat_random_rvw_filepath, limit=1000)
+# generate_random_data(rat_gene_to_phenotype_filepath, panther_filepath, rat_gene_prefix, zebrafish_gene_prefix, rat_random_rvz_filepath, limit=1000)
+
+# Create all the worm randomized datasets:
+# generate_random_data(worm_gene_to_phenotype_filepath, panther_filepath, worm_gene_prefix, human_gene_prefix, worm_random_wvh_filepath, limit=1000)
+# generate_random_data(worm_gene_to_phenotype_filepath, panther_filepath, worm_gene_prefix, mouse_gene_prefix, worm_random_wvm_filepath, limit=1000)
+# generate_random_data(worm_gene_to_phenotype_filepath, panther_filepath, worm_gene_prefix, rat_gene_prefix, worm_random_wvr_filepath, limit=1000)
+# generate_random_data(worm_gene_to_phenotype_filepath, panther_filepath, worm_gene_prefix, zebrafish_gene_prefix, worm_random_wvz_filepath, limit=1000)
+
+# Create all the zebrafish randomized datasets:
+# generate_random_data(zebrafish_gene_to_phenotype_filepath, panther_filepath, zebrafish_gene_prefix, human_gene_prefix, zebrafish_random_zvh_filepath, limit=1000)
+generate_random_data(zebrafish_gene_to_phenotype_filepath, panther_filepath, zebrafish_gene_prefix, mouse_gene_prefix, zebrafish_random_zvm_filepath, limit=1000)
+generate_random_data(zebrafish_gene_to_phenotype_filepath, panther_filepath, zebrafish_gene_prefix, rat_gene_prefix, zebrafish_random_zvr_filepath, limit=1000)
+generate_random_data(zebrafish_gene_to_phenotype_filepath, panther_filepath, zebrafish_gene_prefix, worm_gene_prefix, zebrafish_random_zvw_filepath, limit=1000)
+
+
+
+
 
 
 # panther_inverse = panther.rename(columns={'subject': 'object', 'object': 'subject'})
