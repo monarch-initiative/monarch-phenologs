@@ -24,6 +24,7 @@ def generate_random_data(gene_phenotype_file, orthologs_file, source_gene_prefix
     Thoughts on randomization:
     -Should a gene be chosen at random from the total distinct gene list, or should we maintain gene frequencies?
     -Previously used panther IDs, but can we use the native gene IDs, but just use them from the ortholog subset? Thinking that panther IDs might be necessary.
+    -Is the pandas dataframe the best data structure for this process? Would a dataframe with an embedded series be better (one row per phenotype (first column) in dataframe, with genes/orthologs as a series in second column)?
 
     """
 
@@ -152,23 +153,23 @@ zebrafish_random_zvw_filepath = "../datasets/intermediate/random/zebrafish/zebra
 # generate_random_data(mouse_gene_to_phenotype_filepath, panther_filepath, mouse_gene_prefix, worm_gene_prefix, mouse_random_mvw_filepath, limit=1000)
 # generate_random_data(mouse_gene_to_phenotype_filepath, panther_filepath, mouse_gene_prefix, zebrafish_gene_prefix, mouse_random_mvz_filepath, limit=1000)  # DONE
 
-# Create all the rat randomized datasets:
+# Create all the rat randomized datasets: Gene-Phenotype annotations: 3018
 # generate_random_data(rat_gene_to_phenotype_filepath, panther_filepath, rat_gene_prefix, human_gene_prefix, rat_random_rvh_filepath, limit=1000)
-# generate_random_data(rat_gene_to_phenotype_filepath, panther_filepath, rat_gene_prefix, mouse_gene_prefix, rat_random_rvm_filepath, limit=1000)
-# generate_random_data(rat_gene_to_phenotype_filepath, panther_filepath, rat_gene_prefix, worm_gene_prefix, rat_random_rvw_filepath, limit=1000)
-# generate_random_data(rat_gene_to_phenotype_filepath, panther_filepath, rat_gene_prefix, zebrafish_gene_prefix, rat_random_rvz_filepath, limit=1000)
+generate_random_data(rat_gene_to_phenotype_filepath, panther_filepath, rat_gene_prefix, mouse_gene_prefix, rat_random_rvm_filepath, limit=1000)
+generate_random_data(rat_gene_to_phenotype_filepath, panther_filepath, rat_gene_prefix, worm_gene_prefix, rat_random_rvw_filepath, limit=1000)
+generate_random_data(rat_gene_to_phenotype_filepath, panther_filepath, rat_gene_prefix, zebrafish_gene_prefix, rat_random_rvz_filepath, limit=1000)
 
 # Create all the worm randomized datasets:
 # generate_random_data(worm_gene_to_phenotype_filepath, panther_filepath, worm_gene_prefix, human_gene_prefix, worm_random_wvh_filepath, limit=1000)
-# generate_random_data(worm_gene_to_phenotype_filepath, panther_filepath, worm_gene_prefix, mouse_gene_prefix, worm_random_wvm_filepath, limit=1000)
-# generate_random_data(worm_gene_to_phenotype_filepath, panther_filepath, worm_gene_prefix, rat_gene_prefix, worm_random_wvr_filepath, limit=1000)
-# generate_random_data(worm_gene_to_phenotype_filepath, panther_filepath, worm_gene_prefix, zebrafish_gene_prefix, worm_random_wvz_filepath, limit=1000)
+# generate_random_data(worm_gene_to_phenotype_filepath, panther_filepath, worm_gene_prefix, mouse_gene_prefix, worm_random_wvm_filepath, limit=1000)  # DONE
+# generate_random_data(worm_gene_to_phenotype_filepath, panther_filepath, worm_gene_prefix, rat_gene_prefix, worm_random_wvr_filepath, limit=1000)  # DONE
+# generate_random_data(worm_gene_to_phenotype_filepath, panther_filepath, worm_gene_prefix, zebrafish_gene_prefix, worm_random_wvz_filepath, limit=1000)  # DONE
 
 # Create all the zebrafish randomized datasets:
 # generate_random_data(zebrafish_gene_to_phenotype_filepath, panther_filepath, zebrafish_gene_prefix, human_gene_prefix, zebrafish_random_zvh_filepath, limit=1000)
-generate_random_data(zebrafish_gene_to_phenotype_filepath, panther_filepath, zebrafish_gene_prefix, mouse_gene_prefix, zebrafish_random_zvm_filepath, limit=1000)
-generate_random_data(zebrafish_gene_to_phenotype_filepath, panther_filepath, zebrafish_gene_prefix, rat_gene_prefix, zebrafish_random_zvr_filepath, limit=1000)
-generate_random_data(zebrafish_gene_to_phenotype_filepath, panther_filepath, zebrafish_gene_prefix, worm_gene_prefix, zebrafish_random_zvw_filepath, limit=1000)
+# generate_random_data(zebrafish_gene_to_phenotype_filepath, panther_filepath, zebrafish_gene_prefix, mouse_gene_prefix, zebrafish_random_zvm_filepath, limit=1000)  # DONE
+# generate_random_data(zebrafish_gene_to_phenotype_filepath, panther_filepath, zebrafish_gene_prefix, rat_gene_prefix, zebrafish_random_zvr_filepath, limit=1000)  # DONE
+# generate_random_data(zebrafish_gene_to_phenotype_filepath, panther_filepath, zebrafish_gene_prefix, worm_gene_prefix, zebrafish_random_zvw_filepath, limit=1000)  # DONE
 
 
 
