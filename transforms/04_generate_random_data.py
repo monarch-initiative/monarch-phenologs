@@ -155,9 +155,9 @@ zebrafish_random_zvw_filepath = "../datasets/intermediate/random/zebrafish/zebra
 
 # Create all the rat randomized datasets: Gene-Phenotype annotations: 3018
 # generate_random_data(rat_gene_to_phenotype_filepath, panther_filepath, rat_gene_prefix, human_gene_prefix, rat_random_rvh_filepath, limit=1000)
-generate_random_data(rat_gene_to_phenotype_filepath, panther_filepath, rat_gene_prefix, mouse_gene_prefix, rat_random_rvm_filepath, limit=1000)
-generate_random_data(rat_gene_to_phenotype_filepath, panther_filepath, rat_gene_prefix, worm_gene_prefix, rat_random_rvw_filepath, limit=1000)
-generate_random_data(rat_gene_to_phenotype_filepath, panther_filepath, rat_gene_prefix, zebrafish_gene_prefix, rat_random_rvz_filepath, limit=1000)
+# generate_random_data(rat_gene_to_phenotype_filepath, panther_filepath, rat_gene_prefix, mouse_gene_prefix, rat_random_rvm_filepath, limit=1000)  # DONE
+# generate_random_data(rat_gene_to_phenotype_filepath, panther_filepath, rat_gene_prefix, worm_gene_prefix, rat_random_rvw_filepath, limit=1000)  # DONE
+# generate_random_data(rat_gene_to_phenotype_filepath, panther_filepath, rat_gene_prefix, zebrafish_gene_prefix, rat_random_rvz_filepath, limit=1000)  # DONE
 
 # Create all the worm randomized datasets:
 # generate_random_data(worm_gene_to_phenotype_filepath, panther_filepath, worm_gene_prefix, human_gene_prefix, worm_random_wvh_filepath, limit=1000)
