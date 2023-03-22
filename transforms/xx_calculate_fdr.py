@@ -1,3 +1,5 @@
+from scipy.stats import hypergeom, pearsonr
+
 '''
 Using the randomized datasets, we need to calculate a false discovery rate that will be used to identify the
 "significant" phenologs. Because this involves processing 1000s of randomized datasets, will need to
@@ -63,10 +65,78 @@ zebrafish_random_zvw_filepath = "../datasets/intermediate/random/zebrafish/zebra
 
 organism_list = ['human', 'mouse', 'rat', 'worm', 'zebrafish']
 
-for i in range(0, 10):
+for i in range(1, 4):
 
 
+# Old code for fdr calculation
+    def calculate_fdr_from_random_data(self, species_a_po_hash, species_b_po_hash, shared_orthologs):
+        """
+        This function performs the phenolog calculations between
+        the phenotypes of two species from the random data sets.
+        For each cross-species pair of phenotypes, the associated orthologs are compared for matches.
+        If two phenotypes have one or more matching orthologs, the hypergeometric probability is calculated.
+        P-values are added to a list, which is returned after all phenotype comparisons are complete.
+        :param species_a_po_hash: The phenotype-ortholog hash for species A.
+        :param species_b_po_hash: The phenotype-ortholog hash for species B.
+        :param shared_orthologs: The file containing the orthologs shared between the two compared species.
+        :return: List of p-values from the hypergeometric probability calculation.
+        """
 
+        total_ortholog_matches = 0
+        total_ortholog_nonmatches = 0
+
+        total_hyp_calcs = 0
+        phenolog_p_value_list = []
+
+        species_a_pheno_gene_hash = species_a_po_hash
+        species_b_pheno_gene_hash = species_b_po_hash
+        # Iterate through the phenotypes for each species,
+        # determining the number of ortholog matches between the orthologs associated with each phenotype.
+        for i in species_a_pheno_gene_hash:
+            # Phenotype for species A
+            species_a_phenotype_id = i
+            species_a_orthologs = species_a_pheno_gene_hash[i]
+            #print(species_a_orthologs)
+            phenotype_a_ortholog_count = len(species_a_orthologs)
+
+            for j in species_b_pheno_gene_hash:
+                # Phenotype for species B
+                species_b_phenotype_id = j
+                species_b_orthologs = species_b_pheno_gene_hash[j]
+                ortholog_matches = 0
+                ortholog_non_matches = 0
+                phenotype_b_ortholog_count = len(species_b_orthologs)
+                for k in species_a_orthologs:
+                    # Orthologs for species A
+                    species_a_ortholog = k
+                    for l in species_b_orthologs:
+                        # Orthologs for species B
+                        species_b_ortholog = l
+                        if species_a_ortholog == species_b_ortholog:
+                            ortholog_matches += 1
+                            total_ortholog_matches += 1
+                        else:
+                            ortholog_non_matches += 1
+                            total_ortholog_nonmatches += 1
+
+                if ortholog_matches > 0:
+                    # Relevent SciPy documentation: http://docs.scipy.org/doc/scipy-0.14.0/reference/generated/scipy.stats.hypergeom.html#scipy.stats.hypergeom
+                    # N = total number of orthologs shared between species
+                    # n = nummber of orthologs in species A phenotype
+                    # m = nummber of orthologs in species B phenotype
+                    # c = number of common orthologs between phenotypes (ortholog matches)
+                    m = float(phenotype_b_ortholog_count)
+                    n = float(phenotype_a_ortholog_count)
+                    N = float(shared_orthologs)
+                    c = float(ortholog_matches)
+                    prb = float(hypergeom.pmf(c, N, m, n))
+                    phenolog_p_value_list.append(prb)
+                    total_hyp_calcs += 1
+        print('Total Matches: '+str(total_ortholog_matches))
+        print('Total non-matches: '+str(total_ortholog_nonmatches))
+        print('Total phenolog calculations: '+str(total_hyp_calcs))
+
+        return phenolog_p_value_list
 
 
 

@@ -96,6 +96,9 @@ def get_panther_edges_from_edges_kg(input_file, subject, object, predicate, outp
     edges = edges[["subject","predicate","object", "has_evidence"]]
     # edges = edges["has_evidence"].str.split(':').str[1]
     edges["has_evidence"] = edges["has_evidence"].str.split(':').str[1]
+    # Create a duplicated PANTHER file so that we have rows for orthologs pointing in both directions:
+    # As in, have one line representing gene A is orthologous to gene B,
+    # and another line representing gene B is orthologous to gene A.
     edges_inverse = edges.rename(columns={'subject': 'geneB', 'object': 'geneA', 'has_evidence': 'ortholog_id'})
     edges = edges.rename(columns={'subject': 'geneA', 'object': 'geneB', 'has_evidence': 'ortholog_id'})
     edges = pd.concat([edges, edges_inverse])
