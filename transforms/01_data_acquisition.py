@@ -23,6 +23,15 @@ These data sources can be expanded and the process rerun as additional model org
 import os
 import requests
 
+# Set up dataset directories
+paths = ['../datasets/sources/monarch_kg', '../datasets/intermediate/human', '../datasets/intermediate/mouse',
+         '../datasets/intermediate/rat', '../datasets/intermediate/worm', '../datasets/intermediate/zebrafish',
+         '../datasets/intermediate/panther', '../datasets/intermediate/random', '../datasets/output',]
+
+for path in paths:
+    if not os.path.exists(path):
+        os.makedirs(path)
+
 URL = 'https://storage.googleapis.com/monarch-ingest/latest/monarch-kg.tar.gz'
 filename = '../datasets/sources/monarch_kg/' + URL.split("/")[-1]
 with open(filename, "wb") as f:

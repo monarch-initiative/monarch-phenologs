@@ -124,13 +124,13 @@ class myClass:
 
             # print(limit)
             #
-            organism1_df = pd.read_csv(gene_phenotype_file, sep='\t', header=0, low_memory=False)
-            organism1_df = organism1_df[['phenotype']]
+            # organism1_df = pd.read_csv(gene_phenotype_file, sep='\t', header=0, low_memory=False)
+            # organism1_df = organism1_df[['phenotype']]
 
             # Load the phenotype_ortholog pickle file.
             # This file can be used as the schema for creating the randomized phenotype-ortholog files.
             data = open(phenotype_ortholog_file, 'rb')
-            phenotype_ortholog_hash = pickle.load(data)
+            phenotype_ortholog_dict = pickle.load(data)
 
             # Load orthologs file and select the common ortholgs between the source and target species.
             orthologs_df = pd.read_csv(orthologs_file, sep='\t', header=0, low_memory=False)
@@ -147,34 +147,34 @@ class myClass:
             print('Starting randomized dataset ' + str(limit) + ' for ' + source_gene_prefix + ' vs ' +
                   target_gene_prefix + '.')
 
-            # Here's an approach using the phenotype-ortholog hashes created in transform 03:
+            # Here's an approach using the phenotype-ortholog dicts created in transform 03:
             '''
-            Start with existing phenotype-ortholog hash
-            Create an empty hash for the randomized data
-            For each phenotype in hash
+            Start with existing phenotype-ortholog dict
+            Create an empty dict for the randomized data
+            For each phenotype in dict
                 Create a new, shuffled ortholog list 
-                Add the phenotype to the hash
+                Add the phenotype to the dict
                 For each ortholog associated with the phenotype
-                    pop an ortholog off the shuffled list and add to the randomized hash
+                    pop an ortholog off the shuffled list and add to the randomized dict
             
             '''
-            randomized_phenotype_ortholog_hash = {}
+            randomized_phenotype_ortholog_dict = {}
 
-            for phenotype in phenotype_ortholog_hash:
+            for phenotype in phenotype_ortholog_dict:
                 shuffled_orthologs = common_orthologs.ortholog_id.values.tolist()
                 random.shuffle(shuffled_orthologs)
-                randomized_phenotype_ortholog_hash[phenotype] = []
-                for ortholog in phenotype_ortholog_hash[phenotype]:
+                randomized_phenotype_ortholog_dict[phenotype] = []
+                for ortholog in phenotype_ortholog_dict[phenotype]:
                     random_ortholog = shuffled_orthologs.pop()
-                    randomized_phenotype_ortholog_hash[phenotype].append(random_ortholog)
+                    randomized_phenotype_ortholog_dict[phenotype].append(random_ortholog)
 
-            # print(randomized_phenotype_ortholog_hash)
+            # print(randomized_phenotype_ortholog_dict)
             output_file = output_filepath + str(limit) + '.pkl'
             with open(output_file, 'wb') as handle:
-                pickle.dump(randomized_phenotype_ortholog_hash, handle)
+                pickle.dump(randomized_phenotype_ortholog_dict, handle)
             print('Completed randomized dataset ' + str(limit) + ' for ' + source_gene_prefix + ' vs ' +
                   target_gene_prefix + ' : ' + output_file)
-
+            del randomized_phenotype_ortholog_dict, phenotype_ortholog_dict, orthologs_df, common_orthologs, shuffled_orthologs
         return
 
     def run(self, limit, nodes):

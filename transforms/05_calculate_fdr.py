@@ -159,9 +159,9 @@ class myClass:
         print('Total phenolog calculations: '+str(total_hyp_calcs))
 
         # Perhaps writing the phenolog_p_value_list to disk would be appropriate here, should the processing fail?
-        # Do we need the phenolog_p_value_list or just grab the 5% cutoff p-value?
+        # Do we need the phenolog_p_value_list or just grab the 5% cutoff p-value? Maybe write both?
         five_percent_position = round((len(phenolog_p_value_list))*0.05)
-        phenolog_p_value_list.sort(reverse=True)
+        phenolog_p_value_list.sort(reverse=False)
         p_value_cutoff = phenolog_p_value_list[five_percent_position]
         print(phenolog_p_value_list[1:10])
         print(phenolog_p_value_list[-10:-1])
