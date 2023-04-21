@@ -74,6 +74,28 @@ zebrafish_random_zvw_filepath = "../datasets/intermediate/random/zebrafish/zebra
 
 organism_list = ['human', 'mouse', 'rat', 'worm', 'zebrafish']
 
+human_dict = {'species_name': 'human', 'gene_prefix': 'HGNC:',
+              'gene_phenotype_filepath': '../datasets/intermediate/human/human_gene_to_phenotype.tsv',
+              'phenotype_to_ortholog_filepath': '../datasets/intermediate/human/human_phenotype_to_ortholog.pkl',
+              'random_filepath': "../datasets/intermediate/random/human/human_vs_"}
+mouse_dict = {'species_name': 'mouse', 'gene_prefix': 'MGI:',
+              'gene_phenotype_filepath': '../datasets/intermediate/mouse/mouse_gene_to_phenotype.tsv',
+              'phenotype_to_ortholog_filepath': '../datasets/intermediate/rat/rat_phenotype_to_ortholog.pkl',
+              'random_filepath': "../datasets/intermediate/random/mouse/mouse_vs_"}
+rat_dict = {'species_name': 'rat', 'gene_prefix': 'RGD:',
+            'gene_phenotype_filepath': '../datasets/intermediate/rat/rat_gene_to_phenotype.tsv',
+            'phenotype_to_ortholog_filepath': '../datasets/intermediate/rat/rat_phenotype_to_ortholog.pkl',
+            'random_filepath': "../datasets/intermediate/random/rat/rat_vs_"}
+worm_dict = {'species_name': 'worm', 'gene_prefix': 'WB:',
+             'gene_phenotype_filepath': '../datasets/intermediate/worm/worm_gene_to_phenotype.tsv',
+             'phenotype_to_ortholog_filepath': '../datasets/intermediate/worm/worm_phenotype_to_ortholog.pkl',
+             'random_filepath': "../datasets/intermediate/random/worm/worm_vs_"}
+zebrafish_dict = {'species_name': 'zebrafish', 'gene_prefix': 'ZFIN:',
+                  'gene_phenotype_filepath': '../datasets/intermediate/zebrafish/zebrafish_gene_to_phenotype.tsv',
+                  'phenotype_to_ortholog_filepath': '../datasets/intermediate/zebrafish/zebrafish_phenotype_to_ortholog.pkl',
+                  'random_filepath': "../datasets/intermediate/random/zebrafish/zebrafish_vs_"}
+species_dict = {'human': human_dict, 'mouse': mouse_dict, 'rat': rat_dict, 'worm': worm_dict,
+                'zebrafish': zebrafish_dict}
 
 class myClass:
     def __init__(self):
@@ -162,11 +184,41 @@ class myClass:
         # Do we need the phenolog_p_value_list or just grab the 5% cutoff p-value? Maybe write both?
         five_percent_position = round((len(phenolog_p_value_list))*0.05)
         phenolog_p_value_list.sort(reverse=False)
+
+        # Save p-value list to disc for testing
         p_value_cutoff = phenolog_p_value_list[five_percent_position]
         print(phenolog_p_value_list[1:10])
         print(phenolog_p_value_list[-10:-1])
         print(p_value_cutoff)
         return phenolog_p_value_list
+
+    def manage_phenolog_calculations(self):
+        '''
+        This function manages running the phenologs calculations for all pair-wise species comparisons using
+        randomized datasets for a single
+
+        Possible to just configure by writing an auto-cross-species function?
+
+        :return:
+        '''
+
+        species_list = ['human', 'mouse', 'rat', 'worm', 'zebrafish']
+        for species_a in species_list:
+            for species_b in species_list:
+                if species_a == species_b:
+                    pass
+                else:
+
+
+
+        return
+
+
+    def run(self, limit, nodes):
+        # pool = Pool(nodes=nodes) # Use this one to specify nodes
+        pool = Pool() # If nodes not specified, will auto-detect
+        pool.map(self.calculate_fdr_from_random_data, limit)
+        return
 
 
 # Testing old code
@@ -183,3 +235,12 @@ common_orthologs = common_orthologs[['ortholog_id']]
 common_orthologs = common_orthologs.drop_duplicates()
 p_value_list = myClass.calculate_fdr_from_random_data(myClass, mouse_file, zebrafish_file, common_orthologs)
 
+'''
+if __name__ == '__main__':
+    m = myClass()
+    nodes = 5
+    # limit = range(1, 11)
+    limit = range(1, 2)
+    m.run(limit, nodes)
+    print('Completed phenologs calculations for randomized datasets.')
+'''
