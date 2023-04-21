@@ -149,21 +149,21 @@ human_disease_prefix = 'ORPHA:'
 human_phenotype_prefix = 'HP:'
 human_orpha_disease_to_phenotype_filepath = "../datasets/intermediate/human/human_orpha_disease_to_phenotype.tsv"
 get_gene_phenotype_edges_from_kg(kg_edges, kg_nodes, human_disease_prefix, human_phenotype_prefix, has_phenotype, human_orpha_disease_to_phenotype_filepath)
-print('Human ORPHA disease-to-phenotype complete.')
+print('Human ORPHA-HP disease-to-phenotype complete.')
 
 # Get human MONDO disease to phenotype
 human_disease_prefix = 'MONDO:'
 human_phenotype_prefix = 'HP:'
 human_mondo_disease_to_phenotype_filepath = "../datasets/intermediate/human/human_mondo_disease_to_phenotype.tsv"
 get_gene_phenotype_edges_from_kg(kg_edges, kg_nodes, human_disease_prefix, human_phenotype_prefix, has_phenotype, human_mondo_disease_to_phenotype_filepath)
-print('Human MONDO disease-to-phenotype complete.')
+print('Human MONDO-HP disease-to-phenotype complete.')
 
 # Get human MONDO disease to MONDO phenotype
 human_disease_prefix = 'MONDO:'
 human_phenotype_prefix = 'MONDO:'
 human_mondo_disease_to_mondo_phenotype_filepath = "../datasets/intermediate/human/human_mondo_disease_to_mondo_phenotype.tsv"
 get_gene_phenotype_edges_from_kg(kg_edges, kg_nodes, human_disease_prefix, human_phenotype_prefix, has_phenotype, human_mondo_disease_to_mondo_phenotype_filepath)
-print('Human MONDO disease-to-phenotype complete.')
+print('Human MONDO-MONDO disease-to-phenotype complete.')
 
 # Merge human disease to phenotype files:
 mondo_to_hp = pd.read_csv(human_mondo_disease_to_phenotype_filepath, sep='\t', header=0, low_memory=False)

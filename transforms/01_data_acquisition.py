@@ -27,7 +27,11 @@ import tarfile
 # Set up dataset directories
 paths = ['../datasets/sources/monarch_kg', '../datasets/intermediate/human', '../datasets/intermediate/mouse',
          '../datasets/intermediate/rat', '../datasets/intermediate/worm', '../datasets/intermediate/zebrafish',
-         '../datasets/intermediate/panther', '../datasets/intermediate/random', '../datasets/output/phenologs',
+         '../datasets/intermediate/panther', '../datasets/intermediate/random/fdr/fdr_p_value_lists',
+         '../datasets/intermediate/random/human', '../datasets/intermediate/random/mouse',
+         '../datasets/intermediate/random/rat', '../datasets/intermediate/random/worm',
+         '../datasets/intermediate/random/zebrafish',
+         '../datasets/output/phenologs',
          '../datasets/output/gene_candidates']
 
 for path in paths:
@@ -44,7 +48,6 @@ with open(filename, "wb") as f:
 
 # Unpack Monarch KG
 monarch_kg = '../datasets/sources/monarch_kg/monarch-kg.tar.gz'
-print(monarch_kg)
 file = tarfile.open(monarch_kg)
 file.extractall('../datasets/sources/monarch_kg')
 file.close()
@@ -53,3 +56,5 @@ file.close()
 # with open(filename, "wb") as f:
 #     r = requests.get(URL)
 #     f.write(r.content)
+
+print('Setup and data acuisition complete.')
