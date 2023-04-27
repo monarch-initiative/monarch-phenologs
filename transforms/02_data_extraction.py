@@ -134,8 +134,50 @@ panther_orthologs_filepath = "../datasets/intermediate/panther/panther_orthologs
 get_panther_edges_from_edges_kg(kg_edges, panther_gene_prefix, panther_phenotype_prefix, has_ortholog, panther_orthologs_filepath)
 print('PANTHER ortholog extraction complete.')
 
+orthologs_df = pd.read_csv(panther_orthologs_filepath, sep='\t', header=0, low_memory=False)
 
+# Create 'common orthologs' files.
 
+human_dict = {'species_name': 'human', 'gene_prefix': 'HGNC:',
+              'gene_phenotype_filepath': '../datasets/intermediate/human/human_gene_to_phenotype.tsv',
+              'phenotype_to_ortholog_filepath': '../datasets/intermediate/human/human_phenotype_to_ortholog.pkl',
+              'random_filepath': "../datasets/intermediate/random/human/human_vs_"}
+mouse_dict = {'species_name': 'mouse', 'gene_prefix': 'MGI:',
+              'gene_phenotype_filepath': '../datasets/intermediate/mouse/mouse_gene_to_phenotype.tsv',
+              'phenotype_to_ortholog_filepath': '../datasets/intermediate/mouse/mouse_phenotype_to_ortholog.pkl',
+              'random_filepath': "../datasets/intermediate/random/mouse/mouse_vs_"}
+rat_dict = {'species_name': 'rat', 'gene_prefix': 'RGD:',
+            'gene_phenotype_filepath': '../datasets/intermediate/rat/rat_gene_to_phenotype.tsv',
+            'phenotype_to_ortholog_filepath': '../datasets/intermediate/rat/rat_phenotype_to_ortholog.pkl',
+            'random_filepath': "../datasets/intermediate/random/rat/rat_vs_"}
+worm_dict = {'species_name': 'worm', 'gene_prefix': 'WB:',
+             'gene_phenotype_filepath': '../datasets/intermediate/worm/worm_gene_to_phenotype.tsv',
+             'phenotype_to_ortholog_filepath': '../datasets/intermediate/worm/worm_phenotype_to_ortholog.pkl',
+             'random_filepath': "../datasets/intermediate/random/worm/worm_vs_"}
+zebrafish_dict = {'species_name': 'zebrafish', 'gene_prefix': 'ZFIN:',
+                  'gene_phenotype_filepath': '../datasets/intermediate/zebrafish/zebrafish_gene_to_phenotype.tsv',
+                  'phenotype_to_ortholog_filepath': '../datasets/intermediate/zebrafish/zebrafish_phenotype_to_ortholog.pkl',
+                  'random_filepath': "../datasets/intermediate/random/zebrafish/zebrafish_vs_"}
+species_dict = {'human': human_dict, 'mouse': mouse_dict, 'rat': rat_dict, 'worm': worm_dict,
+                'zebrafish': zebrafish_dict}
+
+for species_a in species_dict:
+    for species_b in species_dict:
+        if species_a == species_b:
+            pass
+        else:
+            source_species_name = species_dict[species_a]['species_name']
+            source_gene_prefix = species_dict[species_a]['gene_prefix']
+            target_species_name = species_dict[species_b]['species_name']
+            target_gene_prefix = species_dict[species_b]['gene_prefix']
+            common_orthologs_filepath = "../datasets/intermediate/panther/common_orthologs_" + source_species_name + '_vs_' + target_species_name + '.tsv'
+            common_orthologs = orthologs_df[
+                (orthologs_df["geneA"].str.contains(source_gene_prefix, regex=True, na=True)) & (
+                    orthologs_df["geneB"].str.contains(target_gene_prefix, regex=True, na=True))]
+            common_orthologs = common_orthologs[['ortholog_id']]
+            common_orthologs = common_orthologs.drop_duplicates()
+            pd.DataFrame(common_orthologs).to_csv(common_orthologs_filepath, sep="\t", index=False)
+print('Common orthologs files created.')
 
 # Get human gene to phenotype TODO: Are there phenotypes with the MONDO prefix as well? Doesn't look like it.
 human_gene_prefix = 'HGNC:'

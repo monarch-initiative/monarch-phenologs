@@ -102,7 +102,7 @@ class myClass:
         pass
 
 # Old code for fdr calculation
-    def calculate_fdr_from_random_data(self, species_a_phenotype_ortholog_file, species_b_phenotype_ortholog_file, shared_orthologs):
+    def calculate_fdr_from_random_data(self, species_a_phenotype_ortholog_file, species_b_phenotype_ortholog_file, shared_orthologs, limit):
         """
         This function performs the phenolog calculations between
         the phenotypes of two species from the random data sets.
@@ -192,7 +192,7 @@ class myClass:
         print(p_value_cutoff)
         return phenolog_p_value_list
 
-    def manage_phenolog_calculations(self):
+    def stage_phenolog_calculations(self, limit):
         '''
         This function manages running the phenologs calculations for all pair-wise species comparisons using
         randomized datasets for a single
@@ -202,31 +202,81 @@ class myClass:
         :return:
         '''
 
+        human_dict = {'species_name': 'human', 'gene_prefix': 'HGNC:',
+                      'gene_phenotype_filepath': '../datasets/intermediate/human/human_gene_to_phenotype.tsv',
+                      'phenotype_to_ortholog_filepath': '../datasets/intermediate/human/human_phenotype_to_ortholog.pkl',
+                      'random_filepath': "../datasets/intermediate/random/human/human_vs_"}
+        mouse_dict = {'species_name': 'mouse', 'gene_prefix': 'MGI:',
+                      'gene_phenotype_filepath': '../datasets/intermediate/mouse/mouse_gene_to_phenotype.tsv',
+                      'phenotype_to_ortholog_filepath': '../datasets/intermediate/mouse/mouse_phenotype_to_ortholog.pkl',
+                      'random_filepath': "../datasets/intermediate/random/mouse/mouse_vs_"}
+        rat_dict = {'species_name': 'rat', 'gene_prefix': 'RGD:',
+                    'gene_phenotype_filepath': '../datasets/intermediate/rat/rat_gene_to_phenotype.tsv',
+                    'phenotype_to_ortholog_filepath': '../datasets/intermediate/rat/rat_phenotype_to_ortholog.pkl',
+                    'random_filepath': "../datasets/intermediate/random/rat/rat_vs_"}
+        worm_dict = {'species_name': 'worm', 'gene_prefix': 'WB:',
+                     'gene_phenotype_filepath': '../datasets/intermediate/worm/worm_gene_to_phenotype.tsv',
+                     'phenotype_to_ortholog_filepath': '../datasets/intermediate/worm/worm_phenotype_to_ortholog.pkl',
+                     'random_filepath': "../datasets/intermediate/random/worm/worm_vs_"}
+        zebrafish_dict = {'species_name': 'zebrafish', 'gene_prefix': 'ZFIN:',
+                          'gene_phenotype_filepath': '../datasets/intermediate/zebrafish/zebrafish_gene_to_phenotype.tsv',
+                          'phenotype_to_ortholog_filepath': '../datasets/intermediate/zebrafish/zebrafish_phenotype_to_ortholog.pkl',
+                          'random_filepath': "../datasets/intermediate/random/zebrafish/zebrafish_vs_"}
+        species_dict = {'human': human_dict, 'mouse': mouse_dict, 'rat': rat_dict, 'worm': worm_dict,
+                        'zebrafish': zebrafish_dict}
+
+
         species_list = ['human', 'mouse', 'rat', 'worm', 'zebrafish']
         for species_a in species_list:
             for species_b in species_list:
                 if species_a == species_b:
                     pass
                 else:
+                    phenotype_ortholog_file = species_dict[species_a]['phenotype_to_ortholog_filepath']
+                    source_species_name = species_dict[species_a]['species_name']
+                    source_gene_prefix = species_dict[species_a]['gene_prefix']
+                    source_phenotype_ortholog_file = species_dict[species_a]['phenotype_to_ortholog_filepath']
+                    target_species_name = species_dict[species_b]['species_name']
+                    target_gene_prefix = species_dict[species_b]['gene_prefix']
+                    target_phenotype_ortholog_file = species_dict[species_b]['phenotype_to_ortholog_filepath']
+                    output_filepath = species_dict[species_a]['random_filepath'] + species_dict[species_b]['species_name']
 
+                    p_value_list_filepath = "../datasets/intermediate/random/fdr/fdr_p_value_lists/" + source_species_name + "_vs_" + target_species_name + '_' + str(limit) + ".pkl"
+                    # p_value_cutoff_filepath = "../datasets/intermediate/random/fdr/fdr_cutoffs/" + source_species_name + "_vs_" + target_species_name + '_' + limit + ".txt"
 
+                    # Load common orthologs file for the source and target species.
+                    common_orthologs_filepath = "../datasets/intermediate/panther/common_orthologs_" + source_species_name + '_vs_' + target_species_name + '.tsv'
+                    common_orthologs = pd.read_csv(common_orthologs_filepath, sep='\t', header=0, low_memory=False)
+                    print('Generating phenolog p-value list for ' + source_species_name + ' vs ' + target_species_name + ' ' + str(limit) + '.')
+                    phenolog_p_value_list = self.calculate_fdr_from_random_data(source_phenotype_ortholog_file, target_phenotype_ortholog_file, common_orthologs, limit)
+                    # Perhaps writing the phenolog_p_value_list to disk would be appropriate here, should the processing fail?
+                    # Do we need the phenolog_p_value_list or just grab the 5% cutoff p-value? Maybe write both?
+                    # five_percent_position = round((len(phenolog_p_value_list)) * 0.05)
+                    # phenolog_p_value_list.sort(reverse=False)
 
+                    # Save p-value list to disc for testing
+                    # p_value_cutoff = phenolog_p_value_list[five_percent_position]
+                    with open(p_value_list_filepath, 'wb') as handle:
+                        pickle.dump(phenolog_p_value_list, handle)
+                    print('Complete generating phenolog p-value list for ' + source_species_name + ' vs ' + target_species_name + ' ' + str(limit) + '.')
+                    del phenolog_p_value_list, common_orthologs
         return
 
 
     def run(self, limit, nodes):
         # pool = Pool(nodes=nodes) # Use this one to specify nodes
         pool = Pool() # If nodes not specified, will auto-detect
-        pool.map(self.calculate_fdr_from_random_data, limit)
+        pool.map(self.stage_phenolog_calculations, limit)
         return
 
-
+'''
 # Testing old code
 zebrafish_file = zebrafish_random_zvm_filepath + '1.pkl'
 mouse_file = mouse_random_mvz_filepath + '1.pkl'
 source_gene_prefix = mouse_gene_prefix
 target_gene_prefix = zebrafish_gene_prefix
-# Load orthologs file and select the common ortholgs between the source and target species.
+# Load orthologs file and select the common orthologs between the source and target species.
+# Make sense to go ahead and create all common ortholog files now?
 orthologs_df = pd.read_csv(panther_filepath, sep='\t', header=0, low_memory=False)
 common_orthologs = orthologs_df[
     (orthologs_df["geneA"].str.contains(source_gene_prefix, regex=True, na=True)) & (
@@ -234,13 +284,12 @@ common_orthologs = orthologs_df[
 common_orthologs = common_orthologs[['ortholog_id']]
 common_orthologs = common_orthologs.drop_duplicates()
 p_value_list = myClass.calculate_fdr_from_random_data(myClass, mouse_file, zebrafish_file, common_orthologs)
-
 '''
+
 if __name__ == '__main__':
     m = myClass()
     nodes = 5
-    # limit = range(1, 11)
-    limit = range(1, 2)
+    limit = range(1, 11)
+    # limit = range(1, 2)
     m.run(limit, nodes)
     print('Completed phenologs calculations for randomized datasets.')
-'''

@@ -47,7 +47,7 @@ class myClass:
                       'random_filepath': "../datasets/intermediate/random/human/human_vs_"}
         mouse_dict = {'species_name': 'mouse', 'gene_prefix': 'MGI:',
                       'gene_phenotype_filepath': '../datasets/intermediate/mouse/mouse_gene_to_phenotype.tsv',
-                      'phenotype_to_ortholog_filepath': '../datasets/intermediate/rat/rat_phenotype_to_ortholog.pkl',
+                      'phenotype_to_ortholog_filepath': '../datasets/intermediate/mouse/mouse_phenotype_to_ortholog.pkl',
                       'random_filepath': "../datasets/intermediate/random/mouse/mouse_vs_"}
         rat_dict = {'species_name': 'rat', 'gene_prefix': 'RGD:',
                     'gene_phenotype_filepath': '../datasets/intermediate/rat/rat_gene_to_phenotype.tsv',
@@ -81,13 +81,9 @@ class myClass:
                     data = open(phenotype_ortholog_file, 'rb')
                     phenotype_ortholog_dict = pickle.load(data)
 
-                    # Load orthologs file and select the common ortholgs between the source and target species.
-                    orthologs_df = pd.read_csv(panther_filepath, sep='\t', header=0, low_memory=False)
-                    common_orthologs = orthologs_df[
-                        (orthologs_df["geneA"].str.contains(source_gene_prefix, regex=True, na=True)) & (
-                            orthologs_df["geneB"].str.contains(target_gene_prefix, regex=True, na=True))]
-                    common_orthologs = common_orthologs[['ortholog_id']]
-                    common_orthologs = common_orthologs.drop_duplicates()
+                    # Load common orthologs file for the source and target species.
+                    common_orthologs_filepath = "../datasets/intermediate/panther/common_orthologs_" + source_species_name + '_vs_' + target_species_name + '.tsv'
+                    common_orthologs = pd.read_csv(common_orthologs_filepath, sep='\t', header=0, low_memory=False)
 
                     # Have organism structures, have common orthologs, now need to replace each
                     # ortholog associated with a phenotype with a random common ortholog without replacement.
@@ -123,7 +119,7 @@ class myClass:
                         pickle.dump(randomized_phenotype_ortholog_dict, handle)
                     print('Completed randomized dataset ' + str(limit) + ' for ' + source_species_name + ' vs ' +
                           target_species_name + ' : ' + output_file)
-                    del randomized_phenotype_ortholog_dict, phenotype_ortholog_dict, orthologs_df, common_orthologs, shuffled_orthologs
+                    del randomized_phenotype_ortholog_dict, phenotype_ortholog_dict, common_orthologs, shuffled_orthologs
         return
 
     def run(self, limit, nodes):
