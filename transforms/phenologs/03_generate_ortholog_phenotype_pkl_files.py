@@ -88,35 +88,35 @@ def build_ortholog_phenotype_data(panther_file, gene_phenotype_file, output_file
 # there will not be an equivalent row pointing in the other direction: geneB -> orthologous to -> geneA.
 # So in order to have a row for every A to B link, we have to duplicate the dataframe, swap columns, and merge
 # OR handle the one-directional nature of the ortholog edges in later steps.
-panther_orthologs_filepath = "../datasets/intermediate/panther/panther_orthologs.tsv"
+panther_orthologs_filepath = "../../datasets/intermediate/panther/panther_orthologs.tsv"
 
 # Build mouse phenotype to ortholog
-mouse_gene_to_phenotype_filepath = "../datasets/intermediate/mouse/mouse_gene_to_phenotype.tsv"
-mouse_phenotype_to_ortholog_filepath = "../datasets/intermediate/mouse/mouse_phenotype_to_ortholog.pkl"
+mouse_gene_to_phenotype_filepath = "../../datasets/intermediate/mouse/mouse_gene_to_phenotype.tsv"
+mouse_phenotype_to_ortholog_filepath = "../../datasets/intermediate/mouse/mouse_phenotype_to_ortholog.pkl"
 build_ortholog_phenotype_data(panther_orthologs_filepath, mouse_gene_to_phenotype_filepath, mouse_phenotype_to_ortholog_filepath)
 print('Mouse  phenotype-to-ortholog complete.')
 
 # Build zebrafish phenotype to ortholog
-zebrafish_gene_to_phenotype_filepath = "../datasets/intermediate/zebrafish/zebrafish_gene_to_phenotype.tsv"
-zebrafish_phenotype_to_ortholog_filepath = "../datasets/intermediate/zebrafish/zebrafish_phenotype_to_ortholog.pkl"
+zebrafish_gene_to_phenotype_filepath = "../../datasets/intermediate/zebrafish/zebrafish_gene_to_phenotype.tsv"
+zebrafish_phenotype_to_ortholog_filepath = "../../datasets/intermediate/zebrafish/zebrafish_phenotype_to_ortholog.pkl"
 build_ortholog_phenotype_data(panther_orthologs_filepath, zebrafish_gene_to_phenotype_filepath, zebrafish_phenotype_to_ortholog_filepath)
 print('Zebrafish phenotype-to-ortholog complete.')
 
 # Build rat phenotype to ortholog
-rat_gene_to_phenotype_filepath = "../datasets/intermediate/rat/rat_gene_to_phenotype.tsv"
-rat_phenotype_to_ortholog_filepath = "../datasets/intermediate/rat/rat_phenotype_to_ortholog.pkl"
+rat_gene_to_phenotype_filepath = "../../datasets/intermediate/rat/rat_gene_to_phenotype.tsv"
+rat_phenotype_to_ortholog_filepath = "../../datasets/intermediate/rat/rat_phenotype_to_ortholog.pkl"
 build_ortholog_phenotype_data(panther_orthologs_filepath, rat_gene_to_phenotype_filepath, rat_phenotype_to_ortholog_filepath)
 print('Rat phenotype-to-ortholog complete.')
 
 # Build worm phenotype to ortholog
-worm_gene_to_phenotype_filepath = "../datasets/intermediate/worm/worm_gene_to_phenotype.tsv"
-worm_phenotype_to_ortholog_filepath = "../datasets/intermediate/worm/worm_phenotype_to_ortholog.pkl"
+worm_gene_to_phenotype_filepath = "../../datasets/intermediate/worm/worm_gene_to_phenotype.tsv"
+worm_phenotype_to_ortholog_filepath = "../../datasets/intermediate/worm/worm_phenotype_to_ortholog.pkl"
 build_ortholog_phenotype_data(panther_orthologs_filepath, worm_gene_to_phenotype_filepath, worm_phenotype_to_ortholog_filepath)
 print('Worm phenotype-to-ortholog complete.')
 
 # Build human phenotype to ortholog
-human_gene_to_phenotype_filepath = "../datasets/intermediate/human/human_gene_to_phenotype.tsv"
-human_phenotype_to_ortholog_filepath = "../datasets/intermediate/human/human_phenotype_to_ortholog.pkl"
+human_gene_to_phenotype_filepath = "../../datasets/intermediate/human/human_gene_to_phenotype.tsv"
+human_phenotype_to_ortholog_filepath = "../../datasets/intermediate/human/human_phenotype_to_ortholog.pkl"
 build_ortholog_phenotype_data(panther_orthologs_filepath, human_gene_to_phenotype_filepath, human_phenotype_to_ortholog_filepath)
 print('Human phenotype-to-ortholog complete.')
 

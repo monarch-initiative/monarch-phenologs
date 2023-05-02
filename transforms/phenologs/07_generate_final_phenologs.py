@@ -37,8 +37,8 @@ pd.set_option('display.max_colwidth', None)
 pd.set_option('display.max_columns', None)
 
 
-panther_filepath = "../datasets/intermediate/panther/panther_orthologs.tsv"
-fdr_cutoff_file = "../datasets/intermediate/random/fdr/"
+panther_filepath = "../../datasets/intermediate/panther/panther_orthologs.tsv"
+fdr_cutoff_file = "../../datasets/intermediate/random/fdr/"
 fdr_cutoff = 0.0072
 
 
@@ -72,7 +72,7 @@ total_ortholog_matches = 0
 total_ortholog_nonmatches = 0
 total_hyp_calcs = 0
 phenolog_p_value_list = []
-
+significant_phenolog_count = 0
 
 species_list = ['human', 'mouse', 'rat', 'worm', 'zebrafish']
 species_list.sort()
@@ -136,21 +136,34 @@ for species_a in species_list:
                         c = float(ortholog_matches)
                         prb = float(hypergeom.pmf(c, N, m, n))
                         phenolog_p_value_list.append(prb)
+                        total_hyp_calcs += 1
                         if prb <= fdr_cutoff:
                             significance = 'Significant'
+                            significant_phenolog_count += 1
                         else:
                             significance = 'Not Significant'
+
                         new_row = pd.Series({'Phenotype_A': species_a_phenotype_id, 'Phenotype_B': species_b_phenotype_id, 'p_value': prb, 'phenolog_flag': significance})
+                        pd.concat([phenologs_df, new_row.to_frame().T], ignore_index=True)
+
+                    else:
+                        prb = 1
+                        significance = 'No ortholog matches'
+                        new_row = pd.Series(
+                            {'Phenotype_A': species_a_phenotype_id, 'Phenotype_B': species_b_phenotype_id,
+                             'p_value': prb, 'phenolog_flag': significance})
                         pd.concat([phenologs_df, new_row.to_frame().T], ignore_index=True)
             print("Completed processing of " + species_a + " vs " + species_b + " phenolog calculations.")
             print('Total Matches so far: ' + str(total_ortholog_matches))
             print('Total non-matches so far: ' + str(total_ortholog_nonmatches))
             print('Total phenolog calculations so far: ' + str(total_hyp_calcs))
+            print('Total significant phenologs so far: ' + str(significant_phenolog_count))
     species_list_clone.remove(species_a)
 
     print('Total Matches: ' + str(total_ortholog_matches))
     print('Total non-matches: ' + str(total_ortholog_nonmatches))
     print('Total phenolog calculations: ' + str(total_hyp_calcs))
+    print('Total significant phenologs: ' + str(significant_phenolog_count))
 
 # Final output
 full_output_file = '../datasets/output/phenologs/all_phenolog_data.tsv'

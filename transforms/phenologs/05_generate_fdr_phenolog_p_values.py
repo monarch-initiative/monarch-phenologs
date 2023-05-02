@@ -35,7 +35,7 @@ NOTE: This portion of the pipeline will likely consume a large amount of time, s
 '''
 
 # Would it make sense to move all of these directory labels to a separate file to be referenced by individual scripts?
-panther_filepath = "../datasets/intermediate/panther/panther_orthologs.tsv"
+panther_filepath = "../../datasets/intermediate/panther/panther_orthologs.tsv"
 
 organism_list = ['human', 'mouse', 'rat', 'worm', 'zebrafish']
 

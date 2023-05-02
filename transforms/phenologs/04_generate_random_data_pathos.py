@@ -39,7 +39,7 @@ class myClass:
             Or should I only be creating one randomized file for each pairwise species combination?
             Looks like I previously created files for both directions.
         """
-        panther_filepath = "../datasets/intermediate/panther/panther_orthologs.tsv"
+        panther_filepath = "../../datasets/intermediate/panther/panther_orthologs.tsv"
 
         human_dict = {'species_name': 'human', 'gene_prefix': 'HGNC:',
                       'gene_phenotype_filepath': '../datasets/intermediate/human/human_gene_to_phenotype.tsv',
