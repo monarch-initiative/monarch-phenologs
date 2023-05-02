@@ -37,41 +37,6 @@ NOTE: This portion of the pipeline will likely consume a large amount of time, s
 # Would it make sense to move all of these directory labels to a separate file to be referenced by individual scripts?
 panther_filepath = "../datasets/intermediate/panther/panther_orthologs.tsv"
 
-human_gene_prefix = 'HGNC:'
-human_gene_to_phenotype_filepath = "../datasets/intermediate/human/human_gene_to_phenotype.tsv"
-human_random_hvm_filepath = "../datasets/intermediate/random/human/human_hvm_"
-human_random_hvr_filepath = "../datasets/intermediate/random/human/human_hvr_"
-human_random_hvw_filepath = "../datasets/intermediate/random/human/human_hvw_"
-human_random_hvz_filepath = "../datasets/intermediate/random/human/human_hvz_"
-
-mouse_gene_prefix = 'MGI:'
-mouse_gene_to_phenotype_filepath = "../datasets/intermediate/mouse/mouse_gene_to_phenotype.tsv"
-mouse_random_mvh_filepath = "../datasets/intermediate/random/mouse/mouse_mvh_"
-mouse_random_mvr_filepath = "../datasets/intermediate/random/mouse/mouse_mvr_"
-mouse_random_mvw_filepath = "../datasets/intermediate/random/mouse/mouse_mvw_"
-mouse_random_mvz_filepath = "../datasets/intermediate/random/mouse/mouse_mvz_"
-
-rat_gene_prefix = 'RGD:'
-rat_gene_to_phenotype_filepath = "../datasets/intermediate/rat/rat_gene_to_phenotype.tsv"
-rat_random_rvh_filepath = "../datasets/intermediate/random/rat/rat_rvh_"
-rat_random_rvm_filepath = "../datasets/intermediate/random/rat/rat_rvm_"
-rat_random_rvw_filepath = "../datasets/intermediate/random/rat/rat_rvw_"
-rat_random_rvz_filepath = "../datasets/intermediate/random/rat/rat_rvz_"
-
-worm_gene_prefix = 'WB:'
-worm_gene_to_phenotype_filepath = "../datasets/intermediate/worm/worm_gene_to_phenotype.tsv"
-worm_random_wvh_filepath = "../datasets/intermediate/random/worm/worm_wvh_"
-worm_random_wvm_filepath = "../datasets/intermediate/random/worm/worm_wvm_"
-worm_random_wvr_filepath = "../datasets/intermediate/random/worm/worm_wvr_"
-worm_random_wvz_filepath = "../datasets/intermediate/random/worm/worm_wvz_"
-
-zebrafish_gene_prefix = 'ZFIN:'
-zebrafish_gene_to_phenotype_filepath = "../datasets/intermediate/zebrafish/zebrafish_gene_to_phenotype.tsv"
-zebrafish_random_zvh_filepath = "../datasets/intermediate/random/zebrafish/zebrafish_zvh_"
-zebrafish_random_zvm_filepath = "../datasets/intermediate/random/zebrafish/zebrafish_zvm_"
-zebrafish_random_zvr_filepath = "../datasets/intermediate/random/zebrafish/zebrafish_zvr_"
-zebrafish_random_zvw_filepath = "../datasets/intermediate/random/zebrafish/zebrafish_zvw_"
-
 organism_list = ['human', 'mouse', 'rat', 'worm', 'zebrafish']
 
 human_dict = {'species_name': 'human', 'gene_prefix': 'HGNC:',
@@ -102,7 +67,7 @@ class myClass:
         pass
 
 # Old code for fdr calculation
-    def calculate_fdr_from_random_data(self, species_a_phenotype_ortholog_file, species_b_phenotype_ortholog_file, shared_orthologs, limit):
+    def calculate_fdr_from_random_data(self, species_a_phenotype_ortholog_file, species_b_phenotype_ortholog_file, shared_orthologs):
         """
         This function performs the phenolog calculations between
         the phenotypes of two species from the random data sets.
@@ -225,20 +190,33 @@ class myClass:
         species_dict = {'human': human_dict, 'mouse': mouse_dict, 'rat': rat_dict, 'worm': worm_dict,
                         'zebrafish': zebrafish_dict}
 
-
+        # TODO: Think a fix is necessary here
+        # While we needed to create randomized phenotype-ortholog files in each direction for each pair of species,
+        # both the processing of these files for the FDR as well as the actual phenologs calculations will only
+        # need to be computed once for each species pair. So, the solution here would be to drop out a species from list
+        # after each iteration of the 'species_a in species_list loop.
+        # Otherwise you are just getting duplicate calculations.
         species_list = ['human', 'mouse', 'rat', 'worm', 'zebrafish']
+        species_list.sort()
+        species_list_clone = ['human', 'mouse', 'rat', 'worm', 'zebrafish']
+        species_list_clone.sort()
+        print('Starting species list: ' + str(species_list))
+        print('Starting clone species list: ' + str(species_list_clone))
         for species_a in species_list:
-            for species_b in species_list:
+            for species_b in species_list_clone:
                 if species_a == species_b:
                     pass
                 else:
                     phenotype_ortholog_file = species_dict[species_a]['phenotype_to_ortholog_filepath']
                     source_species_name = species_dict[species_a]['species_name']
                     source_gene_prefix = species_dict[species_a]['gene_prefix']
+                    # Source and target phenotype-ortholog files should be the random files!
                     source_phenotype_ortholog_file = species_dict[species_a]['phenotype_to_ortholog_filepath']
+                    source_random_phenotype_ortholog_file = species_dict[species_a]['random_filepath'] + species_dict[species_b]['species_name'] + '_' + str(limit) + '.pkl'
                     target_species_name = species_dict[species_b]['species_name']
                     target_gene_prefix = species_dict[species_b]['gene_prefix']
                     target_phenotype_ortholog_file = species_dict[species_b]['phenotype_to_ortholog_filepath']
+                    target_random_phenotype_ortholog_file = species_dict[species_a]['random_filepath'] + species_dict[species_b]['species_name'] + '_' + str(limit) + '.pkl'
                     output_filepath = species_dict[species_a]['random_filepath'] + species_dict[species_b]['species_name']
 
                     p_value_list_filepath = "../datasets/intermediate/random/fdr/fdr_p_value_lists/" + source_species_name + "_vs_" + target_species_name + '_' + str(limit) + ".pkl"
@@ -248,7 +226,7 @@ class myClass:
                     common_orthologs_filepath = "../datasets/intermediate/panther/common_orthologs_" + source_species_name + '_vs_' + target_species_name + '.tsv'
                     common_orthologs = pd.read_csv(common_orthologs_filepath, sep='\t', header=0, low_memory=False)
                     print('Generating phenolog p-value list for ' + source_species_name + ' vs ' + target_species_name + ' ' + str(limit) + '.')
-                    phenolog_p_value_list = self.calculate_fdr_from_random_data(source_phenotype_ortholog_file, target_phenotype_ortholog_file, common_orthologs, limit)
+                    phenolog_p_value_list = self.calculate_fdr_from_random_data(source_random_phenotype_ortholog_file, target_random_phenotype_ortholog_file, common_orthologs)
                     # Perhaps writing the phenolog_p_value_list to disk would be appropriate here, should the processing fail?
                     # Do we need the phenolog_p_value_list or just grab the 5% cutoff p-value? Maybe write both?
                     # five_percent_position = round((len(phenolog_p_value_list)) * 0.05)
@@ -260,6 +238,9 @@ class myClass:
                         pickle.dump(phenolog_p_value_list, handle)
                     print('Complete generating phenolog p-value list for ' + source_species_name + ' vs ' + target_species_name + ' ' + str(limit) + '.')
                     del phenolog_p_value_list, common_orthologs
+            species_list_clone.remove(species_a)
+            print('Species list after ' + species_a + 'completed: ' + str(species_list))
+            print('Clone species list after ' + species_a + 'completed: ' + str(species_list_clone))
         return
 
 

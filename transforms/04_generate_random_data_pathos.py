@@ -74,7 +74,7 @@ class myClass:
                     source_gene_prefix = species_dict[species_a]['gene_prefix']
                     target_species_name = species_dict[species_b]['species_name']
                     target_gene_prefix = species_dict[species_b]['gene_prefix']
-                    output_filepath = species_dict[species_a]['random_filepath'] + species_dict[species_b]['species_name']
+                    output_filepath = species_dict[species_a]['random_filepath'] + species_dict[species_b]['species_name'] + '_'
 
                     # Load the phenotype_ortholog pickle file.
                     # This file can be used as the schema for creating the randomized phenotype-ortholog files.
