@@ -47,16 +47,18 @@ limit = range(1, 11)
 # limit = 1
 #
 fdr_list = []
-species_list = ['human', 'mouse', 'rat', 'worm', 'zebrafish']
-species_list.sort()
-species_list_clone = ['human', 'mouse', 'rat', 'worm', 'zebrafish']
-species_list_clone.sort()
+
 for i in limit:
+    species_list = ['human', 'mouse', 'rat', 'worm', 'zebrafish']
+    species_list.sort()
+    species_list_clone = ['human', 'mouse', 'rat', 'worm', 'zebrafish']
+    species_list_clone.sort()
 
     p_value_list = []
     print('P-value list: ' + str(p_value_list))
     print('Starting species list: ' + str(species_list))
     for species_a in species_list:
+        print('Starting species ' + str(species_a))
         for species_b in species_list_clone:
             if species_a == species_b:
                 pass
@@ -76,8 +78,9 @@ for i in limit:
                 p_value_list.extend(p_value_list_file)
                 # print(len(p_value_list))
         species_list_clone.remove(species_a)
-        print('Species list after ' + species_a + 'completed: ' + str(species_list))
-    print('Assembled P-value list: ' + str(p_value_list[1:10]))
+        # print('Species list after ' + species_a + ' completed: ' + str(species_list))
+        # print('Species clone list after ' + species_a + ' completed: ' + str(species_list_clone))
+    # print('Assembled P-value list: ' + str(p_value_list[1:10]))
     five_percent_position = round((len(p_value_list)) * 0.05)
     p_value_list.sort(reverse=False)
     p_value_cutoff = p_value_list[five_percent_position]
@@ -87,9 +90,16 @@ for i in limit:
     # print(p_value_list[-10:-1])
     print('FDR Cutoff value for run ' + str(i) + ': ' + str(p_value_cutoff))
 
+# Save to disk: FDR p-value cutoff list.
+p_value_list_output_file = '../datasets/intermediate/random/fdr/fdr_cutoff_list.pkl'
+with open(p_value_list_output_file, 'wb') as handle:
+    pickle.dump(fdr_list, handle)
 
 fdr_cutoff_value = mean(fdr_list)
 print('Final FDR Cutoff value: ' + str(fdr_cutoff_value))
-
+# Save to disk: FDR cutoff value.
+fdr_cutoff_output_file = '../datasets/intermediate/random/fdr/fdr_cutoff.pkl'
+with open(fdr_cutoff_output_file, 'wb') as handle:
+    pickle.dump(fdr_cutoff_value, handle)
 
 print('All processing complete.')

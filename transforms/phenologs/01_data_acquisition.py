@@ -25,14 +25,15 @@ import requests
 import tarfile
 
 # Set up dataset directories
-paths = ['../datasets/sources/monarch_kg', '../datasets/intermediate/human', '../datasets/intermediate/mouse',
-         '../datasets/intermediate/rat', '../datasets/intermediate/worm', '../datasets/intermediate/zebrafish',
-         '../datasets/intermediate/panther', '../datasets/intermediate/random/fdr/fdr_p_value_lists',
-         '../datasets/intermediate/random/human', '../datasets/intermediate/random/mouse',
-         '../datasets/intermediate/random/rat', '../datasets/intermediate/random/worm',
-         '../datasets/intermediate/random/zebrafish',
-         '../datasets/output/phenologs',
-         '../datasets/output/gene_candidates']
+paths = ['../datasets/sources/monarch_kg', '../datasets/intermediate/panther',
+         '../datasets/intermediate/human', '../datasets/intermediate/random/human',
+         '../datasets/intermediate/mouse', '../datasets/intermediate/random/mouse',
+         '../datasets/intermediate/rat', '../datasets/intermediate/random/rat',
+         '../datasets/intermediate/worm', '../datasets/intermediate/random/worm',
+         '../datasets/intermediate/xenopus', '../datasets/intermediate/random/xenopus',
+         '../datasets/intermediate/zebrafish', '../datasets/intermediate/random/zebrafish',
+         '../datasets/intermediate/random/fdr/fdr_p_value_lists',
+         '../datasets/output/phenologs', '../datasets/output/gene_candidates']
 
 for path in paths:
     if not os.path.exists(path):
@@ -57,4 +58,4 @@ file.close()
 #     r = requests.get(URL)
 #     f.write(r.content)
 
-print('Setup and data acuisition complete.')
+print('Setup and data acquisition complete.')

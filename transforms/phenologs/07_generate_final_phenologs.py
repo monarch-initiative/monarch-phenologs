@@ -38,8 +38,8 @@ pd.set_option('display.max_columns', None)
 
 
 panther_filepath = "../../datasets/intermediate/panther/panther_orthologs.tsv"
-fdr_cutoff_file = "../../datasets/intermediate/random/fdr/"
-fdr_cutoff = 0.0072
+fdr_cutoff_file = '../datasets/intermediate/random/fdr/fdr_cutoff.pkl'
+fdr_cutoff = pickle.load(open(fdr_cutoff_file, 'rb'))
 
 
 human_dict = {'species_name': 'human', 'gene_prefix': 'HGNC:',

@@ -240,7 +240,7 @@ class myClass:
                     del phenolog_p_value_list, common_orthologs
             species_list_clone.remove(species_a)
             print('Species list after ' + species_a + 'completed: ' + str(species_list))
-            print('Clone species list after ' + species_a + 'completed: ' + str(species_list_clone))
+            print('Clone species list after ' + species_a + ' completed: ' + str(species_list_clone))
         return
 
 

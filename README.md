@@ -11,26 +11,28 @@ Phenologs extends the concept of orthologous genes to orthologous phenotypes. By
 
 Inclusion of model organisms into the calculations to generate phenologs is dependent on the availability of gene-phenotype associations as well as gene orthology annotations. For ease of data inclusion, we will attempt to utilize data already ingested and formatted within the Monarch KG.
 
+Included organisms:
+- Humans
+- Mouse
+- Rats
+- Zebrafish
+- C. Elegans
+- Xenopus
+
 Source datasets:
 - Mondo
 - Human Phenotype Ontology
 - Mouse Genome Database
+- Rat Genome Database
 - Zebrafish Information Network
 
-Rat
-Mouse
-Zebrafish
-Worm
-Chicken
-Fission yeast?
+
 
 
 
 Methods
 
-Identification of phenologs through gene enrichment analysis
-
-
+Identification of phenologs
 Gene candidate predictions by k-nearest neighbors
 Calculation of false discovery rate
 Distance matrix
