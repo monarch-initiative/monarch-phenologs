@@ -41,28 +41,8 @@ class myClass:
         """
         panther_filepath = "../../datasets/intermediate/panther/panther_orthologs.tsv"
 
-        human_dict = {'species_name': 'human', 'gene_prefix': 'HGNC:',
-                      'gene_phenotype_filepath': '../datasets/intermediate/human/human_gene_to_phenotype.tsv',
-                      'phenotype_to_ortholog_filepath': '../datasets/intermediate/human/human_phenotype_to_ortholog.pkl',
-                      'random_filepath': "../datasets/intermediate/random/human/human_vs_"}
-        mouse_dict = {'species_name': 'mouse', 'gene_prefix': 'MGI:',
-                      'gene_phenotype_filepath': '../datasets/intermediate/mouse/mouse_gene_to_phenotype.tsv',
-                      'phenotype_to_ortholog_filepath': '../datasets/intermediate/mouse/mouse_phenotype_to_ortholog.pkl',
-                      'random_filepath': "../datasets/intermediate/random/mouse/mouse_vs_"}
-        rat_dict = {'species_name': 'rat', 'gene_prefix': 'RGD:',
-                    'gene_phenotype_filepath': '../datasets/intermediate/rat/rat_gene_to_phenotype.tsv',
-                    'phenotype_to_ortholog_filepath': '../datasets/intermediate/rat/rat_phenotype_to_ortholog.pkl',
-                    'random_filepath': "../datasets/intermediate/random/rat/rat_vs_"}
-        worm_dict = {'species_name': 'worm', 'gene_prefix': 'WB:',
-                     'gene_phenotype_filepath': '../datasets/intermediate/worm/worm_gene_to_phenotype.tsv',
-                     'phenotype_to_ortholog_filepath': '../datasets/intermediate/worm/worm_phenotype_to_ortholog.pkl',
-                     'random_filepath': "../datasets/intermediate/random/worm/worm_vs_"}
-        zebrafish_dict = {'species_name': 'zebrafish', 'gene_prefix': 'ZFIN:',
-                          'gene_phenotype_filepath': '../datasets/intermediate/zebrafish/zebrafish_gene_to_phenotype.tsv',
-                          'phenotype_to_ortholog_filepath': '../datasets/intermediate/zebrafish/zebrafish_phenotype_to_ortholog.pkl',
-                          'random_filepath': "../datasets/intermediate/random/zebrafish/zebrafish_vs_"}
-        species_dict = {'human': human_dict, 'mouse': mouse_dict, 'rat': rat_dict, 'worm': worm_dict,
-                        'zebrafish': zebrafish_dict}
+        # Load species dict.
+        species_dict = pickle.load(open('../../datasets/utils/species_dict.pkl', 'rb'))
 
         for species_a in species_dict:
             for species_b in species_dict:
@@ -82,7 +62,7 @@ class myClass:
                     phenotype_ortholog_dict = pickle.load(data)
 
                     # Load common orthologs file for the source and target species.
-                    common_orthologs_filepath = "../datasets/intermediate/panther/common_orthologs_" + source_species_name + '_vs_' + target_species_name + '.tsv'
+                    common_orthologs_filepath = "../../datasets/intermediate/panther/common_orthologs_" + source_species_name + '_vs_' + target_species_name + '.tsv'
                     common_orthologs = pd.read_csv(common_orthologs_filepath, sep='\t', header=0, low_memory=False)
 
                     # Have organism structures, have common orthologs, now need to replace each

@@ -60,6 +60,7 @@ Chicken phenotype:
 import csv
 import os
 import pandas as pd
+import pickle
 
 
 def get_gene_phenotype_edges_from_kg(edges_file, nodes_file, subject, object, predicate, output_file):
@@ -112,15 +113,14 @@ def get_panther_edges_from_edges_kg(input_file, subject, object, predicate, outp
 
 pd.set_option('display.max_colwidth', None)
 pd.set_option('display.max_columns', None)
-kg_edges = '../datasets/sources/monarch_kg/monarch-kg_edges.tsv'
+kg_edges = '../../datasets/sources/monarch_kg/monarch-kg_edges.tsv'
 # edges = pd.read_csv(kg_edges, sep='\t', header=0, low_memory=False)
 
-kg_nodes = '../datasets/sources/monarch_kg/monarch-kg_nodes.tsv'
+kg_nodes = '../../datasets/sources/monarch_kg/monarch-kg_nodes.tsv'
 # nodes = pd.read_csv(kg_nodes, sep='\t', header=0, low_memory=False)
 
 has_phenotype = 'biolink:has_phenotype'
 has_ortholog = 'biolink:orthologous_to'
-
 
 
 # Get PANTHER data
@@ -140,35 +140,10 @@ print('PANTHER ortholog extraction complete.')
 
 orthologs_df = pd.read_csv(panther_orthologs_filepath, sep='\t', header=0, low_memory=False)
 
+# Load species dict.
+species_dict = pickle.load(open('../../datasets/utils/species_dict.pkl', 'rb'))
+
 # Create 'common orthologs' files.
-
-human_dict = {'species_name': 'human', 'gene_prefix': 'HGNC:', 'phenotype_prefix': 'HP:',
-              'gene_phenotype_filepath': '../datasets/intermediate/human/human_gene_to_phenotype.tsv',
-              'phenotype_to_ortholog_filepath': '../datasets/intermediate/human/human_phenotype_to_ortholog.pkl',
-              'random_filepath': "../datasets/intermediate/random/human/human_vs_"}
-mouse_dict = {'species_name': 'mouse', 'gene_prefix': 'MGI:', 'phenotype_prefix': 'MP:',
-              'gene_phenotype_filepath': '../datasets/intermediate/mouse/mouse_gene_to_phenotype.tsv',
-              'phenotype_to_ortholog_filepath': '../datasets/intermediate/mouse/mouse_phenotype_to_ortholog.pkl',
-              'random_filepath': "../datasets/intermediate/random/mouse/mouse_vs_"}
-rat_dict = {'species_name': 'rat', 'gene_prefix': 'RGD:', 'phenotype_prefix': 'MP:',
-            'gene_phenotype_filepath': '../datasets/intermediate/rat/rat_gene_to_phenotype.tsv',
-            'phenotype_to_ortholog_filepath': '../datasets/intermediate/rat/rat_phenotype_to_ortholog.pkl',
-            'random_filepath': "../datasets/intermediate/random/rat/rat_vs_"}
-worm_dict = {'species_name': 'worm', 'gene_prefix': 'WB:', 'phenotype_prefix': 'WBPhenotype:',
-             'gene_phenotype_filepath': '../datasets/intermediate/worm/worm_gene_to_phenotype.tsv',
-             'phenotype_to_ortholog_filepath': '../datasets/intermediate/worm/worm_phenotype_to_ortholog.pkl',
-             'random_filepath': "../datasets/intermediate/random/worm/worm_vs_"}
-xenopus_dict = {'species_name': 'xenopus', 'gene_prefix': 'Xenbase:', 'phenotype_prefix': 'XPO',
-             'gene_phenotype_filepath': '../datasets/intermediate/xenopus/xenopus_gene_to_phenotype.tsv',
-             'phenotype_to_ortholog_filepath': '../datasets/intermediate/xenopus/xenopus_phenotype_to_ortholog.pkl',
-             'random_filepath': "../datasets/intermediate/random/xenopus/xenopus_vs_"}
-zebrafish_dict = {'species_name': 'zebrafish', 'gene_prefix': 'ZFIN:', 'phenotype_prefix': 'ZP:',
-                  'gene_phenotype_filepath': '../datasets/intermediate/zebrafish/zebrafish_gene_to_phenotype.tsv',
-                  'phenotype_to_ortholog_filepath': '../datasets/intermediate/zebrafish/zebrafish_phenotype_to_ortholog.pkl',
-                  'random_filepath': "../datasets/intermediate/random/zebrafish/zebrafish_vs_"}
-species_dict = {'human': human_dict, 'mouse': mouse_dict, 'rat': rat_dict, 'worm': worm_dict,
-                'xenopus' : xenopus_dict, 'zebrafish': zebrafish_dict}
-
 for species_a in species_dict:
     for species_b in species_dict:
         if species_a == species_b:
@@ -178,7 +153,7 @@ for species_a in species_dict:
             source_gene_prefix = species_dict[species_a]['gene_prefix']
             target_species_name = species_dict[species_b]['species_name']
             target_gene_prefix = species_dict[species_b]['gene_prefix']
-            common_orthologs_filepath = "../datasets/intermediate/panther/common_orthologs_" + source_species_name + '_vs_' + target_species_name + '.tsv'
+            common_orthologs_filepath = "../../datasets/intermediate/panther/common_orthologs_" + source_species_name + '_vs_' + target_species_name + '.tsv'
             common_orthologs = orthologs_df[
                 (orthologs_df["geneA"].str.contains(source_gene_prefix, regex=True, na=True)) & (
                     orthologs_df["geneB"].str.contains(target_gene_prefix, regex=True, na=True))]
@@ -224,39 +199,15 @@ all_human_disease_to_phenotype = all_human_disease_to_phenotype.drop_duplicates(
 pd.DataFrame(all_human_disease_to_phenotype).to_csv(all_disease_to_phenotype_filepath, sep="\t", index=False)
 print('Human all disease-to-phenotype merge complete.')
 
-# Get mouse gene to phenotype
-mouse_gene_prefix = 'MGI:'
-mouse_phenotype_prefix = 'MP:'
-mouse_gene_to_phenotype_filepath = "../../datasets/intermediate/mouse/mouse_gene_to_phenotype.tsv"
-get_gene_phenotype_edges_from_kg(kg_edges, kg_nodes, mouse_gene_prefix, mouse_phenotype_prefix, has_phenotype, mouse_gene_to_phenotype_filepath)
-print('Mouse gene-to-phenotype complete.')
-
-# Get zebrafish gene to phenotype
-zebrafish_gene_prefix = 'ZFIN:'
-zebrafish_phenotype_prefix = 'ZP:'
-zebrafish_gene_to_phenotype_filepath = "../../datasets/intermediate/zebrafish/zebrafish_gene_to_phenotype.tsv"
-get_gene_phenotype_edges_from_kg(kg_edges, kg_nodes, zebrafish_gene_prefix, zebrafish_phenotype_prefix, has_phenotype, zebrafish_gene_to_phenotype_filepath)
-print('Zebrafish gene-to-phenotype complete.')
-
-# Get rat gene to phenotype -> do we currently not have rat phenotypes?
-rat_gene_prefix = 'RGD:'
-rat_phenotype_prefix = 'MP:'
-rat_gene_to_phenotype_filepath = "../../datasets/intermediate/rat/rat_gene_to_phenotype.tsv"
-get_gene_phenotype_edges_from_kg(kg_edges, kg_nodes, rat_gene_prefix, rat_phenotype_prefix, has_phenotype, rat_gene_to_phenotype_filepath)
-
-# Get worm gene to phenotype
-worm_gene_prefix = 'WB:'
-worm_phenotype_prefix = 'WBPhenotype:'
-worm_gene_to_phenotype_filepath = "../../datasets/intermediate/worm/worm_gene_to_phenotype.tsv"
-get_gene_phenotype_edges_from_kg(kg_edges, kg_nodes, worm_gene_prefix, worm_phenotype_prefix, has_phenotype, worm_gene_to_phenotype_filepath)
-print('Worm gene-to-phenotype complete.')
-
-# Get xenopus gene to phenotype
-xenopus_gene_prefix = 'Xenbase:'
-xenopus_phenotype_prefix = 'XPO:'
-xenopus_gene_to_phenotype_filepath = "../../datasets/intermediate/xenopus/xenopus_gene_to_phenotype.tsv"
-get_gene_phenotype_edges_from_kg(kg_edges, kg_nodes, xenopus_gene_prefix, xenopus_phenotype_prefix, has_phenotype, xenopus_gene_to_phenotype_filepath)
-print('Xenopus gene-to-phenotype complete.')
-
+for species in species_dict:
+    if species == 'human':
+        pass
+    else:
+        gene_prefix = species_dict[species]['gene_prefix']
+        phenotype_prefix = species_dict[species]['phenotype_prefix']
+        gene_to_phenotype_filepath = species_dict[species]['gene_phenotype_filepath']
+        get_gene_phenotype_edges_from_kg(kg_edges, kg_nodes, gene_prefix, phenotype_prefix, has_phenotype,
+                                     gene_to_phenotype_filepath)
+        print(str(species) + ' gene-to-phenotype complete.')
 
 print('All extractions complete.')

@@ -38,32 +38,11 @@ pd.set_option('display.max_columns', None)
 
 
 panther_filepath = "../../datasets/intermediate/panther/panther_orthologs.tsv"
-fdr_cutoff_file = '../datasets/intermediate/random/fdr/fdr_cutoff.pkl'
+fdr_cutoff_file = '../../datasets/intermediate/random/fdr/fdr_cutoff.pkl'
 fdr_cutoff = pickle.load(open(fdr_cutoff_file, 'rb'))
 
-
-human_dict = {'species_name': 'human', 'gene_prefix': 'HGNC:',
-              'gene_phenotype_filepath': '../datasets/intermediate/human/human_gene_to_phenotype.tsv',
-              'phenotype_to_ortholog_filepath': '../datasets/intermediate/human/human_phenotype_to_ortholog.pkl',
-              'random_filepath': "../datasets/intermediate/random/human/human_vs_"}
-mouse_dict = {'species_name': 'mouse', 'gene_prefix': 'MGI:',
-              'gene_phenotype_filepath': '../datasets/intermediate/mouse/mouse_gene_to_phenotype.tsv',
-              'phenotype_to_ortholog_filepath': '../datasets/intermediate/rat/rat_phenotype_to_ortholog.pkl',
-              'random_filepath': "../datasets/intermediate/random/mouse/mouse_vs_"}
-rat_dict = {'species_name': 'rat', 'gene_prefix': 'RGD:',
-            'gene_phenotype_filepath': '../datasets/intermediate/rat/rat_gene_to_phenotype.tsv',
-            'phenotype_to_ortholog_filepath': '../datasets/intermediate/rat/rat_phenotype_to_ortholog.pkl',
-            'random_filepath': "../datasets/intermediate/random/rat/rat_vs_"}
-worm_dict = {'species_name': 'worm', 'gene_prefix': 'WB:',
-             'gene_phenotype_filepath': '../datasets/intermediate/worm/worm_gene_to_phenotype.tsv',
-             'phenotype_to_ortholog_filepath': '../datasets/intermediate/worm/worm_phenotype_to_ortholog.pkl',
-             'random_filepath': "../datasets/intermediate/random/worm/worm_vs_"}
-zebrafish_dict = {'species_name': 'zebrafish', 'gene_prefix': 'ZFIN:',
-                  'gene_phenotype_filepath': '../datasets/intermediate/zebrafish/zebrafish_gene_to_phenotype.tsv',
-                  'phenotype_to_ortholog_filepath': '../datasets/intermediate/zebrafish/zebrafish_phenotype_to_ortholog.pkl',
-                  'random_filepath': "../datasets/intermediate/random/zebrafish/zebrafish_vs_"}
-species_dict = {'human': human_dict, 'mouse': mouse_dict, 'rat': rat_dict, 'worm': worm_dict,
-                'zebrafish': zebrafish_dict}
+# Load species dict.
+species_dict = pickle.load(open('../../datasets/utils/species_dict.pkl', 'rb'))
 
 
 phenologs_df = pd.DataFrame(columns=['Phenotype_A', 'Phenotype_B', 'p_value', 'phenolog_flag'])
@@ -94,7 +73,7 @@ for species_a in species_list:
 
 
             # Load common orthologs file for the source and target species.
-            common_orthologs_filepath = "../datasets/intermediate/panther/common_orthologs_" + species_a_name + '_vs_' + species_b_name + '.tsv'
+            common_orthologs_filepath = "../../datasets/intermediate/panther/common_orthologs_" + species_a_name + '_vs_' + species_b_name + '.tsv'
             common_orthologs = pd.read_csv(common_orthologs_filepath, sep='\t', header=0, low_memory=False)
             shared_ortholog_count = len(common_orthologs)
             for i in species_a_phenotype_ortholog_dict:
@@ -166,10 +145,10 @@ for species_a in species_list:
     print('Total significant phenologs: ' + str(significant_phenolog_count))
 
 # Final output
-full_output_file = '../datasets/output/phenologs/all_phenolog_data.tsv'
+full_output_file = '../../datasets/output/phenologs/all_phenolog_data.tsv'
 pd.DataFrame(phenologs_df).to_csv(full_output_file, sep="\t", index=False)
 significant_phenlogs = phenologs_df[(phenologs_df["phenolog_flag"] == 'Significant')]
-significant_phenolog_output_file = '../datasets/output/phenologs/significant_phenolog_data.tsv'
+significant_phenolog_output_file = '../../datasets/output/phenologs/significant_phenolog_data.tsv'
 pd.DataFrame(significant_phenlogs).to_csv(significant_phenolog_output_file, sep="\t", index=False)
 
 

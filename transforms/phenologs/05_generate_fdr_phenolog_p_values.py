@@ -36,31 +36,9 @@ NOTE: This portion of the pipeline will likely consume a large amount of time, s
 
 # Would it make sense to move all of these directory labels to a separate file to be referenced by individual scripts?
 panther_filepath = "../../datasets/intermediate/panther/panther_orthologs.tsv"
-
+'''
 organism_list = ['human', 'mouse', 'rat', 'worm', 'zebrafish']
-
-human_dict = {'species_name': 'human', 'gene_prefix': 'HGNC:',
-              'gene_phenotype_filepath': '../datasets/intermediate/human/human_gene_to_phenotype.tsv',
-              'phenotype_to_ortholog_filepath': '../datasets/intermediate/human/human_phenotype_to_ortholog.pkl',
-              'random_filepath': "../datasets/intermediate/random/human/human_vs_"}
-mouse_dict = {'species_name': 'mouse', 'gene_prefix': 'MGI:',
-              'gene_phenotype_filepath': '../datasets/intermediate/mouse/mouse_gene_to_phenotype.tsv',
-              'phenotype_to_ortholog_filepath': '../datasets/intermediate/rat/rat_phenotype_to_ortholog.pkl',
-              'random_filepath': "../datasets/intermediate/random/mouse/mouse_vs_"}
-rat_dict = {'species_name': 'rat', 'gene_prefix': 'RGD:',
-            'gene_phenotype_filepath': '../datasets/intermediate/rat/rat_gene_to_phenotype.tsv',
-            'phenotype_to_ortholog_filepath': '../datasets/intermediate/rat/rat_phenotype_to_ortholog.pkl',
-            'random_filepath': "../datasets/intermediate/random/rat/rat_vs_"}
-worm_dict = {'species_name': 'worm', 'gene_prefix': 'WB:',
-             'gene_phenotype_filepath': '../datasets/intermediate/worm/worm_gene_to_phenotype.tsv',
-             'phenotype_to_ortholog_filepath': '../datasets/intermediate/worm/worm_phenotype_to_ortholog.pkl',
-             'random_filepath': "../datasets/intermediate/random/worm/worm_vs_"}
-zebrafish_dict = {'species_name': 'zebrafish', 'gene_prefix': 'ZFIN:',
-                  'gene_phenotype_filepath': '../datasets/intermediate/zebrafish/zebrafish_gene_to_phenotype.tsv',
-                  'phenotype_to_ortholog_filepath': '../datasets/intermediate/zebrafish/zebrafish_phenotype_to_ortholog.pkl',
-                  'random_filepath': "../datasets/intermediate/random/zebrafish/zebrafish_vs_"}
-species_dict = {'human': human_dict, 'mouse': mouse_dict, 'rat': rat_dict, 'worm': worm_dict,
-                'zebrafish': zebrafish_dict}
+'''
 
 class myClass:
     def __init__(self):
@@ -79,9 +57,6 @@ class myClass:
         :param shared_orthologs: The file containing the orthologs shared between the two compared species.
         :return: List of p-values from the hypergeometric probability calculation.
         """
-
-        # Testing out
-
 
         total_ortholog_matches = 0
         total_ortholog_nonmatches = 0
@@ -167,39 +142,23 @@ class myClass:
         :return:
         '''
 
-        human_dict = {'species_name': 'human', 'gene_prefix': 'HGNC:',
-                      'gene_phenotype_filepath': '../datasets/intermediate/human/human_gene_to_phenotype.tsv',
-                      'phenotype_to_ortholog_filepath': '../datasets/intermediate/human/human_phenotype_to_ortholog.pkl',
-                      'random_filepath': "../datasets/intermediate/random/human/human_vs_"}
-        mouse_dict = {'species_name': 'mouse', 'gene_prefix': 'MGI:',
-                      'gene_phenotype_filepath': '../datasets/intermediate/mouse/mouse_gene_to_phenotype.tsv',
-                      'phenotype_to_ortholog_filepath': '../datasets/intermediate/mouse/mouse_phenotype_to_ortholog.pkl',
-                      'random_filepath': "../datasets/intermediate/random/mouse/mouse_vs_"}
-        rat_dict = {'species_name': 'rat', 'gene_prefix': 'RGD:',
-                    'gene_phenotype_filepath': '../datasets/intermediate/rat/rat_gene_to_phenotype.tsv',
-                    'phenotype_to_ortholog_filepath': '../datasets/intermediate/rat/rat_phenotype_to_ortholog.pkl',
-                    'random_filepath': "../datasets/intermediate/random/rat/rat_vs_"}
-        worm_dict = {'species_name': 'worm', 'gene_prefix': 'WB:',
-                     'gene_phenotype_filepath': '../datasets/intermediate/worm/worm_gene_to_phenotype.tsv',
-                     'phenotype_to_ortholog_filepath': '../datasets/intermediate/worm/worm_phenotype_to_ortholog.pkl',
-                     'random_filepath': "../datasets/intermediate/random/worm/worm_vs_"}
-        zebrafish_dict = {'species_name': 'zebrafish', 'gene_prefix': 'ZFIN:',
-                          'gene_phenotype_filepath': '../datasets/intermediate/zebrafish/zebrafish_gene_to_phenotype.tsv',
-                          'phenotype_to_ortholog_filepath': '../datasets/intermediate/zebrafish/zebrafish_phenotype_to_ortholog.pkl',
-                          'random_filepath': "../datasets/intermediate/random/zebrafish/zebrafish_vs_"}
-        species_dict = {'human': human_dict, 'mouse': mouse_dict, 'rat': rat_dict, 'worm': worm_dict,
-                        'zebrafish': zebrafish_dict}
+        # Load species dict.
+        species_dict = pickle.load(open('../../datasets/utils/species_dict.pkl', 'rb'))
 
-        # TODO: Think a fix is necessary here
         # While we needed to create randomized phenotype-ortholog files in each direction for each pair of species,
         # both the processing of these files for the FDR as well as the actual phenologs calculations will only
         # need to be computed once for each species pair. So, the solution here would be to drop out a species from list
         # after each iteration of the 'species_a in species_list loop.
         # Otherwise you are just getting duplicate calculations.
-        species_list = ['human', 'mouse', 'rat', 'worm', 'zebrafish']
+        species_list = []
+        species_list_clone = []
+        for species in species_dict:
+            species_list.append(species)
+            species_list_clone.append(species)
+
         species_list.sort()
-        species_list_clone = ['human', 'mouse', 'rat', 'worm', 'zebrafish']
         species_list_clone.sort()
+
         print('Starting species list: ' + str(species_list))
         print('Starting clone species list: ' + str(species_list_clone))
         for species_a in species_list:
@@ -219,11 +178,11 @@ class myClass:
                     target_random_phenotype_ortholog_file = species_dict[species_a]['random_filepath'] + species_dict[species_b]['species_name'] + '_' + str(limit) + '.pkl'
                     output_filepath = species_dict[species_a]['random_filepath'] + species_dict[species_b]['species_name']
 
-                    p_value_list_filepath = "../datasets/intermediate/random/fdr/fdr_p_value_lists/" + source_species_name + "_vs_" + target_species_name + '_' + str(limit) + ".pkl"
+                    p_value_list_filepath = "../../datasets/intermediate/random/fdr/fdr_p_value_lists/" + source_species_name + "_vs_" + target_species_name + '_' + str(limit) + ".pkl"
                     # p_value_cutoff_filepath = "../datasets/intermediate/random/fdr/fdr_cutoffs/" + source_species_name + "_vs_" + target_species_name + '_' + limit + ".txt"
 
                     # Load common orthologs file for the source and target species.
-                    common_orthologs_filepath = "../datasets/intermediate/panther/common_orthologs_" + source_species_name + '_vs_' + target_species_name + '.tsv'
+                    common_orthologs_filepath = "../../datasets/intermediate/panther/common_orthologs_" + source_species_name + '_vs_' + target_species_name + '.tsv'
                     common_orthologs = pd.read_csv(common_orthologs_filepath, sep='\t', header=0, low_memory=False)
                     print('Generating phenolog p-value list for ' + source_species_name + ' vs ' + target_species_name + ' ' + str(limit) + '.')
                     phenolog_p_value_list = self.calculate_fdr_from_random_data(source_random_phenotype_ortholog_file, target_random_phenotype_ortholog_file, common_orthologs)

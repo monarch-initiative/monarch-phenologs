@@ -47,37 +47,11 @@ def build_ortholog_phenotype_data(panther_file, gene_phenotype_file, output_file
     # print(phenotype_ortholog_hash)
     with open(output_file, 'wb') as handle:
         pickle.dump(phenotype_ortholog_hash, handle)
-
-
-
-    '''
-    output_df = phenotype_ortholog_df[['phenotype']]
-    output_df = output_df.drop_duplicates()
-    output_df['orthologs'] = np.empty((len(output_df), 0)).tolist()
-    print(output_df)
-    for _, row in phenotype_ortholog_df.iterrows():
-        # print(output_df.loc[output_df.phenotype == row.phenotype])
-        # print(output_df.loc[output_df.phenotype == row.phenotype])
-        output_df.loc[output_df.phenotype == row.phenotype, output_df.orthologs].append(row.ortholog_id)
-        # if output_df[] row.phenotype in
-        # Check output_df for phenotype
-            # If phenotype not fine, print error message to console
-        # if phenotype is in output_df
-            # check associated series for ortholog
-            # if ortholog is present
-                #pass
-            # if ortholog not present
-                # add to series for that row/phenotype
-
-
-        pass
-        # print(row.ortholog_id)
-        # print(row.phenotype)
-
-    # print(output_df)
-    pd.DataFrame(phenotype_ortholog_df).to_csv(output_file, sep="\t", index=False)
-    '''
     return
+
+
+# Load species dict.
+species_dict = pickle.load(open('../../datasets/utils/species_dict.pkl', 'rb'))
 
 # Get PANTHER data
 # Grab all PANTHER data for now, or just for included species?
@@ -90,34 +64,10 @@ def build_ortholog_phenotype_data(panther_file, gene_phenotype_file, output_file
 # OR handle the one-directional nature of the ortholog edges in later steps.
 panther_orthologs_filepath = "../../datasets/intermediate/panther/panther_orthologs.tsv"
 
-# Build mouse phenotype to ortholog
-mouse_gene_to_phenotype_filepath = "../../datasets/intermediate/mouse/mouse_gene_to_phenotype.tsv"
-mouse_phenotype_to_ortholog_filepath = "../../datasets/intermediate/mouse/mouse_phenotype_to_ortholog.pkl"
-build_ortholog_phenotype_data(panther_orthologs_filepath, mouse_gene_to_phenotype_filepath, mouse_phenotype_to_ortholog_filepath)
-print('Mouse  phenotype-to-ortholog complete.')
-
-# Build zebrafish phenotype to ortholog
-zebrafish_gene_to_phenotype_filepath = "../../datasets/intermediate/zebrafish/zebrafish_gene_to_phenotype.tsv"
-zebrafish_phenotype_to_ortholog_filepath = "../../datasets/intermediate/zebrafish/zebrafish_phenotype_to_ortholog.pkl"
-build_ortholog_phenotype_data(panther_orthologs_filepath, zebrafish_gene_to_phenotype_filepath, zebrafish_phenotype_to_ortholog_filepath)
-print('Zebrafish phenotype-to-ortholog complete.')
-
-# Build rat phenotype to ortholog
-rat_gene_to_phenotype_filepath = "../../datasets/intermediate/rat/rat_gene_to_phenotype.tsv"
-rat_phenotype_to_ortholog_filepath = "../../datasets/intermediate/rat/rat_phenotype_to_ortholog.pkl"
-build_ortholog_phenotype_data(panther_orthologs_filepath, rat_gene_to_phenotype_filepath, rat_phenotype_to_ortholog_filepath)
-print('Rat phenotype-to-ortholog complete.')
-
-# Build worm phenotype to ortholog
-worm_gene_to_phenotype_filepath = "../../datasets/intermediate/worm/worm_gene_to_phenotype.tsv"
-worm_phenotype_to_ortholog_filepath = "../../datasets/intermediate/worm/worm_phenotype_to_ortholog.pkl"
-build_ortholog_phenotype_data(panther_orthologs_filepath, worm_gene_to_phenotype_filepath, worm_phenotype_to_ortholog_filepath)
-print('Worm phenotype-to-ortholog complete.')
-
-# Build human phenotype to ortholog
-human_gene_to_phenotype_filepath = "../../datasets/intermediate/human/human_gene_to_phenotype.tsv"
-human_phenotype_to_ortholog_filepath = "../../datasets/intermediate/human/human_phenotype_to_ortholog.pkl"
-build_ortholog_phenotype_data(panther_orthologs_filepath, human_gene_to_phenotype_filepath, human_phenotype_to_ortholog_filepath)
-print('Human phenotype-to-ortholog complete.')
+for species in species_dict:
+    gene_to_phenotype_filepath = species_dict[species]['gene_phenotype_filepath']
+    phenotype_to_ortholog_filepath = species_dict[species]['phenotype_to_ortholog_filepath']
+    build_ortholog_phenotype_data(panther_orthologs_filepath, gene_to_phenotype_filepath, phenotype_to_ortholog_filepath)
+    print(str(species) +' phenotype-to-ortholog complete.')
 
 print('All ortholog extractions complete.')
