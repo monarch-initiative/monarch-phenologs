@@ -53,7 +53,7 @@ for i in limit:
                 # target_phenotype_ortholog_file = species_dict[species_b]['phenotype_to_ortholog_filepath']
                 output_filepath = species_dict[species_a]['random_filepath'] + species_dict[species_b]['species_name']
 
-                p_value_list_filepath = "../datasets/intermediate/random/fdr/fdr_p_value_lists/" + source_species_name + "_vs_" + target_species_name + '_' + str(i) + ".pkl"
+                p_value_list_filepath = "../../datasets/intermediate/random/fdr/fdr_p_value_lists/" + source_species_name + "_vs_" + target_species_name + '_' + str(i) + ".pkl"
                 # print('Filepath: ' + p_value_list_filepath)
                 p_value_list_file = pickle.load(open(p_value_list_filepath, 'rb'))
                 p_value_list.extend(p_value_list_file)
@@ -72,14 +72,14 @@ for i in limit:
     print('FDR Cutoff value for run ' + str(i) + ': ' + str(p_value_cutoff))
 
 # Save to disk: FDR p-value cutoff list.
-p_value_list_output_file = '../datasets/intermediate/random/fdr/fdr_cutoff_list.pkl'
+p_value_list_output_file = '../../datasets/intermediate/random/fdr/fdr_cutoff_list.pkl'
 with open(p_value_list_output_file, 'wb') as handle:
     pickle.dump(fdr_list, handle)
 
 fdr_cutoff_value = mean(fdr_list)
 print('Final FDR Cutoff value: ' + str(fdr_cutoff_value))
 # Save to disk: FDR cutoff value.
-fdr_cutoff_output_file = '../datasets/intermediate/random/fdr/fdr_cutoff.pkl'
+fdr_cutoff_output_file = '../../datasets/intermediate/random/fdr/fdr_cutoff.pkl'
 with open(fdr_cutoff_output_file, 'wb') as handle:
     pickle.dump(fdr_cutoff_value, handle)
 

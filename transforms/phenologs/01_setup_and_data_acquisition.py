@@ -34,7 +34,7 @@ paths = ['../../datasets/sources/monarch_kg', '../../datasets/intermediate/panth
          '../../datasets/intermediate/xenopus', '../../datasets/intermediate/random/xenopus',
          '../../datasets/intermediate/zebrafish', '../../datasets/intermediate/random/zebrafish',
          '../../datasets/intermediate/random/fdr/fdr_p_value_lists', '../../datasets/utils',
-         '../../datasets/output/phenologs', '../../datasets/output/gene_candidates']
+         '../../datasets/output/phenologs', '../../datasets/output/gene_candidate']
 
 for path in paths:
     if not os.path.exists(path):

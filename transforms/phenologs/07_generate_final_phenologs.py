@@ -3,10 +3,9 @@ Now that the FDR cutoff has been determined, calculate the final phenologs using
 significance cutoff.
 
 Want an output file containing:
--The cross-species phentype pairing.
+-The cross-species phenotype pairing.
 -The calculated p-value score associated with that phenotype pair.
--A flag indicating whether or not the pair are phenologs/significant based on the FDR cutoff.
-
+-A flag indicating whether the pair are phenologs/significant based on the FDR cutoff.
 
 Note: Need to make a decision regarding the bidirectional indication of phenolog pairs.
 Okay to just include phenologs in one direction like:
@@ -22,11 +21,6 @@ This function performs the phenolog calculations between
 the phenotypes of two species from the actual data sets.
 For each cross-species pair of phenotypes, the associated orthologs are compared for matches.
 If two phenotypes have one or more matching orthologs, the hypergeometric probability is calculated.
-P-values are added to a list, which is returned after all phenotype comparisons are complete.
-:param species_a_phenotype_ortholog_file: The phenotype-ortholog hash for species A.
-:param species_b_phenotype_ortholog_file: The phenotype-ortholog hash for species B.
-:param shared_orthologs: The file containing the orthologs shared between the two compared species.
-:return: List of p-values from the hypergeometric probability calculation.
 """
 from scipy.stats import hypergeom, pearsonr
 import random
@@ -40,6 +34,7 @@ pd.set_option('display.max_columns', None)
 panther_filepath = "../../datasets/intermediate/panther/panther_orthologs.tsv"
 fdr_cutoff_file = '../../datasets/intermediate/random/fdr/fdr_cutoff.pkl'
 fdr_cutoff = pickle.load(open(fdr_cutoff_file, 'rb'))
+print('Using FDR cutoff value: ' + str(fdr_cutoff) + '.')
 
 # Load species dict.
 species_dict = pickle.load(open('../../datasets/utils/species_dict.pkl', 'rb'))
@@ -50,12 +45,25 @@ phenologs_df = pd.DataFrame(columns=['Phenotype_A', 'Phenotype_B', 'p_value', 'p
 total_ortholog_matches = 0
 total_ortholog_nonmatches = 0
 total_hyp_calcs = 0
-phenolog_p_value_list = []
+# phenolog_p_value_list = []
 significant_phenolog_count = 0
 
-species_list = ['human', 'mouse', 'rat', 'worm', 'zebrafish']
+'''
+# Use this setup for species list after testing:
+species_list = []
+species_list_clone = []
+for species in species_dict:
+    species_list.append(species)
+    species_list_clone.append(species)
 species_list.sort()
-species_list_clone = ['human', 'mouse', 'rat', 'worm', 'zebrafish']
+species_list_clone.sort()
+'''
+
+# species_list = ['human', 'mouse', 'rat', 'worm', 'zebrafish']
+species_list = ['worm', 'zebrafish']
+species_list.sort()
+# species_list_clone = ['human', 'mouse', 'rat', 'worm', 'zebrafish']
+species_list_clone = ['worm', 'zebrafish']
 species_list_clone.sort()
 for species_a in species_list:
     for species_b in species_list_clone:
@@ -63,11 +71,15 @@ for species_a in species_list:
             pass
         else:
             print("Starting processing of " + species_a + " vs " + species_b + " phenolog calculations.")
+            counter = 0
             species_a_phenotype_ortholog_file = species_dict[species_a]['phenotype_to_ortholog_filepath']
             species_b_phenotype_ortholog_file = species_dict[species_b]['phenotype_to_ortholog_filepath']
             species_a_phenotype_ortholog_dict = pickle.load(open(species_a_phenotype_ortholog_file, 'rb'))
             species_b_phenotype_ortholog_dict = pickle.load(open(species_b_phenotype_ortholog_file, 'rb'))
-
+            species_a_phenotype_count = len(species_a_phenotype_ortholog_dict)
+            species_b_phenotype_count = len(species_b_phenotype_ortholog_dict)
+            species_cross_product = species_a_phenotype_count * species_b_phenotype_count
+            print(str(species_cross_product) + ' phenolog calculations to perform.')
             species_a_name = species_dict[species_a]['species_name']
             species_b_name = species_dict[species_b]['species_name']
 
@@ -90,6 +102,7 @@ for species_a in species_list:
                     ortholog_matches = 0
                     ortholog_non_matches = 0
                     phenotype_b_ortholog_count = len(species_b_orthologs)
+
                     for k in species_a_orthologs:
                         # Orthologs for species A
                         species_a_ortholog = k
@@ -114,7 +127,7 @@ for species_a in species_list:
                         N = float(shared_ortholog_count)
                         c = float(ortholog_matches)
                         prb = float(hypergeom.pmf(c, N, m, n))
-                        phenolog_p_value_list.append(prb)
+                        # phenolog_p_value_list.append(prb)
                         total_hyp_calcs += 1
                         if prb <= fdr_cutoff:
                             significance = 'Significant'
@@ -123,7 +136,7 @@ for species_a in species_list:
                             significance = 'Not Significant'
 
                         new_row = pd.Series({'Phenotype_A': species_a_phenotype_id, 'Phenotype_B': species_b_phenotype_id, 'p_value': prb, 'phenolog_flag': significance})
-                        pd.concat([phenologs_df, new_row.to_frame().T], ignore_index=True)
+                        phenologs_df = pd.concat([phenologs_df, new_row.to_frame().T], ignore_index=True)
 
                     else:
                         prb = 1
@@ -131,7 +144,11 @@ for species_a in species_list:
                         new_row = pd.Series(
                             {'Phenotype_A': species_a_phenotype_id, 'Phenotype_B': species_b_phenotype_id,
                              'p_value': prb, 'phenolog_flag': significance})
-                        pd.concat([phenologs_df, new_row.to_frame().T], ignore_index=True)
+                        phenologs_df = pd.concat([phenologs_df, new_row.to_frame().T], ignore_index=True)
+                    counter += 1
+                    if counter % 100000 == 0:
+                        print('Completed phenolog calculation ' + str(counter) + ' of ' + str(
+                            species_cross_product) + '.')
             print("Completed processing of " + species_a + " vs " + species_b + " phenolog calculations.")
             print('Total Matches so far: ' + str(total_ortholog_matches))
             print('Total non-matches so far: ' + str(total_ortholog_nonmatches))
@@ -139,6 +156,7 @@ for species_a in species_list:
             print('Total significant phenologs so far: ' + str(significant_phenolog_count))
     species_list_clone.remove(species_a)
 
+    print('All phenologs calculated.')
     print('Total Matches: ' + str(total_ortholog_matches))
     print('Total non-matches: ' + str(total_ortholog_nonmatches))
     print('Total phenolog calculations: ' + str(total_hyp_calcs))
@@ -147,8 +165,9 @@ for species_a in species_list:
 # Final output
 full_output_file = '../../datasets/output/phenologs/all_phenolog_data.tsv'
 pd.DataFrame(phenologs_df).to_csv(full_output_file, sep="\t", index=False)
-significant_phenlogs = phenologs_df[(phenologs_df["phenolog_flag"] == 'Significant')]
+significant_phenologs = phenologs_df[(phenologs_df["phenolog_flag"] == 'Significant')]
 significant_phenolog_output_file = '../../datasets/output/phenologs/significant_phenolog_data.tsv'
-pd.DataFrame(significant_phenlogs).to_csv(significant_phenolog_output_file, sep="\t", index=False)
+pd.DataFrame(significant_phenologs).to_csv(significant_phenolog_output_file, sep="\t", index=False)
 
+print('All processing complete.')
 

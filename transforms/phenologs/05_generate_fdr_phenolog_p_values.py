@@ -193,6 +193,8 @@ class myClass:
 
                     # Save p-value list to disc for testing
                     # p_value_cutoff = phenolog_p_value_list[five_percent_position]
+                    # NOTE: The p-value lists appear to take significant disk space.
+                    # Saving just the 5% cutoff value could be a way to reduce storage needs.
                     with open(p_value_list_filepath, 'wb') as handle:
                         pickle.dump(phenolog_p_value_list, handle)
                     print('Complete generating phenolog p-value list for ' + source_species_name + ' vs ' + target_species_name + ' ' + str(limit) + '.')
