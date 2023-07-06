@@ -38,10 +38,10 @@ def build_ortholog_phenotype_data(panther_file, gene_phenotype_file, output_file
     # with each phenotype being associated with a distinct list of n orthologs.
     phenotype_ortholog_hash = {}
     for _, row in phenotype_ortholog_df.iterrows():
-        if row.phenotype_i not in phenotype_ortholog_hash:
-            phenotype_ortholog_hash[row.phenotype_i] = [row.ortholog_id]
-        elif row.ortholog_id not in phenotype_ortholog_hash[row.phenotype_i]:
-            phenotype_ortholog_hash[row.phenotype_i].append(row.ortholog_id)
+        if row.phenotype not in phenotype_ortholog_hash:
+            phenotype_ortholog_hash[row.phenotype] = [row.ortholog_id]
+        elif row.ortholog_id not in phenotype_ortholog_hash[row.phenotype]:
+            phenotype_ortholog_hash[row.phenotype].append(row.ortholog_id)
         else:
             print('Phenotype and ortholog already present.')
     # print(phenotype_ortholog_hash)
