@@ -24,11 +24,15 @@ If two phenotypes have one or more matching orthologs, the hypergeometric probab
 """
 from scipy.stats import hypergeom, pearsonr
 import random
-
+from pathos.multiprocessing import ProcessPool as Pool
 import pandas as pd
 import pickle
 pd.set_option('display.max_colwidth', None)
 pd.set_option('display.max_columns', None)
+
+
+
+
 
 
 panther_filepath = "../../datasets/intermediate/panther/panther_orthologs.tsv"
@@ -59,12 +63,13 @@ species_list.sort()
 species_list_clone.sort()
 '''
 
-# species_list = ['human', 'mouse', 'rat', 'worm', 'zebrafish']
-species_list = ['worm', 'zebrafish']
+species_list = ['human', 'mouse', 'rat', 'worm', 'zebrafish', 'xenopus']
+# species_list = ['worm', 'rat']
 species_list.sort()
-# species_list_clone = ['human', 'mouse', 'rat', 'worm', 'zebrafish']
-species_list_clone = ['worm', 'zebrafish']
+species_list_clone = ['human', 'mouse', 'rat', 'worm', 'zebrafish', 'xenopus']
+# species_list_clone = ['worm', 'rat']
 species_list_clone.sort()
+
 for species_a in species_list:
     for species_b in species_list_clone:
         if species_a == species_b:
@@ -105,11 +110,11 @@ for species_a in species_list:
 
                     for k in species_a_orthologs:
                         # Orthologs for species A
-                        species_a_ortholog = k
+                        # species_a_ortholog = k
                         for l in species_b_orthologs:
                             # Orthologs for species B
-                            species_b_ortholog = l
-                            if species_a_ortholog == species_b_ortholog:
+                            # species_b_ortholog = l
+                            if k == l:
                                 ortholog_matches += 1
                                 total_ortholog_matches += 1
                             else:
@@ -135,7 +140,9 @@ for species_a in species_list:
                         else:
                             significance = 'Not Significant'
 
-                        new_row = pd.Series({'Phenotype_A': species_a_phenotype_id, 'Phenotype_B': species_b_phenotype_id, 'p_value': prb, 'phenolog_flag': significance})
+                        new_row = pd.Series(
+                            {'Phenotype_A': species_a_phenotype_id, 'Phenotype_B': species_b_phenotype_id,
+                             'p_value': prb, 'phenolog_flag': significance})
                         phenologs_df = pd.concat([phenologs_df, new_row.to_frame().T], ignore_index=True)
 
                     else:

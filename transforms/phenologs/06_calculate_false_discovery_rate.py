@@ -21,7 +21,7 @@ from statistics import mean
 # Load species dict.
 species_dict = pickle.load(open('../../datasets/utils/species_dict.pkl', 'rb'))
 
-limit = range(1, 11)
+limit = range(1, 1001)
 # limit = 1
 #
 fdr_list = []

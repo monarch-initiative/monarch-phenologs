@@ -149,7 +149,7 @@ class myClass:
         # both the processing of these files for the FDR as well as the actual phenologs calculations will only
         # need to be computed once for each species pair. So, the solution here would be to drop out a species from list
         # after each iteration of the 'species_a in species_list loop.
-        # Otherwise you are just getting duplicate calculations.
+        # Otherwise, you are just getting duplicate calculations.
         species_list = []
         species_list_clone = []
         for species in species_dict:
@@ -159,8 +159,8 @@ class myClass:
         species_list.sort()
         species_list_clone.sort()
 
-        print('Starting species list: ' + str(species_list))
-        print('Starting clone species list: ' + str(species_list_clone))
+        # print('Starting species list: ' + str(species_list))
+        # print('Starting clone species list: ' + str(species_list_clone))
         for species_a in species_list:
             for species_b in species_list_clone:
                 if species_a == species_b:
@@ -200,8 +200,8 @@ class myClass:
                     print('Complete generating phenolog p-value list for ' + source_species_name + ' vs ' + target_species_name + ' ' + str(limit) + '.')
                     del phenolog_p_value_list, common_orthologs
             species_list_clone.remove(species_a)
-            print('Species list after ' + species_a + 'completed: ' + str(species_list))
-            print('Clone species list after ' + species_a + ' completed: ' + str(species_list_clone))
+            # print('Species list after ' + species_a + 'completed: ' + str(species_list))
+            # print('Clone species list after ' + species_a + ' completed: ' + str(species_list_clone))
         return
 
 
@@ -231,7 +231,7 @@ p_value_list = myClass.calculate_fdr_from_random_data(myClass, mouse_file, zebra
 if __name__ == '__main__':
     m = myClass()
     nodes = 5
-    limit = range(1, 11)
+    limit = range(501, 1001)
     # limit = range(1, 2)
     m.run(limit, nodes)
     print('Completed phenologs calculations for randomized datasets.')

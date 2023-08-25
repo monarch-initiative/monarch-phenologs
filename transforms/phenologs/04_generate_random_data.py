@@ -112,7 +112,7 @@ class myClass:
 if __name__ == '__main__':
     m = myClass()
     nodes = 5
-    limit = range(1, 11)
-    # limit = range(1, 1001)
+    # limit = range(1, 2)
+    limit = range(1, 1001)
     m.run(limit, nodes)
     print('Completed all randomized datasets.')
