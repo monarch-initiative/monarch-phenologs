@@ -52,7 +52,7 @@ total_ortholog_nonmatches = 0
 total_hyp_calcs = 0
 # phenolog_p_value_list = []
 significant_phenolog_count = 0
-
+total_phenotypes_compared = 0
 '''
 # Use this setup for species list after testing:
 species_list = []
@@ -96,6 +96,7 @@ with open('../../datasets/output/phenologs/all_phenolog_data.tsv', 'w', newline=
                     print(species_b + " phenotype count: " + str(species_b_phenotype_count))
                     species_cross_product = species_a_phenotype_count * species_b_phenotype_count
                     print(str(species_cross_product) + ' phenolog calculations to perform.')
+                    total_phenotypes_compared += species_cross_product
                     species_a_name = species_dict[species_a]['species_name']
                     species_b_name = species_dict[species_b]['species_name']
 
@@ -171,6 +172,7 @@ with open('../../datasets/output/phenologs/all_phenolog_data.tsv', 'w', newline=
                     print("Completed processing of " + species_a + " vs " + species_b + " phenolog calculations.")
                     print('Total Matches so far: ' + str(total_ortholog_matches))
                     print('Total non-matches so far: ' + str(total_ortholog_nonmatches))
+                    print('Total phenotype comparisons so far: ' + str(total_phenotypes_compared))
                     print('Total phenolog calculations so far: ' + str(total_hyp_calcs))
                     print('Total significant phenologs so far: ' + str(significant_phenolog_count))
             species_list_clone.remove(species_a)
@@ -178,6 +180,7 @@ with open('../../datasets/output/phenologs/all_phenolog_data.tsv', 'w', newline=
             print('All phenologs calculated.')
             print('Total Matches: ' + str(total_ortholog_matches))
             print('Total non-matches: ' + str(total_ortholog_nonmatches))
+            print('Total phenotype comparisons: ' + str(total_phenotypes_compared))
             print('Total phenolog calculations: ' + str(total_hyp_calcs))
             print('Total significant phenologs: ' + str(significant_phenolog_count))
 
