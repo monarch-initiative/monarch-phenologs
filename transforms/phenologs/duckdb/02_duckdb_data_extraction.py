@@ -1,4 +1,5 @@
 import duckdb
+import os
 
 duckdb.sql("CREATE TABLE nodes AS SELECT * FROM '../../../datasets/sources/monarch_kg/monarch-kg_nodes.tsv'") # Create the nodes table
 duckdb.sql("CREATE TABLE edges AS SELECT * FROM '../../../datasets/sources/monarch_kg/monarch-kg_edges.tsv'") # Create the edges table
@@ -6,6 +7,10 @@ duckdb.sql("CREATE TABLE edges AS SELECT * FROM '../../../datasets/sources/monar
 # nodes columns: id	category	name	description	xref	provided_by	synonym	full_name	in_taxon	in_taxon_label	symbol	deprecated	iri	same_as
 # edges columns: id	original_subject	predicate	original_object	category	agent_type	aggregator_knowledge_source	knowledge_level	primary_knowledge_source	qualifiers	provided_by	has_evidence	publications	stage_qualifier	frequency_qualifier	has_count
 # want everything that has a 'has_phenotype' edge, preferably from just the species of interest
+
+if not os.path.exists('../../../datasets/intermediate/duckdb_tables/'):
+    os.makedirs('../../../datasets/intermediate/duckdb_tables/')
+
 
 # create genes table
 duckdb.sql("CREATE TABLE genes AS "
