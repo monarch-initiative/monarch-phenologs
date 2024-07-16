@@ -34,7 +34,8 @@ duckdb.sql("COPY genes TO '../../../datasets/intermediate/duckdb_tables/genes.cs
 duckdb.sql("CREATE TABLE phenotypes AS "
            "select distinct nodes_B.id as phenotype_id, "
            "nodes_B.name as phenotype_name, "
-           "nodes_A.in_taxon " # This will allow us to assign a taxon for the ambiguous mouse/rat phenotypes   
+           "nodes_A.in_taxon, " # This will allow us to assign a taxon for the ambiguous mouse/rat phenotypes   
+           "row_number() over (partition by nodes_A.in_taxon) as phenotype_row_number "
            "from nodes as nodes_A left join edges on nodes_A.id = edges.subject "
            "left join nodes as nodes_B "
            "on edges.object = nodes_B.id "
@@ -45,10 +46,16 @@ duckdb.sql("CREATE TABLE phenotypes AS "
            "or regexp_replace(nodes_B.id, ':.+', ':') like 'MP:%' " # Both rat and mouse use MP
            "or regexp_replace(nodes_B.id, ':.+', ':') like 'ZP:%' "
            "or regexp_replace(nodes_B.id, ':.+', ':') like 'XPO:%' "
-           "or regexp_replace(nodes_B.id, ':.+', ':') like 'WBPhenotype:%' "
-           ")")
+           "or regexp_replace(nodes_B.id, ':.+', ':') like 'WBPhenotype:%') order by nodes_B.id")
 
+#TODO: Note that XPO phenotypes have edges for two different taxons: NCBITaxon:8364	(Xenopus tropicalis) and NCBITaxon:8355 (Xenopus laevis).
+# Keep both? Are the row counts identical for each taxon? Gene associations?
 
+duckdb.sql("SELECT count(*) as phenotype_row_count FROM phenotypes").show(max_width=10000, max_rows=100)
+
+# Creating a test/development option where we only save 10 or 100 phenotypes per taxon,
+# reducing the amount of data processing necessary in downstream steps for testing purposes.
+duckdb.sql("DELETE FROM phenotypes WHERE phenotype_row_number > 10")
 
 duckdb.sql("SELECT count(*) as phenotype_row_count FROM phenotypes").show(max_width=10000, max_rows=100)
 

@@ -1,5 +1,6 @@
 import pickle
 import numpy
+import os
 
 '''
 This script generates a sorted list of phenotypes and orthologs to use as indices.
@@ -10,8 +11,10 @@ It then generates a phenotype-ortholog matrix, to be used in later calculations.
 species_dict = pickle.load(open('../../datasets/utils/species_dict.pkl', 'rb'))
 print('Assembling ortholog and phenotype lists.')
 phenotype_list = []
+test_phenotype_list = [] # Remove when testing is complete
 ortholog_list = []
 for species in species_dict:
+    phenotype_count = 0  # Remove when testing is complete
     species_name = species_dict[species]['species_name']
     print('Starting species ' + species_name + '.')
     # phenotype_ortholog_file = species_dict[species]['phenotype_to_ortholog_filepath']
@@ -19,6 +22,9 @@ for species in species_dict:
     for phenotype in phenotype_ortholog_dict:
         if phenotype not in phenotype_list:
             phenotype_list.append(phenotype)
+            if phenotype_count < 100: # Remove when testing is complete
+                test_phenotype_list.append(phenotype)
+                phenotype_count += 1 # Remove when testing is complete
         for ortholog in phenotype_ortholog_dict[phenotype]:
             if ortholog not in ortholog_list:
                 ortholog_list.append(ortholog)
@@ -53,8 +59,15 @@ for species in species_dict:
 print('Done assembling phenotype-ortholog matrices.')
 
 # Save all files to disk.
+
+if not os.path.exists('../../datasets/intermediate/gene_candidate/'):
+    os.makedirs('../../datasets/intermediate/gene_candidate/')
+
+
 with open('../../datasets/intermediate/gene_candidate/phenotype_list.txt', 'wb') as handle:
     pickle.dump(phenotype_list, handle)
+with open('../../datasets/intermediate/gene_candidate/test_phenotype_list.txt', 'wb') as handle:
+    pickle.dump(test_phenotype_list, handle)
 with open('../../datasets/intermediate/gene_candidate/ortholog_list.txt', 'wb') as handle:
     pickle.dump(ortholog_list, handle)
 numpy.save('../../datasets/intermediate/gene_candidate/ortholog_phenotype_matrix.npy', ortholog_phenotype_matrix)
