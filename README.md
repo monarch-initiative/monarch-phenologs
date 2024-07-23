@@ -40,6 +40,8 @@ This implementation of phenologs uses the Monarch Knowledge Graph as the data so
 with the intention of integrating the calculated phenologs and phenolog gene candidate predictions 
 back to that same instance/version of the Monarch KG after calculations are complete.
 
+
+
 ### Calculation of phenologs
 
 The calculation of phenologs begins by acquiring the latest version of the Monarch KG and extracting data from the Monarch KG.
@@ -62,10 +64,12 @@ and the significant phenologs can be identified simply as those with a p-value l
 Calculation of false discovery rate
 
 #### Distance matrix
+Distance matrix is calculated by...
 
 #### Weight matrix
+The weight matrix is calculated by...
 
-k-nearest neighbors
+#### k-nearest neighbors
 
 
 

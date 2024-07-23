@@ -76,7 +76,7 @@ if __name__ == '__main__':
     ortholog_phenotype_matrix = numpy.load('../../datasets/intermediate/gene_candidate/ortholog_phenotype_matrix.npy')
 
     #If testing, set phenotype list to the test list:
-    # phenotype_list = test_phenotype_list
+    phenotype_list = test_phenotype_list
 
     total_phenotypes = len(phenotype_list)
     print('INFO: Total number of phenotypes: ' + str(total_phenotypes))
@@ -88,7 +88,7 @@ if __name__ == '__main__':
     # Use the hypergeometric CDF to provide scores for the weight matrix.
 
     # Here might be an opportunity to limit the number of phenotypes considered for testing.
-    # Possible to limit the number of phenotypes but have the full gamut of orthologs for coveage?
+    # Possible to limit the number of phenotypes but have the full gamut of orthologs for coverage?
     # Or would it make more sense just to limit the parsed data in step 01?
 
     distance_matrix = numpy.zeros((len(phenotype_list), len(phenotype_list)))
@@ -96,7 +96,6 @@ if __name__ == '__main__':
     weight_matrix = numpy.zeros((len(phenotype_list), len(phenotype_list)))
     print('Will need to process ' + str(distance_matrix_comparisons) + ' matrix comparisons.')
 
-    # Takes ~65 seconds to reach this point.
     print('INFO: Assembling phenotype matrix coordinates.')
 
     for phenotype_i in phenotype_list:
