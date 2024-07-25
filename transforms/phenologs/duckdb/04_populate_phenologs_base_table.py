@@ -26,6 +26,7 @@ def calculate_hypergeometric_probablity(phenotype_a_ortholog_count: int, phenoty
     N = float(shared_ortholog_count)
     c = float(ortholog_matches)
     probability = float(hypergeom.pmf(c, N, m, n))
+    # print("Phenotype B Ortholog Count: " + str(phenotype_b_ortholog_count) + ", Phenotype A Ortholog Count: " + str(phenotype_a_ortholog_count) + ", Shared ortholog count: "+ str(shared_ortholog_count) + ", Ortholog matches: " + str(ortholog_matches) + ", Probability: " + str(probability))
     return probability
 
 duckdb.create_function("hypergeom_prb", calculate_hypergeometric_probablity, [int, int, int, int], DOUBLE)
@@ -60,7 +61,7 @@ duckdb.sql("CREATE TABLE updated_phenolog_base AS "
            "ON pb.phenotype_a_id = co.phenotype_a_id AND pb.phenotype_a_in_taxon = co.phenotype_a_taxon_id "
            "AND pb.phenotype_b_id = co.phenotype_b_id AND pb.phenotype_b_in_taxon = co.phenotype_b_taxon_id "
            "left join total_common_orthologs tco "
-           "on pb.phenotype_a_in_taxon = tco.species_a_taxon_id and pb.phenotype_b_in_taxon = tco.species_b_taxon_id"
+           "on pb.phenotype_a_in_taxon = tco.species_a_taxon_id and pb.phenotype_b_in_taxon = tco.species_b_taxon_id "
            )
 
 
@@ -72,16 +73,21 @@ duckdb.sql("SELECT * FROM updated_phenolog_base ").show(max_width=10000, max_row
 
 duckdb.sql("ALTER TABLE updated_phenolog_base ADD COLUMN p_value DOUBLE;")
 
+# FOR TESTING: Keep rows that have > 5 ortholog_matches:
+# duckdb.sql("DELETE FROM updated_phenolog_base WHERE ortholog_matches < 5;")
+
 print("Updated phenologs base table: ")
 duckdb.sql("SELECT * FROM updated_phenolog_base ").show(max_width=10000, max_rows=10)
 
 duckdb.sql("UPDATE updated_phenolog_base "
-           "SET p_value = hypergeom_prb(phenotype_b_ortholog_count, phenotype_a_ortholog_count, ortholog_matches, shared_orthologs) ")
+           "SET p_value = hypergeom_prb(phenotype_b_ortholog_count, phenotype_a_ortholog_count, shared_orthologs, ortholog_matches) ")
 
 
-print("Updated phenologs base table: ")
+print("Updated phenologs base table: populated p-values?")
 duckdb.sql("SELECT * FROM updated_phenolog_base ").show(max_width=10000, max_rows=10)
 
+print("Updated phenologs base table: > 0 p-values?")
+duckdb.sql("SELECT * FROM updated_phenolog_base where p_value > 0").show(max_width=10000, max_rows=10)
 
 
 print("Updated phenologs base table, zero ortholog count check: drop from final table?")
