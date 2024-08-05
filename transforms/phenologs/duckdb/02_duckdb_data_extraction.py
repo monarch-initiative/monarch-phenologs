@@ -204,7 +204,7 @@ phenotype_ortholog Columns: phenotype_id	phenotype_name	phenotype_taxon_id	ortho
 phenotype columns: phenotype_id	phenotype_name	in_taxon	phenotype_row_number
 '''
 # Trim phenotype table to remove phenotypes without orthologs:
-duckdb.sql("CREATE TABLE tuncated_phenotypes AS "
+duckdb.sql("CREATE TABLE truncated_phenotypes AS "
            "SELECT distinct p.* from phenotypes p "
            "inner join phenotype_ortholog_counts po "
            "on p.phenotype_id = po.phenotype_id "
@@ -217,19 +217,19 @@ duckdb.sql("CREATE TABLE tuncated_phenotypes AS "
 duckdb.sql("CREATE TABLE common_orthologs AS "
            "SELECT distinct p_a.phenotype_id as phenotype_a_id, p_a.in_taxon as phenotype_a_taxon_id, p_b.phenotype_id as phenotype_b_id, p_b.in_taxon as phenotype_b_taxon_id, "
            "po_a.ortholog_id as ortholog_id "
-           "FROM tuncated_phenotypes as p_a "
-           "LEFT JOIN tuncated_phenotypes as p_b "
+           "FROM truncated_phenotypes as p_a "
+           "LEFT JOIN truncated_phenotypes as p_b "
            "ON p_a.in_taxon <> p_b.in_taxon " # This will give a cross-product of phenotypes where taxons are not the same.
            "LEFT JOIN phenotype_to_ortholog as po_a "
            "ON p_a.phenotype_id = po_a.phenotype_id and p_a.in_taxon = po_a.phenotype_taxon_id "
            "LEFT JOIN phenotype_to_ortholog as po_b "
            "ON p_b.phenotype_id = po_b.phenotype_id and p_b.in_taxon = po_b.phenotype_taxon_id "
-           "WHERE po_a.ortholog_id = po_b.ortholog_id")
+           "WHERE po_a.ortholog_id = po_b.ortholog_id ")
 
 print('Common Orthologs Table')
 duckdb.sql("SELECT * FROM common_orthologs ").show(max_width=10000, max_rows=10)
 
-print("Common ortholgs: XPO:0115436 should not have any rows for taxon 8355")
+print("Common orthologs: XPO:0115436 should not have any rows for taxon 8355")
 duckdb.sql("SELECT * FROM common_orthologs "
            "WHERE phenotype_a_id in ('HP:0005107', 'XPO:0115436' ) "
            "and phenotype_b_id in ('HP:0005107', 'XPO:0115436') "
