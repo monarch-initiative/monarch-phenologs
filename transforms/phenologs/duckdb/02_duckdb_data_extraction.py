@@ -224,12 +224,12 @@ duckdb.sql("CREATE TABLE common_orthologs AS "
            "ON p_a.phenotype_id = po_a.phenotype_id and p_a.in_taxon = po_a.phenotype_taxon_id "
            "LEFT JOIN phenotype_to_ortholog as po_b "
            "ON p_b.phenotype_id = po_b.phenotype_id and p_b.in_taxon = po_b.phenotype_taxon_id "
-           "WHERE po_a.ortholog_id = po_b.ortholog_id")
+           "WHERE po_a.ortholog_id = po_b.ortholog_id ")
 
 print('Common Orthologs Table')
 duckdb.sql("SELECT * FROM common_orthologs ").show(max_width=10000, max_rows=10)
 
-print("Common ortholgs: XPO:0115436 should not have any rows for taxon 8355")
+print("Common orthologs: XPO:0115436 should not have any rows for taxon 8355")
 duckdb.sql("SELECT * FROM common_orthologs "
            "WHERE phenotype_a_id in ('HP:0005107', 'XPO:0115436' ) "
            "and phenotype_b_id in ('HP:0005107', 'XPO:0115436') "
