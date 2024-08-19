@@ -76,8 +76,9 @@ duckdb.sql("ALTER TABLE updated_phenolog_base ADD COLUMN p_value DOUBLE;")
 # FOR TESTING: Keep rows that have > 5 ortholog_matches:
 # duckdb.sql("DELETE FROM updated_phenolog_base WHERE ortholog_matches < 5;")
 
-print("Updated phenologs base table: ")
-duckdb.sql("SELECT * FROM updated_phenolog_base ").show(max_width=10000, max_rows=10)
+print("Calculating hypergeometric probability.")
+print("Rows to process: ")
+duckdb.sql("SELECT count(*) as row_count FROM updated_phenolog_base ").show(max_width=10000, max_rows=10)
 
 duckdb.sql("UPDATE updated_phenolog_base "
            "SET p_value = hypergeom_prb(phenotype_b_ortholog_count, phenotype_a_ortholog_count, shared_orthologs, ortholog_matches) ")
@@ -93,15 +94,12 @@ duckdb.sql("SELECT * FROM updated_phenolog_base where p_value > 0").show(max_wid
 print("Updated phenologs base table, zero ortholog count check: drop from final table?")
 duckdb.sql("SELECT * FROM updated_phenolog_base WHERE phenotype_a_ortholog_count = 0 or phenotype_b_ortholog_count = 0").show(max_width=10000, max_rows=10)
 
-
-
-
 print("Updated phenologs base table, common ortholog count check: This should return zero rows.")
 duckdb.sql("SELECT * FROM updated_phenolog_base WHERE ortholog_matches > 0 and (phenotype_a_ortholog_count = 0 or phenotype_b_ortholog_count = 0)").show(max_width=10000, max_rows=10)
 
 
 # save to disk -> Overwrite?
-duckdb.sql("COPY updated_phenolog_base TO '../../../datasets/intermediate/duckdb_tables/updated_phenolog_base.csv' (HEADER true, DELIMITER '\t');")
+duckdb.sql("COPY updated_phenolog_base TO '../../../datasets/intermediate/duckdb_tables/04_updated_phenolog_base.csv' (HEADER true, DELIMITER '\t');")
 
 
 # Xenopus phenotype-ortholog check

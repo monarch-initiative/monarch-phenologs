@@ -11,11 +11,6 @@ duckdb.sql("CREATE TABLE common_ortholog_counts AS SELECT * FROM '../../../datas
 duckdb.sql("CREATE TABLE phenotype_ortholog_counts AS SELECT * FROM '../../../datasets/intermediate/duckdb_tables/phenotype_ortholog_counts.csv'") # Load the phenotype-ortholog counts table
 
 
-
-
-
-
-
 # generate the phenolog table
 
 '''
@@ -44,7 +39,7 @@ What's needed here?
 # Can we trim down the inputs? How about we drop all phenotypes not present in the phenotype-ortholog table?
 
 # Trim phenotype table to remove phenotypes without orthologs:
-duckdb.sql("CREATE TABLE tuncated_phenotypes AS "
+duckdb.sql("CREATE TABLE truncated_phenotypes AS "
            "SELECT distinct p.* from phenotypes p "
            "inner join phenotype_ortholog_counts po "
            "on p.phenotype_id = po.phenotype_id "
@@ -55,48 +50,67 @@ duckdb.sql("CREATE TABLE tuncated_phenotypes AS "
 print("Phenotype row count: ")
 duckdb.sql("SELECT count(*) as row_count FROM phenotypes").show(max_width=10000, max_rows=10)
 print("Truncated phenotype row count: ")
-duckdb.sql("SELECT count(*) as row_count FROM tuncated_phenotypes").show(max_width=10000, max_rows=10)
+duckdb.sql("SELECT count(*) as row_count FROM truncated_phenotypes").show(max_width=10000, max_rows=10)
 
 
 # A few different performance tuning options:
 # duckdb.sql("SET threads = 20") # This may work as setting a limit of threads which may be less than what DuckDB would use normally.
 # duckdb.sql("PRAGMA max_temp_directory_size='100GiB'")
+print("Building phenolog base table.")
 duckdb.sql("CREATE TABLE phenolog_base AS "
-           "SELECT DISTINCT pa.phenotype_id as phenotype_a_id, pa.in_taxon as phenotype_a_in_taxon, pb.phenotype_id as phenotype_b_id, pb.in_taxon as phenotype_b_in_taxon "
+           "SELECT DISTINCT pa.phenotype_id as phenotype_a_id, pa.in_taxon as phenotype_a_in_taxon, concat(pa.phenotype_id, '_', pa.in_taxon) as phenotaxon_a_id, "
+           "pb.phenotype_id as phenotype_b_id, pb.in_taxon as phenotype_b_in_taxon, concat(pb.phenotype_id, '_', pb.in_taxon) as phenotaxon_b_id, "
+           "list_sort(array_value(concat(pa.phenotype_id, '_', pa.in_taxon), concat(pb.phenotype_id, '_', pb.in_taxon))) as sorted_phenotaxon_array, "
+           "row_number() OVER (PARTITION BY list_sort(array_value(concat(pa.phenotype_id, '_', pa.in_taxon), concat(pb.phenotype_id, '_', pb.in_taxon)))) as phenolog_row "
            # ", null as phenotype_a_ortholog_count, null as phenotype_b_ortholog_count, null as shared_ortholog_count, null as ortholog_matches, "
            # "null as hypergeom_probability, "
            # "null as p_value, null as significance, "
            # "null as distance, null as weight "
-           "FROM tuncated_phenotypes pa "
-           "LEFT JOIN tuncated_phenotypes pb "
+           "FROM truncated_phenotypes pa "
+           "LEFT JOIN truncated_phenotypes pb "
            "ON pa.phenotype_id <> pb.phenotype_id and pa.in_taxon <> pb.in_taxon ")
-           # "where phenotype_a.phenotype_id in ('MP:0001399','MP:0001025','MP:0009778','MP:0000265','MP:0002883') and phenotype_b.phenotype_id in ('ZP:0006005','ZP:0100399','ZP:0005569','ZP:0137444','ZP:0142224') "
+           # "where pa.phenotype_id in ('MP:0001399','MP:0001025','MP:0009778','MP:0000265','MP:0002883') and pb.phenotype_id in ('ZP:0006005','ZP:0100399','ZP:0005569','ZP:0137444','ZP:0142224') ")
            # "order by phenotype_a.phenotype_id, phenotype_b.phenotype_id").show(max_width=10000, max_rows=50)
            # "where phenotype_a.in_taxon = 'NCBITaxon:10090' and phenotype_b.in_taxon = 'NCBITaxon:9606' ") # .show(max_width=10000, max_rows=50)
+
+# This cross product is duplicative, need to drop the duplicate rows.
+'''
+Process:
+-Combine the two phenotaxon IDs into a sorted array in a column
+-Assign row numbers over partition by that sorted array column
+-Select just the rows with row number = 1 or drop rows with row number = 2
+'''
+print("phenolog base table count: ")
+duckdb.sql("SELECT count(*) as row_count FROM phenolog_base").show(max_width=10000, max_rows=10)
+
+'''
+duckdb.sql("SELECT * FROM phenolog_base "
+           "WHERE (phenotaxon_a_id = 'MP:0006277_NCBITaxon:10090' and phenotaxon_b_id = 'HP:0100856_NCBITaxon:9606') "
+           "or (phenotaxon_a_id = 'HP:0100856_NCBITaxon:9606' and phenotaxon_b_id = 'MP:0006277_NCBITaxon:10090')").show(max_width=10000, max_rows=10)
+'''
+
+# Drop out any of the duplicate comparison rows from the phenolog_base table.
+duckdb.sql("DELETE FROM phenolog_base WHERE phenolog_row > 1")
+
+# Drop columns no longer needed.
+duckdb.sql("ALTER TABLE phenolog_base DROP phenolog_row")
+duckdb.sql("ALTER TABLE phenolog_base DROP sorted_phenotaxon_array")
+
+print("phenolog base table count after drop: ")
+duckdb.sql("SELECT count(*) as row_count FROM phenolog_base").show(max_width=10000, max_rows=10)
+
+'''
+# Example data query:
+duckdb.sql("SELECT * FROM phenolog_base "
+           "WHERE (phenotaxon_a_id = 'MP:0006277_NCBITaxon:10090' and phenotaxon_b_id = 'HP:0100856_NCBITaxon:9606') "
+           "or (phenotaxon_a_id = 'HP:0100856_NCBITaxon:9606' and phenotaxon_b_id = 'MP:0006277_NCBITaxon:10090')").show(max_width=10000, max_rows=10)
+'''
 
 print('Phenolog base table: ')
 duckdb.sql("SELECT * FROM phenolog_base").show(max_width=10000, max_rows=10)
 
 
-print('Phenolog base table row count: ')
-duckdb.sql("SELECT count(*) as phenolog_base_row_count FROM phenolog_base").show(max_width=10000, max_rows=10)
-
-
 duckdb.sql("COPY phenolog_base TO '../../../datasets/intermediate/duckdb_tables/phenolog_base.csv' (HEADER true, DELIMITER '\t');")
-
-
-'''
-Next step, want to assemble the variable columns necessary for the hypergeometric probability calculation: 
-m = float(phenotype_b_ortholog_count)
-n = float(phenotype_a_ortholog_count)
-N = float(shared_ortholog_count)
-c = float(ortholog_matches)
-
-How to add a column to an existing table? Alter?
-'''
-# duckdb.sql("ALTER TABLE phenolog_base ADD_SELECT * FROM phenolog_base;")
-
-
 
 
 '''
