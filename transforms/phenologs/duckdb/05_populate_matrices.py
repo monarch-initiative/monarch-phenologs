@@ -276,15 +276,20 @@ duckdb.sql("SELECT * FROM phenolog_base ").show(max_width=10000, max_rows=10)
 
 
 # Set the phenotaxon coordinates from the
+print("Updating phenotaxon A coordinates.")
 duckdb.sql("UPDATE phenolog_base "
            "SET phenotaxon_a_matrix_coordinate = x.i "
-           "FROM phenotype_ortholog_matrix_input x "
+           "FROM knn_phenotypes x "
            "WHERE phenotaxon_a_id = x.phenotaxon_id ")
 
+print("Updating phenotaxon B coordinates.")
 duckdb.sql("UPDATE phenolog_base "
            "SET phenotaxon_b_matrix_coordinate = x.i "
-           "FROM phenotype_ortholog_matrix_input x "
+           "FROM knn_phenotypes x "
            "WHERE phenotaxon_b_id = x.phenotaxon_id ")
+
+print("Updated phenologs base table: ")
+duckdb.sql("SELECT * FROM phenolog_base ").show(max_width=10000, max_rows=10)
 
 
 # Possible to update two columns at once so we don't have to run through the entire table twice?

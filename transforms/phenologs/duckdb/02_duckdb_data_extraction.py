@@ -152,7 +152,9 @@ duckdb.sql("COPY gene_to_phenotype TO '../../../datasets/intermediate/duckdb_tab
 # gene to phenotype schema: gene_id	gene_name	gene_taxon_id	gene_taxon_label	predicate	phenotype_id	phenotype_name
 # ortholog schema: gene_a_id	gene_a_taxon_id	predicate	gene_b_id	gene_b_taxon_id	ortholog_id
 duckdb.sql("CREATE TABLE phenotype_to_ortholog AS "
-           "SELECT distinct g2p.phenotype_id, g2p.phenotype_name, g2p.phenotype_taxon_id, orth.ortholog_id FROM gene_to_phenotype as g2p left join orthologs as orth on g2p.gene_id = orth.gene_a_id "
+           "SELECT distinct g2p.phenotype_id, g2p.phenotype_name, g2p.phenotype_taxon_id, "
+           "concat(g2p.phenotype_id, '_', g2p.phenotype_taxon_id) as phenotaxon_id, orth.ortholog_id "
+           "FROM gene_to_phenotype as g2p left join orthologs as orth on g2p.gene_id = orth.gene_a_id "
            "where orth.ortholog_id is not null")
 
 # write to file
