@@ -61,6 +61,7 @@ import csv
 import os
 import pandas as pd
 import pickle
+import networkx as nx
 
 
 def get_gene_phenotype_edges_from_kg(edges_file, nodes_file, subject, object, predicate, output_file):
@@ -143,6 +144,10 @@ orthologs_df = pd.read_csv(panther_orthologs_filepath, sep='\t', header=0, low_m
 # Load species dict.
 species_dict = pickle.load(open('../../datasets/utils/species_dict.pkl', 'rb'))
 
+
+# TODO: Verify that the model organism phenotypes do not contain phenotypes that should be removed/excluded.
+# e.g. Adult onset, recessive inheritance, etc. The equivalent of not being a descendant of phenotypic abnormality in HPO.
+
 # Create 'common orthologs' files.
 for species_a in species_dict:
     for species_b in species_dict:
@@ -162,7 +167,10 @@ for species_a in species_dict:
             pd.DataFrame(common_orthologs).to_csv(common_orthologs_filepath, sep="\t", index=False)
 print('Common orthologs files created.')
 
-# Get human gene to phenotype TODO: Are there phenotypes with the MONDO prefix as well? Doesn't look like it.
+# Get human gene to phenotype
+# TODO: Are there phenotypes with the MONDO prefix as well? Doesn't look like it.
+# TODO: There are phenotypes present that aren't a descendant of phenotypic abnormality and should be removed.
+# TODO: A question on approach: For humans, should we use gene-phenotype relations or go with gene-disease relations?
 human_gene_prefix = 'HGNC:'
 human_phenotype_prefix = 'HP:'
 human_gene_to_phenotype_filepath = "../../datasets/intermediate/human/human_gene_to_phenotype.tsv"
@@ -196,6 +204,7 @@ mondo_to_mondo = pd.read_csv(human_mondo_disease_to_mondo_phenotype_filepath, se
 all_disease_to_phenotype_filepath = "../../datasets/intermediate/human/human_all_disease_to_phenotype.tsv"
 all_human_disease_to_phenotype = pd.concat([mondo_to_hp, mondo_to_mondo])
 all_human_disease_to_phenotype = all_human_disease_to_phenotype.drop_duplicates()
+# TODO: Remove HPO terms not under phenotypic abnormality.
 pd.DataFrame(all_human_disease_to_phenotype).to_csv(all_disease_to_phenotype_filepath, sep="\t", index=False)
 print('Human all disease-to-phenotype merge complete.')
 
