@@ -3,6 +3,7 @@ import os
 import pickle
 import random
 import argparse
+import copy
 import time ### Can remove in the future
 import numpy as np
 import pandas as pd
@@ -12,6 +13,8 @@ from collections import Counter
 
 from pydantic import BaseModel
 from typing import Union, Literal, Dict, List, Any, Optional
+
+from numba import njit
 
 # Custom imports
 #from phenologs_utils import species_dict
@@ -96,7 +99,7 @@ class RandomSpeciesComparison(BaseModel):
                                                                                                self.species_b,
                                                                                                format(self.common_ortholog_count, ',')))
     
-    
+
     def run_randomized_comparison_pipeline(self, seed: Optional[int] = None):
         """
         Generates a randomized phenotype-->ortholog dataset for each species.
@@ -207,7 +210,7 @@ class RandomSpeciesComparison(BaseModel):
 
         return hg_params, tt
         
-    
+
     def run_randomized_comparison_trials(self, n_trials: List[int]):
         
         # Keep track of unique sets of hyper geometric tests to compute so we don't recalculate
@@ -263,7 +266,76 @@ class RandomSpeciesComparison(BaseModel):
         return
 
 
+
+
+    # EXPERIMENTAL (Need a separate function to write data for run_comparisons_parallel_v2)
+    def write_trial_data(self, trial_list, hg_pvals):
+        
+        for data in trial_list:
+
+            # Map to pvalues, and write data files
+            for trial_num, trial_data in data.items():
+                
+                # Define our outfile path and map params to pvalues 
+                outfile_path = os.path.join(self.output_directory, 
+                                            "{}_vs_{}_{}.tsv.gz".format(self.species_a, self.species_b, trial_num))
+                                            
+                # Map data back to computed pvalues, and format our trial data for easy writing to file
+                pvals = [hg_pvals[tuple(k)] for k in trial_data]
+                #param_data = np.asarray(trial_data).T
+                
+                # Reduced file size version
+                param_data = np.asarray(list(trial_data.keys())).T
+                occurrence = list(trial_data.values())
+                
+                # Write data using pandas
+                pd.DataFrame({"a_ortholog_count":param_data[0],
+                            "b_ortholog_count":param_data[1],
+                            "overlap_count":param_data[2],
+                            "common_ortholog_count":param_data[3],
+                            "hg_pval":pvals, ## Full file size version).to_csv(outfile_path, sep='\t', index=False)
+
+                            # Compact / reduced file size version (10 fold line count reduction for human mouse comparison)
+                            "occurrence":occurrence}).to_csv(outfile_path, sep='\t', index=False, compression='gzip')
+
+                print("- Data written to file for trial {}...".format(trial_num))
+        
+        ##return hg_pvals, data
+        return
+
+
+    # EXPERIMENTAL This version is more piece mail and will not compute hg pvals or write data
+    def run_randomized_comparison_trials_v2(self, n_trials: List[int]):
+        
+        # Keep track of unique sets of hyper geometric tests to compute so we don't recalculate
+        hg_params = set()
+        data = {}
+        for i, n_trial in enumerate(n_trials):
+            # Generate randomized data
+            trial_hg_params, trial_data = self.run_randomized_comparison_pipeline()
+            
+            # Update our hire level output datastructures
+            hg_params = hg_params | trial_hg_params
+            data.update({n_trial:trial_data})
+            print("- Total hg_params computed {} for {}/{} trials".format(format(len(hg_params), ','), 
+                                                                          i+1, 
+                                                                          format(len(n_trials), ',')))
+        
+        print("- {} vs. {} pairwise phenotype-->ortholog networks overlaps computed for {} trials".format(self.species_a,
+                                                                                                          self.species_b,
+                                                                                                          len(n_trials)))
+        
+        return data, hg_params
+        
+
+
 def run_comparisons_parallel(config, n_trials: int = 1, num_proc: int = 1):
+    """
+    This version will distribute a list of trials to each core requested.
+    Hyper geometric calculations are bundled together across different trials within a single core, and then computed
+    in bulk (so repeat calculations across different trials are collapsed). These pvalues are then mapped back to each 
+    trial's set of parameters and the data written.
+    """
 
     # Deal with - and 0 type edge cases 
     num_proc, n_trials = max(1, num_proc), max(1, n_trials)
@@ -299,6 +371,98 @@ def run_comparisons_parallel(config, n_trials: int = 1, num_proc: int = 1):
     return output
 
 
+# EXPERIMENTAL 
+def run_comparisons_parallel_v2(config, n_trials: int = 1, num_proc: int = 1):
+    """
+    This version performs 3 parallelization steps
+     - fdr hg param calculations
+     - hg tests calulcations
+     - writing data
+    
+    The primary advantage to this version is that one can limit the number of cores writing
+    data at one time. Because 3 separate pools of workers are created (1 for each step)
+
+    Note, that 1,000 trials for human vs. mouse will take up 4.2Mb per file x 1,000 = 4.2Gb storage
+    So this is the theoretical maximum amount of data we could try to write at one time. 
+    """
+
+    # Deal with - and 0 type edge cases 
+    num_proc, n_trials = max(1, num_proc), max(1, n_trials)
+
+    # Properly divide our workload to data
+    # Integers will automatically be cast to list of integers according to trial number
+    if type(n_trials) == type(1):
+        n_trials = [i for i in range(0, n_trials)]
+
+    # Evenly (as possible) divide our data into baskets within a basket (list[list,list,list,...])
+    if len(n_trials) > 1:
+        div_trials = divide_workload(n_trials, num_proc=num_proc)
+    else:
+        div_trials = [n_trials]
+    
+    # Instantiate all our objects before running computation
+    run_objs = [RandomSpeciesComparison.parse_obj(config) for i in range(0, len(div_trials))]
+
+    ############################################################
+    ### Randomized trial / hg parameter set parallel compute ###
+    output = mp.Queue()
+    pool = mp.Pool(processes=num_proc)
+
+    # Kick off jobs via asynchronous processing
+    results = [pool.apply_async(robj.run_randomized_comparison_trials_v2, args=(ddd,)) 
+               for robj, ddd in zip(run_objs, div_trials)]
+    
+    # Retrieve results
+    output = [ p.get() for p in results ]
+    print("- PART1 COMPLETE...")
+    
+
+    ########################################
+    ### Hyper geometric parallel compute ###
+    # Combine previous output set of parameters into a single set to parallel process
+    bulk_hg_params = set()
+    for v in output:
+        bulk_hg_params = bulk_hg_params | v[1]
+
+    div_hg_params = divide_workload(bulk_hg_params, num_proc=num_proc)
+
+    output_part2 = mp.Queue()
+    pool = mp.Pool(processes=num_proc)
+
+    # Kick off jobs via asynchronous processing
+    results = [pool.apply_async(bulk_compute_hyper_geom, args=(div_hg_params[i],)) for i in range(0, num_proc)]
+    
+    # Retrieve results
+    output_part2 = [ p.get() for p in results ]
+    print("- PART2 COMPLETE...")
+
+    ##############################
+    ### Parallel write compute ###
+    # Combine previous output into single hg param pvalue map
+    hg_pvals = {}
+    for v in output_part2:
+        hg_pvals.update(v)
+
+    # TO DO (Maybe...): There is probably a less memory intensive way to do this... May or may not be worth it
+    # Make copies for parrallel compute
+    hg_pval_copies = [copy.copy(hg_pvals) for i in range(0, num_proc)]
+    div_write_data = divide_workload([v[0] for v in output], num_proc=num_proc)
+
+    # Can limit the number of "writers" here if need be...
+    MAX_WRITE = 10
+    output_part3 = mp.Queue()
+    pool = mp.Pool(processes=MAX_WRITE)
+
+    # Kick off jobs via asynchronous processing
+    results = [pool.apply_async(robj.write_trial_data, args=(ddd, hgpv,)) 
+               for robj, ddd, hgpv in zip(run_objs, div_write_data, hg_pval_copies)]
+    
+    # Retrieve results
+    output_part3 = [ p.get() for p in results ]
+    print("- PART3 COMPLETE...")
+
+    return output_part3
+
 
 if __name__ == '__main__':
     ################
@@ -318,6 +482,8 @@ if __name__ == '__main__':
     
     ###############
     ### PROGRAM ###
+    # Basic run command (Human vs. Mouse for 100 trials across 10 cores)
+    # python phenologs_randomized_fdr_pvals.py -a human -b mouse -n 100 -p 10 -o path/to/results/directory
 
     # Base level config
     cpath = "../../datasets/intermediate/panther/common_orthologs_{}_vs_{}.tsv".format(args.species_a, args.species_b)
@@ -340,3 +506,26 @@ if __name__ == '__main__':
     
     else:
         print("-a & -b arguments must both be specied or -all argument must be set in order to run. Exiting...")
+
+    # # EXPERIMENTAL VERSION (Faster hyper geomatric calculations, and we can limit the number of writers if need be)
+    # # Base level config
+    # cpath = "../../datasets/intermediate/panther/common_orthologs_{}_vs_{}.tsv".format(args.species_a, args.species_b)
+    # spath = "../../datasets/utils/species_dict.pkl"
+    
+    # config = {"species_a":args.species_a,
+    #           "species_b":args.species_b,
+    #           "common_orthologs_path":cpath,
+    #           "species_dict_path":spath,
+    #           "output_directory":args.out_dir}
+    
+    # # Means we are dealing with a 1:1 species comparison
+    # if (args.species_a != None) and (args.species_b != None) and (not args.all):
+    #     run_comparisons_parallel_v2(config, n_trials=args.num_trials, num_proc=args.num_proc)
+    
+    # # TO DO
+    # # Run all pairwise species comparisons available
+    # elif args.all:
+    #     print("dummy")
+    
+    # else:
+    #     print("-a & -b arguments must both be specied or -all argument must be set in order to run. Exiting...")
