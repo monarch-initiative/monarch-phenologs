@@ -64,8 +64,6 @@ class RandomSpeciesComparison(BaseModel):
 
     base_a_p2g: Optional[dict] = None
     base_b_p2g: Optional[dict] = None
-    species_a_total_genes: Optional[int] = None
-    species_b_total_genes: Optional[int] = None
     base_pool: Optional[list] = None
     common_ortholog_count: Optional[int] = None
     output_directory: Optional[str] = None
@@ -504,9 +502,13 @@ def run_comparisons_parallel_v2(config, n_trials: int = 1, num_proc: int = 1):
 
 
 
-
-# Newest way (Does sanity checks at beginning to ensure filepaths won't be an issue before computing)
 def initiate_pairwise_comparison_configs(input_args):
+    """
+    - Attempts to ensure filepaths required for all computations are resolved before hand, so that
+      calculations don't fail part way through. 
+    - Creates pairwise comparison configuration data structures from
+      input arguments. Either all comparisons or a select set from a comma seperated list of taxon ids
+    """
 
     # Ensures part1 & part2 of pipeline have been completed
     check_dir = os.path.join(input_args.project_dir, "random_trials")
@@ -622,8 +624,8 @@ if __name__ == '__main__':
     ###############
     ### PROGRAM ###
     # Basic run command (Human vs. Mouse for 100 trials across 10 cores)
-    ###python phenologs_randomized_fdr_pvals.py -taxon_ids NCBITaxon:9606,NCBITaxon:10090 -n 100 -c 10 -p path/to/top_level_project_dir/
-    # TO DO: 
+    ###python phenologs_randomized_fdr_pvals.py -taxon_ids 9606,10090 -n 100 -c 10 -p path/to/top_level_project_dir/
+
     taxon_ids, comparison_configs = initiate_pairwise_comparison_configs(args)
     for config in comparison_configs:
         print("- Computing {} random trials between {} -- {}".format(args.num_trials, 
