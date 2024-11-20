@@ -1,4 +1,5 @@
 import os
+import sys
 import argparse
 import numpy as np
 import pandas as pd
@@ -6,6 +7,14 @@ from collections import Counter
 
 
 def gather_trial_data(input_dir):
+    """
+    Grabs all files within the input directory where
+    - "_vs_" is contained in the filename, 
+    - the filename ends with ".tsv" or ".tsv.gz"
+    - the last charcter of the filename before ".tsv" must pertain to a trial number (i.e. an integer)
+
+    {(species_a, species_b):{trial_number:path/to/trial/results/file}} is the format we store all our our data
+    """
     
     # Gather all filepaths to trial data
     trial_files = []
@@ -34,7 +43,7 @@ def gather_trial_data(input_dir):
         
         # Keep track of trial information by species-species comparison
         ddd = fname_formatted.split("_vs_")
-        specA = ddd[0].split("_")[-1]
+        specA = ddd[0]
         specB = ddd[1].split("_")[0]
         key = tuple((specA, specB))
 
@@ -55,6 +64,13 @@ def gather_trial_data(input_dir):
 
 
 def compute_fdrs_by_trial_nums(trials, trials_by_species):
+    """
+    Predetermined false discovery rate cutoffs (i.e .05, .01, .001, .0001) are used
+    to signify how far into the leading edge of the pvalue distribution we should go to grab pvalues
+    to signify a line in the sand at which we call a phenolog significant or not. Creates two tables...
+    The first is the pvalue cuttoff found for any given set of random trials (i.e. all trials pertaining to number 1 or 100, or 55 etc...),
+    and the second table is the average of these pvalues across the total number of trials.
+    """
     
     # Compute a single FDR per trial across entire species-species pairwise comparison dataset
     tot_trials = len(trials)
@@ -66,11 +82,11 @@ def compute_fdrs_by_trial_nums(trials, trials_by_species):
         pvals = []
         for k, v in trials_by_species.items():
             trial_path = v[n]
-            
+
             # Open file, and expand pvalue list based on "hg_pval" and "occurrence" columns
-            if ".gz" in trial_path:
+            if ".gz" in trial_path: 
                 df = pd.read_csv(trial_path, sep='\t', compression="gzip")
-            else:
+            else: 
                 df = pd.read_csv(trial_path, sep='\t')
             
             # Gather pvals for this species--species comparison
@@ -87,18 +103,22 @@ def compute_fdrs_by_trial_nums(trials, trials_by_species):
             ### fdr_by_sig_level[sgl].append(pvals[round((len(pvals)) * sgl)]) # One liner (but way less readable)
 
         cc += 1
-        if cc % 10 == 0:
+        if cc % 500 == 0:
             print("- Trial {}/{} read into memory...".format(cc, tot_trials))
 
     return fdr_by_sig_level
 
 
 def write_fdr_tables_from_results(fdr_results, trial_table_outpath, fdr_table_outpath):
+    """
+    Writes two tables. One for the fdr averages across trials (a single rowed table minus the header),
+    and another table for fdr values found across all trials (number of rows == N trials run)
+    """
     
     df_data = {}
     df_fdr_data = {}
     for k,v in fdr_results.items():
-        kk = "sig:{}".format(k)
+        kk = "fdr:{}".format(k)
         df_data.update({kk:v})
         df_fdr_data.update({kk:[np.average(v)]})
     
@@ -112,9 +132,21 @@ if __name__ == '__main__':
     ################
 	## ARG PARSE ###
     def parse_input_command():
-        parser = argparse.ArgumentParser(description='Computes randomized comparison trials between species a vs species b')
-        parser.add_argument("-i", "--input_dir", help="Path of directory containining randomized trial files", required=True, type=str)
-        parser.add_argument("-o", "--output_dir", help="Path of directory to write fdr results tables to", required=True, type=str)
+        parser = argparse.ArgumentParser(description='-p argument OR -i & -o arguments are required. Data will either be pulled \
+                                                      from an assumed directory / project structure, or the input and output \
+                                                      directory paths can be supplied individually. This script will gather \
+                                                      randomized trial results (on a per trial basis across all species \
+                                                      and computes a false discovery rate for different significance cutoffs. \
+                                                      In other words, all files pertaining to trial number 1 will have pvalues \
+                                                      pooled into a single distribution, and the pvalue(s) == top5%, for example, \
+                                                      would be taken as a single fdr value (we can do this for multiple cutoffs). \
+                                                      So for N trials we will have N fdr values that we can derive our \
+                                                      pvalue cutoff for the "final phenologs calculation". This information is \
+                                                      ultimately collated into a table for ease of use downstream.')
+
+        parser.add_argument("-p","--project_dir", help="Top most project directory", required=False, type=str, default=None)
+        parser.add_argument("-i", "--input_dir", help="Path of directory containining randomized trial files", required=False, type=str, default=None)
+        parser.add_argument("-o", "--output_dir", help="Path of directory to write fdr results tables to", required=False, type=str, default=None)
         return parser.parse_args()
 
     args = parse_input_command()
@@ -123,11 +155,23 @@ if __name__ == '__main__':
     ###############
     ### PROGRAM ###
 
-    outpath1 = os.path.join(args.output_dir, "fdr_table.tsv")
-    outpath2 = os.path.join(args.output_dir, "fdr_trials_table.tsv")
+    # Resolve input arguments
+    if args.project_dir and not args.input_dir and not args.output_dir:
+        input_dir = os.path.join(args.project_dir, "random_trials")
+        output_dir = os.path.join(args.project_dir, "random_trials_fdr")
 
-    trial_info, trials = gather_trial_data(args.input_dir)
+    elif args.input_dir and args.output_dir and not args.project_dir:
+        input_dir = args.input_dir
+        output_dir = args.output_dir
+    else:
+        print('- ERROR, invalid input argument combination. -p path/to/projectsdir  OR  -i path/to/trials/dir/ -o path/to/outputdir/')
+        sys.exit()
+
+    # Output filepaths
+    outpath1 = os.path.join(output_dir, "fdr_trials_table.tsv")
+    outpath2 = os.path.join(output_dir, "fdr_table.tsv")
+
+    # Run pipeline
+    trial_info, trials = gather_trial_data(input_dir)
     trial_pvals = compute_fdrs_by_trial_nums(trials=trials, trials_by_species=trial_info)
     write_fdr_tables_from_results(trial_pvals, outpath1, outpath2)
-
-
