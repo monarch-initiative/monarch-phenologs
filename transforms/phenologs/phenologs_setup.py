@@ -52,7 +52,7 @@ if __name__ == '__main__':
     project_dirs = ["monarch_kg",
                     "species_data",
                     "random_trials", 
-                    "random_trials_results", 
+                    "random_trials_fdr", 
                     "phenologs_results"]
 
     # Create base project directory

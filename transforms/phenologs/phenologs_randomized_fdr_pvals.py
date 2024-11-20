@@ -110,11 +110,7 @@ class RandomSpeciesComparison(BaseModel):
         
         # Load initial data
         self.load_species_ortholog_information()
-        #print(self.species_a, self.species_a_total_genes, max([len(v) for v in self.base_a_p2g.values()]))
-        #print(self.species_b, self.species_b_total_genes, max([len(v) for v in self.base_b_p2g.values()]))
         
-
-
         # NEW - We can subset out only the common orthologs for each species
         common_orths = set(self.base_pool)
         a_sub, b_sub = {}, {}
@@ -147,7 +143,6 @@ class RandomSpeciesComparison(BaseModel):
         b_matrix_lengths = {i:len(v) for i, v in enumerate(b_matrix)}
         hg_a_count_params = {k:len(v) for k,v in randomized_a.items()}
         hg_b_count_params = {k:len(v) for k,v in randomized_b.items()}
-        print("- Orthologs converted to integers and compact list...")
 
         # Map each unique value (ortholog id) in our data to the rows it belongs to (pre processing step)
         orth_to_coords = {}
@@ -511,25 +506,28 @@ def initiate_pairwise_comparison_configs(input_args):
     """
 
     # Ensures part1 & part2 of pipeline have been completed
-    check_dir = os.path.join(input_args.project_dir, "random_trials")
     check_file = os.path.join(input_args.project_dir, "species_data", "species_information_table.tsv")
-    check_outdir = os.path.join(input_args.project_dir, "random_trials_results")
-
-    if not os.path.isdir(check_dir):
-        print("- ERROR, Project directory {}/random_trials does not seem to exist. Exiting...".format(input_args.project_dir))
-        sys.exit()
+    check_outdir = os.path.join(input_args.project_dir, "random_trials")
     
     if not os.path.isfile(check_file):
         print("- ERROR, Project species information table doesn't seem to exist. Exiting...")
         sys.exit()
     
     if not os.path.isdir(check_outdir):
-        print("- ERROR, Project random_trials_results directory doesn't seem to exist. Exiting...")
+        print("- ERROR, Project random_trials directory doesn't seem to exist. Exiting...")
         sys.exit()
     
     # Figure out which species ids / names we have and which ones are relevant
     species_df = pd.read_csv(check_file, sep='\t')
     species_df = species_df[species_df['Total Phenotype Edges'] > 0] # Only want species whith non zero phenotype information
+    
+
+    # Pull out taxon_id information (twice as two separate variables)
+    ids_to_name = {sp_id:"-".join(sp_name.split(" ")) for sp_id, sp_name in zip(list(species_df["Taxon ID"]), list(species_df["Taxon Label"]))}
+    org_taxon_ids = copy.copy(ids_to_name)
+    
+    
+    # Format, and add additional keys to make more friendly to input arguments
     ids_to_name = {sp_id:"-".join(sp_name.split(" ")) for sp_id, sp_name in zip(list(species_df["Taxon ID"]), list(species_df["Taxon Label"]))}
     ids_to_name.update({sp_id.split(":")[1]:v for sp_id,v in ids_to_name.items()}) # Add keys without NCBITaxon: prefix
     display(species_df)
@@ -558,7 +556,7 @@ def initiate_pairwise_comparison_configs(input_args):
             sys.exit()
         
     else:
-        t_ids = list(ids_to_name.keys())
+        t_ids = list(org_taxon_ids.keys())
     
     tot_species = len(t_ids)
     tot_comps = (tot_species*(tot_species-1))/2
