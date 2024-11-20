@@ -84,10 +84,6 @@ class RandomSpeciesComparison(BaseModel):
         base_b_p2g = pickle.load(open(self.species_b_phenotype_path, 'rb'))
         corth_df = pd.read_csv(self.common_orthologs_path, sep='\t', header=0, low_memory=False)
         common_orthologs = list(corth_df["ortholog_id"])
-
-        # Convert our orthologs into integers
-        ##orths_to_int = {orth:i for i, orth in enumerate(common_orthologs)}
-        ##base_pool = [orths_to_int[orth] for orth in common_orthologs]
         common_ortholog_count = len(common_orthologs)
         
         # Set our reusable attributes
@@ -116,16 +112,36 @@ class RandomSpeciesComparison(BaseModel):
         
         # Load initial data
         self.load_species_ortholog_information()
-        print(self.species_a, self.species_a_total_genes, max([len(v) for v in self.base_a_p2g.values()]))
-        print(self.species_b, self.species_b_total_genes, max([len(v) for v in self.base_b_p2g.values()]))
+        #print(self.species_a, self.species_a_total_genes, max([len(v) for v in self.base_a_p2g.values()]))
+        #print(self.species_b, self.species_b_total_genes, max([len(v) for v in self.base_b_p2g.values()]))
         
-        ## Convert our orthologs into integers (Not currently necessary, but might make more sense in the future)
-        ##orths_to_int = {orth:i for i, orth in enumerate(common_orthologs)}
-        ##base_pool = [orths_to_int[orth] for orth in common_orthologs]
+
+
+        # NEW - We can subset out only the common orthologs for each species
+        common_orths = set(self.base_pool)
+        a_sub, b_sub = {}, {}
+        for k,v in self.base_a_p2g.items():
+            orth_list = list(set([vv for vv in v if vv in common_orths]))
+            if len(orth_list) > 0:
+                a_sub.update({k:orth_list})
         
+        for k,v in self.base_b_p2g.items():
+            orth_list = list(set([vv for vv in v if vv in common_orths]))
+            if len(orth_list) > 0:
+                b_sub.update({k:orth_list})
+
+        #print("- {}, {}".format(len(a_sub), len(b_sub)))
+        #print("- {}".format(self.common_ortholog_count))
+        #print("- {}, {}".format(max([len(v) for v in a_sub.values()]), max([len(v) for v in b_sub.values()])))
+
         # Generate randomized dataset
-        randomized_a = {phen:random.sample(self.base_pool, len(orths)) for phen,orths in self.base_a_p2g.items()}
-        randomized_b = {phen:random.sample(self.base_pool, len(orths)) for phen,orths in self.base_b_p2g.items()}
+        randomized_a = {phen:random.sample(self.base_pool, len(orths)) for phen,orths in a_sub.items()}
+        randomized_b = {phen:random.sample(self.base_pool, len(orths)) for phen,orths in b_sub.items()}
+
+        # OLD WAY
+        # Generate randomized dataset
+        ##randomized_a = {phen:random.sample(self.base_pool, len(orths)) for phen,orths in self.base_a_p2g.items()}
+        ##randomized_b = {phen:random.sample(self.base_pool, len(orths)) for phen,orths in self.base_b_p2g.items()}
         #print("- Randomized data generation complete")
         
         # Convert to compact list data structure (instead of big numpy array)
@@ -133,7 +149,7 @@ class RandomSpeciesComparison(BaseModel):
         b_matrix_lengths = {i:len(v) for i, v in enumerate(b_matrix)}
         hg_a_count_params = {k:len(v) for k,v in randomized_a.items()}
         hg_b_count_params = {k:len(v) for k,v in randomized_b.items()}
-        #print("- Orthologs converted to integers and compact list...")
+        print("- Orthologs converted to integers and compact list...")
 
         # Map each unique value (ortholog id) in our data to the rows it belongs to (pre processing step)
         orth_to_coords = {}
@@ -175,20 +191,22 @@ class RandomSpeciesComparison(BaseModel):
             inds = np.argwhere(counts > 0).flatten()
             ind_count = len(inds)
             
+
+            # TO DO: PROPER HG PARAMETERS NEED TO BE FIGURED OUT. The general framework is here, but the exact params need fixing
             # DEFAULT / PREVIOUS WAY... 
             # This will break when the number of common orthologs is < than the total number of genes assocaited with a phenotype
             # Update our hg parameter lists
-            ##hg_overlap_counts += list(counts[inds])
-            ##hg_b_counts += [b_matrix_lengths[ind] for ind in inds]
-            ##hg_a_counts += [a_ortho_count] * ind_count
-            ##hg_world_counts += [self.common_ortholog_count] * ind_count
-
-            # Alters hg world counts parameter so that the "world size" is derived from species a total genes
-            # (the actual pool of genes we are pulling from) rather than the common set of orthologs 
             hg_overlap_counts += list(counts[inds])
             hg_b_counts += [b_matrix_lengths[ind] for ind in inds]
             hg_a_counts += [a_ortho_count] * ind_count
-            hg_world_counts += [self.species_a_total_genes] * ind_count
+            hg_world_counts += [self.common_ortholog_count] * ind_count
+
+            # Alters hg world counts parameter so that the "world size" is derived from species a total genes
+            # (the actual pool of genes we are pulling from) rather than the common set of orthologs 
+            #hg_overlap_counts += list(counts[inds])
+            #hg_b_counts += [b_matrix_lengths[ind] for ind in inds]
+            #hg_a_counts += [a_ortho_count] * ind_count
+            #hg_world_counts += [self.species_a_total_genes] * ind_count
                         
             processed += 1
             if processed % 1000 == 0:
@@ -272,10 +290,10 @@ class RandomSpeciesComparison(BaseModel):
             
             # Write data using pandas
             pd.DataFrame({"a_ortholog_count":param_data[0],
-                        "b_ortholog_count":param_data[1],
-                        "overlap_count":param_data[2],
-                        "common_ortholog_count":param_data[3],
-                        "hg_pval":pvals, ## Full file size version).to_csv(outfile_path, sep='\t', index=False)
+                          "b_ortholog_count":param_data[1],
+                          "overlap_count":param_data[2],
+                          "common_ortholog_count":param_data[3],
+                          "hg_pval":pvals, ## Full file size version).to_csv(outfile_path, sep='\t', index=False)
 
                         # Compact / reduced file size version (10 fold line count reduction for human mouse comparison)
                         "occurrence":occurrence}).to_csv(outfile_path, sep='\t', index=False, compression='gzip')
@@ -511,26 +529,29 @@ def initiate_pairwise_comparison_configs(input_args):
     species_df = pd.read_csv(check_file, sep='\t')
     species_df = species_df[species_df['Total Phenotype Edges'] > 0] # Only want species whith non zero phenotype information
     ids_to_name = {sp_id:"-".join(sp_name.split(" ")) for sp_id, sp_name in zip(list(species_df["Taxon ID"]), list(species_df["Taxon Label"]))}
+    ids_to_name.update({sp_id.split(":")[1]:v for sp_id,v in ids_to_name.items()}) # Add keys without NCBITaxon: prefix
     display(species_df)
 
     # Simple table mapping species name to the total number of genes (with at least one phenotype term associated with them)
     species_g_count = {t:int(v) for t,v in zip(list(species_df["Taxon Label"]), list(species_df["Genes >= 1 Phenotype"]))}
 
     # Figure out which species ids we are tasked with comparing to one another
+    valid_species_ids = set(ids_to_name.keys())
     if not args.all:
         if not input_args.taxon_ids:
             print('- ERROR, -all or -taxon_ids argument must be specified. Exiting...')
             sys.exit()
         
-        t_ids = list(input_args.taxon_ids.split(","))
+        t_ids = input_args.taxon_ids.split(",")
         tot_species = len(t_ids)
+        print(valid_species_ids)
 
         # Ensure input is compatible with data in graph
         if tot_species < 2:
             print('- ERROR, Total number of input taxon ids must be greater than 1. For example 9606,8355... Exiting...')
             sys.exit()
         
-        if len(set(t_ids) & set(ids_to_name.keys())) != len(t_ids):
+        if len(set(t_ids) & valid_species_ids) != len(t_ids):
             print('- ERROR, One or more incompatible taxon_ids input. Exiting...')
             sys.exit()
         
@@ -563,9 +584,7 @@ def initiate_pairwise_comparison_configs(input_args):
                         "species_a_phenotype_path":apath,
                         "species_b_phenotype_path":bpath,
                         "common_orthologs_path":cpath,
-                        "output_directory":check_outdir,
-                        "species_a_total_genes":species_g_count[a_name.replace("-", " ")],
-                        "species_b_total_genes":species_g_count[b_name.replace("-", " ")]}
+                        "output_directory":check_outdir}
             
             # Swap a & b values to get comparison in other direction
             config_b = {"species_a":b_name,
@@ -573,9 +592,7 @@ def initiate_pairwise_comparison_configs(input_args):
                         "species_a_phenotype_path":bpath,
                         "species_b_phenotype_path":apath,
                         "common_orthologs_path":cpath,
-                        "output_directory":check_outdir,
-                        "species_a_total_genes":species_g_count[b_name.replace("-", " ")],
-                        "species_b_total_genes":species_g_count[a_name.replace("-", " ")]}
+                        "output_directory":check_outdir}
             
             # Just do one config for now
             configs.append(config_a)
@@ -605,11 +622,8 @@ if __name__ == '__main__':
     ###############
     ### PROGRAM ###
     # Basic run command (Human vs. Mouse for 100 trials across 10 cores)
-    ###python phenologs_randomized_fdr_pvals.py -taxon_ids 9606,10090 -n 100 -c 10 -p path/to/top_level_project_dir/
-
-
-    # Still nees some testing, but this largely replaces the old pipeline with some nice sanity checks in place
-    # Should work with the other version as well (more optimized parallelization)
+    ###python phenologs_randomized_fdr_pvals.py -taxon_ids NCBITaxon:9606,NCBITaxon:10090 -n 100 -c 10 -p path/to/top_level_project_dir/
+    # TO DO: 
     taxon_ids, comparison_configs = initiate_pairwise_comparison_configs(args)
     for config in comparison_configs:
         print("- Computing {} random trials between {} -- {}".format(args.num_trials, 
@@ -617,35 +631,3 @@ if __name__ == '__main__':
                                                                      config["species_b"]))
 
         run_comparisons_parallel(config, n_trials=args.num_trials, num_proc=args.cpu_cores)
-
-    
-    # # # # TO DO
-    # # # # Run all pairwise species comparisons available
-    # # # elif args.all:
-    # # #     print("dummy")
-    
-    # # # else:
-    # # #     print("-a & -b arguments must both be specied or -all argument must be set in order to run. Exiting...")
-
-    # # # EXPERIMENTAL VERSION (Faster hyper geomatric calculations, and we can limit the number of writers if need be)
-    # # # Base level config
-    # # cpath = "../../datasets/intermediate/panther/common_orthologs_{}_vs_{}.tsv".format(args.species_a, args.species_b)
-    # # spath = "../../datasets/utils/species_dict.pkl"
-    
-    # # config = {"species_a":args.species_a,
-    # #           "species_b":args.species_b,
-    # #           "common_orthologs_path":cpath,
-    # #           "species_dict_path":spath,
-    # #           "output_directory":args.out_dir}
-    
-    # # # Means we are dealing with a 1:1 species comparison
-    # # if (args.species_a != None) and (args.species_b != None) and (not args.all):
-    # #     run_comparisons_parallel_v2(config, n_trials=args.num_trials, num_proc=args.num_proc)
-    
-    # # # TO DO
-    # # # Run all pairwise species comparisons available
-    # # elif args.all:
-    # #     print("dummy")
-    
-    # # else:
-    # #     print("-a & -b arguments must both be specied or -all argument must be set in order to run. Exiting...")
