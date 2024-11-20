@@ -1,0 +1,99 @@
+'''
+Purpose: Acquire the source datasets needed for calculating phenologs and gene candidate predictions.
+
+Datasets needed:
+-Monarch KG
+-Either Mondo->HPO disease to phenotype annotation from Monarch API (or KGX files) or HPOA
+-
+
+Rat Genome Database
+- mouse Genome Database
+- Zebrafish Information Network
+
+Rat
+mouse
+Zebrafish
+Worm
+Chicken
+Fission yeast?
+
+These data sources can be expanded and the process rerun as additional model organism gene-phenotype annotations + panther orthologs are made available.
+
+'''
+
+import os
+import argparse
+import requests
+import tarfile
+import pickle
+
+#from phenologs_utils import (species_dict,
+#                             phenologs_data_paths)
+
+
+if __name__ == '__main__':
+    ################
+	## ARG PARSE ###
+    def parse_input_command():
+        parser = argparse.ArgumentParser(description='Performs phenologs setup steps. Makes relevant directory structures, \
+                                                      downloads monarch kg, and upacks the kg files. Will not overwrite \
+                                                      existing data or monarch-kg data if already exists')
+        parser.add_argument("-p", "--project_dir", help="Directory to write files to", required=True, type=str)
+        return parser.parse_args()
+
+    args = parse_input_command()
+    ############################
+
+    ###############
+    ### PROGRAM ###
+
+    kg_dir_path = os.path.join(args.project_dir, "monarch_kg")
+    kg_edges_path = os.path.join(args.project_dir, "monarch_kg", "monarch-kg_edges.tsv")
+    project_dirs = ["monarch_kg",
+                    "species_data",
+                    "random_trials", 
+                    "random_trials_results", 
+                    "phenologs_results"]
+
+    # Create base project directory
+    if not os.path.isdir(args.project_dir):
+        print("- Creating project directory(ies) at {}".format(args.project_dir))
+        os.makedirs(args.project_dir, exist_ok=True)
+
+    # Create dataset directories
+    for pdir in project_dirs:
+        os.makedirs(os.path.join(args.project_dir, pdir), exist_ok=True)
+
+    # Download and upack monarch-kg
+    if not os.path.isfile(kg_edges_path):
+        print("- Downloading and upacking monarch kg to {}".format(kg_dir_path))
+
+        # Fetch Monarch KG (.gz file)
+        URL = 'https://data.monarchinitiative.org/monarch-kg-dev/latest/monarch-kg.tar.gz'
+        filename = os.path.join(kg_dir_path, URL.split("/")[-1])
+        with open(filename, "wb") as f:
+            r = requests.get(URL)
+            f.write(r.content)
+        
+        # Unpack Monarch KG
+        file = tarfile.open(filename)
+        file.extractall(kg_dir_path)
+        file.close()
+
+        #???????????
+        # # Fetch Panther data (.gz file)
+        # URL = 'http://data.pantherdb.org/ftp/generic_mapping/panther_classifications.tar.gz'
+        # filename = os.path.join(kg_dir_path, URL.split("/")[-1])
+        # with open(filename, "wb") as f:
+        #     r = requests.get(URL)
+        #     f.write(r.content)
+        
+        # # Unpack Monarch KG
+        # file = tarfile.open(filename)
+        # file.extractall(kg_dir_path)
+        # file.close()
+
+        print("- Download and upacking of monarch kg succesfull...")
+    
+    else:
+        print("- Skipping monarch kg download... An edges file already exists at {}".format(kg_edges_path))
