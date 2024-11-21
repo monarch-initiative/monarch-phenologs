@@ -537,7 +537,7 @@ def initiate_pairwise_comparison_configs(input_args):
 
     # Figure out which species ids we are tasked with comparing to one another
     valid_species_ids = set(ids_to_name.keys())
-    if not args.all:
+    if not input_args.all:
         if not input_args.taxon_ids:
             print('- ERROR, -all or -taxon_ids argument must be specified. Exiting...')
             sys.exit()
