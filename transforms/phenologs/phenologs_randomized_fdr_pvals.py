@@ -111,7 +111,7 @@ class RandomSpeciesComparison(BaseModel):
         # Load initial data
         self.load_species_ortholog_information()
         
-        # NEW - We can subset out only the common orthologs for each species
+        # NEW / Current way - Subset out only the common orthologs for each species
         common_orths = set(self.base_pool)
         a_sub, b_sub = {}, {}
         for k,v in self.base_a_p2g.items():
@@ -132,11 +132,11 @@ class RandomSpeciesComparison(BaseModel):
         randomized_a = {phen:random.sample(self.base_pool, len(orths)) for phen,orths in a_sub.items()}
         randomized_b = {phen:random.sample(self.base_pool, len(orths)) for phen,orths in b_sub.items()}
 
-        # OLD WAY
+        # OLD WAY (Will leave until confirmation of proper hg params is found)
         # Generate randomized dataset
         ##randomized_a = {phen:random.sample(self.base_pool, len(orths)) for phen,orths in self.base_a_p2g.items()}
         ##randomized_b = {phen:random.sample(self.base_pool, len(orths)) for phen,orths in self.base_b_p2g.items()}
-        #print("- Randomized data generation complete")
+        ##print("- Randomized data generation complete")
         
         # Convert to compact list data structure (instead of big numpy array)
         b_matrix = [v for v in randomized_b.values()]
@@ -161,7 +161,7 @@ class RandomSpeciesComparison(BaseModel):
         t_comps = 0
         start_time = time.time()
         
-        # For keeping track of hour hg params
+        # For keeping track of our hg params
         hg_a_counts = []
         hg_b_counts = []
         hg_overlap_counts = []
@@ -185,38 +185,39 @@ class RandomSpeciesComparison(BaseModel):
             ind_count = len(inds)
             
 
-            # TO DO: PROPER HG PARAMETERS NEED TO BE FIGURED OUT. The general framework is here, but the exact params need fixing
-            # DEFAULT / PREVIOUS WAY... 
-            # This will break when the number of common orthologs is < than the total number of genes assocaited with a phenotype
-            # Update our hg parameter lists
+            # TO DO: Confirm proper hg parameters are pulled here. The old way (previous code base) would break
+            # because in the most literal sense, if you physically assigned our data to marbles and bags, you would 
+            # have actually been drawing from different bags, which the test is not designed for. 
+            
+            # World size parameter is set to the number of common orthologs between species a and b.
+            # Therefore, our phenotype<-->gene networks must ONLY consist of genes that are orthologous between a and b.
+            # In reality, species a phenotypeXYZ can be associated with thousands of genes (but only a handful of them
+            # might be common orthologs). If we were to take all genes from a and b (not just common orthologs) then
+            # we could wind up in a situation where the number of genes associated with XYZ phenotype (in species a or b)
+            # is MORE than the number of orthologs those species share in common. By doing it that way, you not only
+            # run into an edge case that will break that hyper geometric test, but it doesn't make sense to include
+            # all genes, given our initial world size parameter is derived from only the common orothologs, and not
+            # the totality of species a or species b genes. Should only be pulling from the common pool of orthologs
+            # between them and the hyper geometric test should take care of the rest
+
+            # Relevent SciPy documentation: http://docs.scipy.org/doc/scipy-0.14.0/reference/generated/scipy.stats.hypergeom.html#scipy.stats.hypergeom
+            # c = number of common orthologs between phenotypes (ortholog matches)
+            # N = total number of orthologs shared between species
+            # m = number of orthologs in species B phenotype
+            # n = number of orthologs in species A phenotype
+            
             hg_overlap_counts += list(counts[inds])
+            hg_world_counts += [self.common_ortholog_count] * ind_count
             hg_b_counts += [b_matrix_lengths[ind] for ind in inds]
             hg_a_counts += [a_ortho_count] * ind_count
-            hg_world_counts += [self.common_ortholog_count] * ind_count
 
-            # Alters hg world counts parameter so that the "world size" is derived from species a total genes
-            # (the actual pool of genes we are pulling from) rather than the common set of orthologs 
-            #hg_overlap_counts += list(counts[inds])
-            #hg_b_counts += [b_matrix_lengths[ind] for ind in inds]
-            #hg_a_counts += [a_ortho_count] * ind_count
-            #hg_world_counts += [self.species_a_total_genes] * ind_count
-                        
             processed += 1
             if processed % 1000 == 0:
                 stop_time = time.time()
                 #print("- Processed {}/10,000 -- 10 samples processed in {}".format(processed, stop_time-start_time))
                 #print("- {}".format(counts.shape))
                 start_time = time.time()
-                
-        
-        
-        
-        
-        # Relevent SciPy documentation: http://docs.scipy.org/doc/scipy-0.14.0/reference/generated/scipy.stats.hypergeom.html#scipy.stats.hypergeom
-        # c = number of common orthologs between phenotypes (ortholog matches)
-        # N = total number of orthologs shared between species
-        # m = number of orthologs in species B phenotype
-        # n = number of orthologs in species A phenotype
+
         
         # Combine our data into a list of hg params
         tt = np.asarray([hg_overlap_counts, hg_world_counts, hg_b_counts, hg_a_counts]).T.astype(int).tolist()
@@ -225,21 +226,10 @@ class RandomSpeciesComparison(BaseModel):
         # Create unique set of tuples
         hg_formatted = list(map(tuple, tt))
         hg_params = set(hg_formatted)
+        hg_param_counts = Counter(hg_formatted)
         #print("- Unique hg params computed {}".format(format(len(hg_params), ',')))
 
-
-        # Deal with occurence where the total number of orthologs associated with a given gene is more than the total common
-        # orthologs between the two species
-
-
-
-        
-        # TO DO: Reduce output file format here? (i.e w)
-        # Output file compression here (instead of writing every single non-zero param, we can collapse)
-        # This should save ~10 fold number of lines written for each file
-        tt = Counter(hg_formatted)
-
-        return hg_params, tt
+        return hg_params, hg_param_counts
         
 
     def run_randomized_comparison_trials(self, n_trials: List[int]):
