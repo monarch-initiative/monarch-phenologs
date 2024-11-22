@@ -1,4 +1,5 @@
 import os
+import sys
 import pickle
 import random
 import copy
@@ -40,7 +41,7 @@ def divide_workload(data_list, num_proc: int=1) -> list:
         return baskets
 
 
-def initiate_random_species_comparison_configs(input_args, fdr_path=None):
+def initiate_random_species_comparison_configs(input_args):
     """
     - Attempts to ensure filepaths required for all computations are resolved before hand, so that
       calculations don't fail part way through. 
@@ -133,8 +134,7 @@ def initiate_random_species_comparison_configs(input_args, fdr_path=None):
                         "species_a_phenotype_path":apath,
                         "species_b_phenotype_path":bpath,
                         "common_orthologs_path":cpath,
-                        "output_directory":check_outdir,
-                        "fdr_path":fdr_path}
+                        "output_directory":check_outdir}
             
             # Swap a & b values to get comparison in other direction
             config_b = {"species_a":b_name,
@@ -142,8 +142,7 @@ def initiate_random_species_comparison_configs(input_args, fdr_path=None):
                         "species_a_phenotype_path":bpath,
                         "species_b_phenotype_path":apath,
                         "common_orthologs_path":cpath,
-                        "output_directory":check_outdir,
-                        "fdr_path":fdr_path}
+                        "output_directory":check_outdir}
             
             # Just do one config for now
             configs.append(config_a)
@@ -719,7 +718,7 @@ class PhenologsSpeciesComparison(SpeciesComparison):
         return hg_params, return_data
     
     
-    def compute_cross_species_phenologs(self, out_directory):
+    def compute_cross_species_phenologs(self):
         
         # Read in fdr table to get pvalue cutoffs
         fdr_info = self.get_fdr_info_from_fdr_file()
@@ -754,7 +753,7 @@ class PhenologsSpeciesComparison(SpeciesComparison):
 
             # Format output filenames
             fname = "{}_vs_{}_phenologs_{}.tsv".format(self.species_a, self.species_b, f_ext)
-            outpath_name = os.path.join(out_directory, fname)
+            outpath_name = os.path.join(self.output_directory, fname)
 
             # Subset df and write data
             comparison_data[comparison_data["P-Value"] <= pval_cutoff].to_csv(outpath_name, sep='\t', index=False)
@@ -764,3 +763,4 @@ class PhenologsSpeciesComparison(SpeciesComparison):
         # Write all data
         ##outpath_name = os.path.join(out_directory, "{}_vs_{}_fulldata.tsv".format(self.species_a, self.species_b))                                                                   
         ##comparison_data.to_csv(outpath_name)
+        return 

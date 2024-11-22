@@ -17,6 +17,33 @@ from phenologs_utils import (SpeciesComparison,
 
 
 
+def run_final_phenologs_parallel(configs, num_proc: int = 1):
+    """
+    This will distribute a list of configs to each cpu core requested (i.e. num_proc argument).
+    Each config will run a single species vs species phenologs calculation and write results
+    """
+
+    # Deal with - and 0 type edge cases, and instantiate all our objects before running computation
+    num_proc = max(1, num_proc)
+    run_objs = [PhenologsSpeciesComparison.parse_obj(config) for config in configs]
+
+    # Evenly (as possible) divide our data into baskets within a basket (list[list,list,list,...])
+    if len(run_objs) > 1:
+        div_configs = divide_workload(run_objs, num_proc=num_proc)
+    else:
+        div_configs = [configs]
+
+    # Setup parallel processing overhead, kick off jobs via asynchronous processing, and retrieve results
+    output = mp.Queue()
+    pool = mp.Pool(processes=num_proc)
+    results = [pool.apply_async(robj.compute_cross_species_phenologs, args=()) for robj in run_objs]
+    output = [ p.get() for p in results ]
+    print("- Done!")
+    return output
+
+
+
+
 if __name__ == '__main__':
     ################
 	## ARG PARSE ###
@@ -38,10 +65,9 @@ if __name__ == '__main__':
     # Basic run command (Human vs. Mouse for 100 trials across 10 cores)
     ###python phenologs_compute_final_phenologs.py -taxon_ids 9606,10090 -c 10 -p path/to/top_level_project_dir/
 
-    outdir = os.path.join(args.project_dir, "phenologs_results")
-    fdr_path = os.path.join(args.project_dir,"random_trials_fdr", "fdr_table.tsv")
     taxon_ids, comparison_configs = initiate_phenologs_species_comparison_configs(args)
-
-    for config in comparison_configs:
-        print("- Computing phenologs calculations for {} -- {}".format(config["species_a"], config["species_b"]))
-        PhenologsSpeciesComparison.parse_obj(config).compute_cross_species_phenologs(outdir)
+    run_final_phenologs_parallel(comparison_configs, num_proc=args.cpu_cores)
+    
+    #for config in comparison_configs:
+    #    print("- Computing phenologs calculations for {} -- {}".format(config["species_a"], config["species_b"]))
+    #    PhenologsSpeciesComparison.parse_obj(config).compute_cross_species_phenologs(outdir)
