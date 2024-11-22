@@ -12,7 +12,7 @@ from IPython.display import display
 from phenologs_utils import (SpeciesComparison,
                              PhenologsSpeciesComparison,
                              divide_workload,
-                             initiate_pairwise_comparison_configs,
+                             initiate_phenologs_species_comparison_configs,
                              bulk_compute_hyper_geom)
 
 
@@ -40,7 +40,7 @@ if __name__ == '__main__':
 
     outdir = os.path.join(args.project_dir, "phenologs_results")
     fdr_path = os.path.join(args.project_dir,"random_trials_fdr", "fdr_table.tsv")
-    taxon_ids, comparison_configs = initiate_pairwise_comparison_configs(args, fdr_path)
+    taxon_ids, comparison_configs = initiate_phenologs_species_comparison_configs(args)
 
     for config in comparison_configs:
         print("- Computing phenologs calculations for {} -- {}".format(config["species_a"], config["species_b"]))
