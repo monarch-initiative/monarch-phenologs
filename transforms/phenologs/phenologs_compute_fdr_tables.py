@@ -1,9 +1,15 @@
 import os
 import sys
 import argparse
+import copy
 import numpy as np
 import pandas as pd
+import multiprocessing as mp
 from collections import Counter
+
+# Custom imports
+from phenologs_utils import divide_workload
+
 
 
 def gather_trial_data(input_dir):
@@ -103,7 +109,7 @@ def compute_fdrs_by_trial_nums(trials, trials_by_species):
             ### fdr_by_sig_level[sgl].append(pvals[round((len(pvals)) * sgl)]) # One liner (but way less readable)
 
         cc += 1
-        if cc % 500 == 0:
+        if cc % 10 == 0:
             print("- Trial {}/{} read into memory...".format(cc, tot_trials))
 
     return fdr_by_sig_level
@@ -127,7 +133,46 @@ def write_fdr_tables_from_results(fdr_results, trial_table_outpath, fdr_table_ou
     print("- FDR trials table file written to {}".format(trial_table_outpath))
     print("- FDR  table file written to {}".format(fdr_table_outpath))
     
-    
+
+# EXPERIMENTAL
+def read_trials_into_mem_parallel(input_dir, num_proc: int = 1):
+    """
+    This will distribute a list of configs to each cpu core requested (i.e. num_proc argument).
+    Each config will run a single species vs species phenologs calculation and write results
+    """
+
+    # Deal with - and 0 type edge cases, and instantiate all our objects before running computation
+    num_proc = max(1, num_proc)
+
+    # Run pipeline
+    trial_info, trials = gather_trial_data(input_dir)
+    print("- Trial data gathered...")
+
+    # Copy information as many times as cpu cores
+    div_trial_info = [copy.copy(trial_info) for i in range(0, num_proc)]
+
+    # Divide trials for parallel
+    div_trials = divide_workload(trials, num_proc=num_proc)
+
+    # Setup parallel processing overhead, kick off jobs via asynchronous processing, and retrieve results
+    output = mp.Queue()
+    pool = mp.Pool(processes=num_proc)
+    results = [pool.apply_async(compute_fdrs_by_trial_nums, args=(d, t)) for d, t in zip(div_trials, div_trial_info)]
+    output = [ p.get() for p in results ]
+
+    # Merge results from previous step into single data structure
+    # Each element in the output list is a dictionary {sival:[pval,pval,...], }
+    merged_data = {}
+    for p in output:
+        for k,v in p.items():
+            if k not in merged_data:
+                merged_data.update({k:[]})
+            merged_data[k] += v
+
+    return merged_data
+
+
+
 if __name__ == '__main__':
     ################
 	## ARG PARSE ###
@@ -145,8 +190,11 @@ if __name__ == '__main__':
                                                       ultimately collated into a table for ease of use downstream.')
 
         parser.add_argument("-p","--project_dir", help="Top most project directory", required=False, type=str, default=None)
-        parser.add_argument("-i", "--input_dir", help="Path of directory containining randomized trial files", required=False, type=str, default=None)
-        parser.add_argument("-o", "--output_dir", help="Path of directory to write fdr results tables to", required=False, type=str, default=None)
+        parser.add_argument("-c", "--cpu_cores", help="Number of cpu cores to use.", required=False, type=int, default=1)
+
+        group1 = parser.add_argument_group()
+        group1.add_argument("-i", "--input_dir", help="Path of directory containining randomized trial files", required=False, type=str, default=None)
+        group1.add_argument("-o", "--output_dir", help="Path of directory to write fdr results tables to", required=False, type=str, default=None)
         return parser.parse_args()
 
     args = parse_input_command()
@@ -156,11 +204,11 @@ if __name__ == '__main__':
     ### PROGRAM ###
 
     # Resolve input arguments
-    if args.project_dir and not args.input_dir and not args.output_dir:
+    if args.project_dir:
         input_dir = os.path.join(args.project_dir, "random_trials")
         output_dir = os.path.join(args.project_dir, "random_trials_fdr")
 
-    elif args.input_dir and args.output_dir and not args.project_dir:
+    elif args.input_dir:
         input_dir = args.input_dir
         output_dir = args.output_dir
     else:
@@ -171,7 +219,9 @@ if __name__ == '__main__':
     outpath1 = os.path.join(output_dir, "fdr_trials_table.tsv")
     outpath2 = os.path.join(output_dir, "fdr_table.tsv")
 
-    # Run pipeline
-    trial_info, trials = gather_trial_data(input_dir)
-    trial_pvals = compute_fdrs_by_trial_nums(trials=trials, trials_by_species=trial_info)
+    # Gather relevant filepaths, and read into memory (many files so scoop them up via multiprocess)
+    trial_pvals = read_trials_into_mem_parallel(input_dir, num_proc=args.cpu_cores)
+
+    # Write results
     write_fdr_tables_from_results(trial_pvals, outpath1, outpath2)
+    print("- Done!")
