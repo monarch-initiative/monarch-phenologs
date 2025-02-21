@@ -30,6 +30,30 @@ import pickle
 #from phenologs_utils import (species_dict,
 #                             phenologs_data_paths)
 
+def download_file_url(url: str, outdir: str, extract_gz: bool = False, overwrite: bool = False):
+    """
+    Will download file from url to outdir/filename
+    filename is generated from the last portion of the url split by "/"
+    """
+    
+    # Download and write file
+    filename = os.path.join(outdir, url.split("/")[-1])
+
+    if overwrite == True:
+        if os.path.isfile(filename):
+            print("- Warning, file {} already exists... Set overwrite to True to download and replace")
+            return
+
+    with open(filename, "wb") as f:
+        r = requests.get(url)
+        f.write(r.content)
+    
+    # Extract gzip
+    if extract_gz != False:
+        file = tarfile.open(filename)
+        file.extractall(kg_dir_path)
+        file.close()
+
 
 if __name__ == '__main__':
     ################
@@ -49,6 +73,7 @@ if __name__ == '__main__':
 
     kg_dir_path = os.path.join(args.project_dir, "monarch_kg")
     kg_edges_path = os.path.join(args.project_dir, "monarch_kg", "monarch-kg_edges.tsv")
+    kg_hp_path = os.path.join(args.project_dir, "monarch_kg", "hp.obo")
     project_dirs = ["monarch_kg",
                     "species_data",
                     "random_trials", 
@@ -66,34 +91,32 @@ if __name__ == '__main__':
 
     # Download and upack monarch-kg
     if not os.path.isfile(kg_edges_path):
+
+        # Fetch Monarch KG and upack (.gz file)
         print("- Downloading and upacking monarch kg to {}".format(kg_dir_path))
-
-        # Fetch Monarch KG (.gz file)
         URL = 'https://data.monarchinitiative.org/monarch-kg-dev/latest/monarch-kg.tar.gz'
-        filename = os.path.join(kg_dir_path, URL.split("/")[-1])
-        with open(filename, "wb") as f:
-            r = requests.get(URL)
-            f.write(r.content)
-        
-        # Unpack Monarch KG
-        file = tarfile.open(filename)
-        file.extractall(kg_dir_path)
-        file.close()
-
-        #???????????
-        # # Fetch Panther data (.gz file)
-        # URL = 'http://data.pantherdb.org/ftp/generic_mapping/panther_classifications.tar.gz'
-        # filename = os.path.join(kg_dir_path, URL.split("/")[-1])
-        # with open(filename, "wb") as f:
-        #     r = requests.get(URL)
-        #     f.write(r.content)
-        
-        # # Unpack Monarch KG
-        # file = tarfile.open(filename)
-        # file.extractall(kg_dir_path)
-        # file.close()
-
+        download_file_url(URL, kg_dir_path, extract_gz=True, overwrite=False)
         print("- Download and upacking of monarch kg succesfull...")
-    
     else:
         print("- Skipping monarch kg download... An edges file already exists at {}".format(kg_edges_path))
+    
+    # Human phenotype ontology (This is what the monarch kg uses)
+    # Allows for selection of specific phenotype terms based on select parent classes for more granular queries
+    if not os.path.isfile(kg_hp_path):
+
+        # Download latest version hp.obo file 
+        print("- Downloading HP .obo file to {}".format(kg_hp_path))
+        URL = "http://purl.obolibrary.org/obo/hp.obo"
+        download_file_url(URL, kg_dir_path, extract_gz=False, overwrite=False)
+        print("- Download of hp.obo file succesfull...")
+    else:
+        print("- Skipping HP ontology download... File already exists at {}".format(kg_hp_path))
+    
+        
+
+
+# Note about orthology source(s).. We could use panther orthology connections / tables directly.
+# But it seems easier to gather this informaiton from the monarch kg, but will leave link here
+# # Fetch Panther data (.gz file)
+# URL = 'http://data.pantherdb.org/ftp/generic_mapping/panther_classifications.tar.gz'
+# download_file_url(URL, kg_dir_path, extract_gz=True)
