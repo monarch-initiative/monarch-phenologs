@@ -78,7 +78,8 @@ if __name__ == '__main__':
                     "species_data",
                     "random_trials", 
                     "random_trials_fdr", 
-                    "phenologs_results"]
+                    "phenologs_results",
+                    "leave_one_out_xvalidation"]
 
     # Create base project directory
     if not os.path.isdir(args.project_dir):

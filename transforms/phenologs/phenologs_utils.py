@@ -6,12 +6,14 @@ import copy
 import numpy as np
 import pandas as pd
 from scipy.stats import hypergeom
+from scipy.stats import pearsonr
 from collections import Counter
 from IPython.display import display
 from pydantic import BaseModel
 from typing import Union, Literal, Dict, List, Any, Optional
 
 
+# For multiprocessing
 def divide_workload(data_list, num_proc: int=1) -> list:
     """
     Meant to divide up the elements in data_list into num_proc equal portions
@@ -41,6 +43,12 @@ def divide_workload(data_list, num_proc: int=1) -> list:
         return baskets
 
 
+
+
+
+
+
+# Leveraged in phenologs_randomized_fdr_pvals
 def initiate_random_species_comparison_configs(input_args):
     """
     - Attempts to ensure filepaths required for all computations are resolved before hand, so that
@@ -144,16 +152,267 @@ def initiate_random_species_comparison_configs(input_args):
                         "common_orthologs_path":cpath,
                         "output_directory":check_outdir}
             
-            # Just do one config for now
+            # Perform comparison in both directions (overkill, but easier for downstream anlysis)
             configs.append(config_a)
-            #configs.append(RandomSpeciesComparison.parse_obj(config_a))
+            configs.append(config_b)
     
     print("- {} Pairwise comparisons configurations created...".format(len(configs)))
     return t_ids, configs
 
 
+# Leveraged in phenologs_randomized_fdr_pvals
+def initiate_random_species_comparison_configs_v2(input_args):
+    """
+    - Attempts to ensure filepaths required for all computations are resolved before hand, so that
+      calculations don't fail part way through. 
+    - Creates pairwise comparison configuration data structures from
+      input arguments. Either all comparisons or a select set from a comma seperated list of taxon ids
+    - Input species is compared against all other species within the monarch kg
+    """
+
+    # Ensures part1 & part2 of pipeline have been completed
+    check_file = os.path.join(input_args.project_dir, "species_data", "species_information_table.tsv")
+    check_outdir = os.path.join(input_args.project_dir, "random_trials")
+    
+    if not os.path.isfile(check_file):
+        print("- ERROR, Project species information table doesn't seem to exist. Exiting...")
+        sys.exit()
+    
+    if not os.path.isdir(check_outdir):
+        print("- ERROR, Project random_trials directory doesn't seem to exist. Exiting...")
+        sys.exit()
+    
+    # Figure out which species ids / names we have and which ones are relevant
+    species_df = pd.read_csv(check_file, sep='\t')
+    species_df = species_df[species_df["Genes with >= 1 phenotype edge"] > 0] # Only want species whith non zero phenotype information
+    
+
+    # Pull out taxon_id information (twice as two separate variables)
+    ids_to_name = {sp_id:"-".join(sp_name.split(" ")) for sp_id, sp_name in zip(list(species_df["Taxon ID"]), list(species_df["Taxon label"]))}
+    org_taxon_ids = copy.copy(ids_to_name)
+    
+    
+    # Format, and add additional keys to make more friendly to input arguments
+    ids_to_name = {sp_id:"-".join(sp_name.split(" ")) for sp_id, sp_name in zip(list(species_df["Taxon ID"]), list(species_df["Taxon label"]))}
+    ids_to_name.update({sp_id.split(":")[1]:v for sp_id,v in ids_to_name.items()}) # Add keys without NCBITaxon: prefix
+    display(species_df)
+
+    # Simple table mapping species name to the total number of genes (with at least one phenotype term associated with them)
+    species_g_count = {t:int(v) for t,v in zip(list(species_df["Taxon label"]), list(species_df["Genes with >= 1 phenotype edge"]))}
+
+    # Figure out which species id(s) we are tasked with comparing to one another
+    valid_species_ids = set(ids_to_name.keys())
+    if input_args.taxon_id == "all":
+        t_ids = list(org_taxon_ids.keys())
+    elif input_args.taxon_id in valid_species_ids:
+        t_ids = [input_args.taxon_id]
+    else:
+        print('- ERROR, all or relevant taxon id must be supplied for taxon_id argument. Exiting...')
+        sys.exit()
+    
+    
+    # Now we need to filter our comparison species list by relevant / available prediction networks
+    # "phenotype" or "disease" networks are available for use
+    comp_species = list(org_taxon_ids.keys())
+    base_species = []
+    for sp_id in t_ids:
+        fname = "{}_gene_to_{}.tsv".format(ids_to_name[sp_id], input_args.prediction_network)
+        fpath = os.path.join(input_args.project_dir, "species_data", fname)
+        if os.path.isfile(fpath):
+            base_species.append(sp_id)
+    
+    # Make sure at least one comparison/prediction species 
+    #has a file associated with the desired prediction network
+    if len(base_species) == 0:
+        print("- Warning or error... No {} type associations found for input species (phenotype, disease)".format(input_args.prediction_network))
+        sys.exit()
+    
+    # Make all comparisons necessary across relevant species
+    configs = []
+    for a_name in base_species:
+        a_name = ids_to_name[a_name]
+        for b_name in comp_species:
+            b_name = ids_to_name[b_name]
+            if a_name == b_name:
+                continue
+            
+            # Base level config
+            afname = "{}_{}_to_ortholog.pkl".format(a_name, input_args.prediction_network)
+            bfname = "{}_phenotype_to_ortholog.pkl".format(b_name)
+            cfname = "common_orthologs_{}_vs_{}.tsv".format(a_name, b_name)
+            
+            apath = os.path.join(input_args.project_dir, "species_data", afname)
+            bpath = os.path.join(input_args.project_dir, "species_data", bfname)
+            cpath = os.path.join(input_args.project_dir, "species_data", cfname)
+
+            # Ensure all files exist
+            if (not os.path.isfile(apath)) or (not os.path.isfile(bpath)) or (not os.path.isfile(cpath)):
+                print("- ERROR, Species {} vs {} is missing common orthologs and or phenotype files...".format(a_name,
+                                                                                                               b_name))
+                sys.exit()
+            
+            # We want to output our random trial data to species specific directories.
+            # Makes downstream analysis easier to deal with
+            random_trial_species_dir = os.path.join(check_outdir, 
+                                                    "{}_{}_trials".format(a_name.replace("-", "_"), 
+                                                                          input_args.prediction_network))
+            if not os.path.isdir(random_trial_species_dir):
+                os.makedirs(random_trial_species_dir, exist_ok=True)
+
+            # Generate two configs for comparison (Species A-->B, and B-->A)
+            config_a = {"species_a":a_name,
+                        "species_b":b_name,
+                        "species_a_phenotype_path":apath,
+                        "species_b_phenotype_path":bpath,
+                        "common_orthologs_path":cpath,
+                        "output_directory":random_trial_species_dir}
+            
+            # Perform comparison in single direction
+            configs.append(config_a)
+            
+    print("- {} relevant pairwise comparisons configurations created for {} species id(s)...".format(len(configs),
+                                                                                                     input_args.taxon_id))
+    return t_ids, configs
+
+
+# Leveraged in phenologs_randomized_fdr_pvals
+def initiate_phenologs_species_comparison_configs_v2(input_args):
+    """
+    - Attempts to ensure filepaths required for all computations are resolved before hand, so that
+      calculations don't fail part way through. 
+    - Creates pairwise comparison configuration data structures from
+      input arguments. Either all comparisons or a select set from a comma seperated list of taxon ids
+    - Input species is compared against all other species within the monarch kg
+    """
+
+    # Ensures part1 & part2 of pipeline have been completed
+    check_file = os.path.join(input_args.project_dir, "species_data", "species_information_table.tsv")
+    check_outdir = os.path.join(input_args.project_dir, "phenologs_results")
+    
+    if not os.path.isfile(check_file):
+        print("- ERROR, Project species information table doesn't seem to exist. Exiting...")
+        sys.exit()
+    
+    if not os.path.isdir(check_outdir):
+        print("- ERROR, Project phenologs_results directory doesn't seem to exist. Exiting...")
+        sys.exit()
+    
+    # Figure out which species ids / names we have and which ones are relevant
+    species_df = pd.read_csv(check_file, sep='\t')
+    species_df = species_df[species_df["Genes with >= 1 phenotype edge"] > 0] # Only want species whith non zero phenotype information
+
+    # Pull out taxon_id information (twice as two separate variables)
+    ids_to_name = {sp_id:"-".join(sp_name.split(" ")) for sp_id, sp_name in zip(list(species_df["Taxon ID"]), list(species_df["Taxon label"]))}
+    org_taxon_ids = copy.copy(ids_to_name)
+    
+    # Format, and add additional keys to make more friendly to input arguments
+    ids_to_name = {sp_id:"-".join(sp_name.split(" ")) for sp_id, sp_name in zip(list(species_df["Taxon ID"]), list(species_df["Taxon label"]))}
+    ids_to_name.update({sp_id.split(":")[1]:v for sp_id,v in ids_to_name.items()}) # Add keys without NCBITaxon: prefix
+    display(species_df)
+
+    # Simple table mapping species name to the total number of genes (with at least one phenotype term associated with them)
+    species_g_count = {t:int(v) for t,v in zip(list(species_df["Taxon label"]), list(species_df["Genes with >= 1 phenotype edge"]))}
+
+    # Figure out which species id(s) we are tasked with comparing to one another
+    valid_species_ids = set(ids_to_name.keys())
+    if input_args.taxon_id == "all":
+        t_ids = list(org_taxon_ids.keys())
+    elif input_args.taxon_id in valid_species_ids:
+        t_ids = [input_args.taxon_id]
+    else:
+        print('- ERROR, all or relevant taxon id must be supplied for taxon_id argument. Exiting...')
+        sys.exit()
+    
+    
+    # Now we need to filter our comparison species list by relevant / available prediction networks
+    # "phenotype" or "disease" networks are available for use
+    comp_species = list(org_taxon_ids.keys())
+    base_species = []
+    for sp_id in t_ids:
+        fname = "{}_gene_to_{}.tsv".format(ids_to_name[sp_id], input_args.prediction_network)
+        fpath = os.path.join(input_args.project_dir, "species_data", fname)
+        if os.path.isfile(fpath):
+            base_species.append(sp_id)
+    
+    # Make sure at least one comparison/prediction species 
+    #has a file associated with the desired prediction network
+    if len(base_species) == 0:
+        print("- Warning or error... No {} type associations found for input species (phenotype, disease)".format(input_args.prediction_network))
+        sys.exit()
+    
+    # Make all comparisons necessary across relevant species
+    configs = []
+    for a_name in base_species:
+        a_name = ids_to_name[a_name]
+        for b_name in comp_species:
+            b_name = ids_to_name[b_name]
+            if a_name == b_name:
+                continue
+
+            # Base level config
+            afname = "{}_{}_to_ortholog.pkl".format(a_name, input_args.prediction_network)
+            bfname = "{}_phenotype_to_ortholog.pkl".format(b_name)
+            cfname = "common_orthologs_{}_vs_{}.tsv".format(a_name, b_name)
+            ag2pfname = "{}_gene_to_{}.tsv".format(a_name, input_args.prediction_network)
+            bg2pfname = "{}_gene_to_phenotype.tsv".format(b_name)
+            
+            apath = os.path.join(input_args.project_dir, "species_data", afname)
+            bpath = os.path.join(input_args.project_dir, "species_data", bfname)
+            cpath = os.path.join(input_args.project_dir, "species_data", cfname)
+            ag2p_path = os.path.join(input_args.project_dir, "species_data", ag2pfname)
+            bg2p_path = os.path.join(input_args.project_dir, "species_data", bg2pfname)
+
+
+            # Ensure all files exist
+            if (not os.path.isfile(apath)) or \
+               (not os.path.isfile(bpath)) or \
+               (not os.path.isfile(cpath)) or \
+               (not os.path.isfile(ag2p_path)) or \
+               (not os.path.isfile(bg2p_path)):
+                print("- ERROR, Species {} vs {} is missing common orthologs and or phenotype files...".format(a_name,
+                                                                                                               b_name))
+                sys.exit()
+            
+            # We want to output our results data to species specific directories.
+            # Makes downstream analysis easier to deal with
+            results_species_dir = os.path.join(check_outdir, 
+                                               "{}_{}_results".format(a_name.replace("-", "_"), 
+                                                                      input_args.prediction_network))
+
+            if not os.path.isdir(results_species_dir):
+                os.makedirs(results_species_dir, exist_ok=True)
+
+            # Generate two configs for comparison (Species A-->B, and B-->A)
+            config_a = {"species_a":a_name,
+                        "species_b":b_name,
+                        "species_a_phenotype_path":apath,
+                        "species_b_phenotype_path":bpath,
+                        
+                        "species_a_g2p_path": ag2p_path,
+                        "species_b_g2p_path": bg2p_path,
+                        
+                        "common_orthologs_path":cpath,
+                        "output_directory":results_species_dir,
+                        "prediction_network_type":input_args.prediction_network}
+                        ##"fdr_path":check_file2} # This is the fdr table file computed from the randomized trials
+
+            # Perform comparison in single direction
+            configs.append(config_a)
+            
+    print("- {} relevant pairwise comparisons configurations created for {} species id(s)...".format(len(configs),
+                                                                                                     input_args.taxon_id))
+    return t_ids, configs
+
+
+# Leveraged in phenologs_compute_final_phenologs
 def initiate_phenologs_species_comparison_configs(input_args):
     """
+    input_args is the return value of argparse.ArgumentParser(...).parse_args()
+    input_args must have following attributes
+        input_args.project_dir
+        input_args.taxon_ids OR input_args.all must be specified
+
+    Performs the following
     - Attempts to ensure filepaths required for all computations are resolved before hand, so that
       calculations don't fail part way through. 
     - Creates pairwise comparison configuration data structures from
@@ -180,7 +439,8 @@ def initiate_phenologs_species_comparison_configs(input_args):
     
     elif len([fname for fname in os.listdir(check_inputdir) if "_vs_" in fname]) == 0:
         print("- ERROR, Project random_trials directory has no relevant file types ('_vs_' in the name). Exiting...")
-    
+        sys.exit()
+
     if not os.path.isdir(check_outdir):
         print("- Making output directory at {}".format(check_outdir))
         os.makedirs(check_outdir)
@@ -189,6 +449,12 @@ def initiate_phenologs_species_comparison_configs(input_args):
     species_df = pd.read_csv(check_file1, sep='\t')
     species_df = species_df[species_df['Total Phenotype Edges'] > 0] # Only want species whith non zero phenotype information
     
+    # This shouldn't happen, but if it does it means something fundementally went wrong with the monarch kg
+    # data extraction process...
+    if len(species_df['Total Phenotype Edges']) == 0:
+        print("- ERROR, No species found with phenotypes in monarch kg... Issue with monarch kg data extraction process")
+        sys.exit()
+
     # Pull out taxon_id information (twice as two separate variables)
     ids_to_name = {sp_id:"-".join(sp_name.split(" ")) for sp_id, sp_name in zip(list(species_df["Taxon ID"]), list(species_df["Taxon Label"]))}
     org_taxon_ids = copy.copy(ids_to_name)
@@ -209,14 +475,19 @@ def initiate_phenologs_species_comparison_configs(input_args):
             sys.exit()
         
         t_ids = input_args.taxon_ids.split(",")
-        tot_species = len(t_ids)
-        print(valid_species_ids)
+        tot_species = len(set(t_ids))
 
-        # Ensure input is compatible with data in graph
+        # Ensure only unique taxon_ids are input (cannot have repeats)
+        if len(set(t_ids)) != len(t_ids):
+            print("- ERROR, Repeat input taxon ids found. Each unique taxon id can only be used once. Exiting...")
+            sys.exit()
+
+        # Make sure we have more than one species to compare to one another
         if tot_species < 2:
-            print('- ERROR, Total number of input taxon ids must be greater than 1. For example 9606,8355... Exiting...')
+            print('- ERROR, Total number of unique input taxon ids must be greater than 1. For example 9606,8355... Exiting...')
             sys.exit()
         
+        # Ensure input is compatible with data in graph
         if len(set(t_ids) & valid_species_ids) != len(t_ids):
             print('- ERROR, One or more incompatible taxon_ids input. Exiting...')
             sys.exit()
@@ -243,6 +514,10 @@ def initiate_phenologs_species_comparison_configs(input_args):
             cpath = os.path.join(input_args.project_dir, "species_data", "common_orthologs_{}_vs_{}.tsv".format(a_name, b_name))
             apath = os.path.join(input_args.project_dir, "species_data", "{}_phenotype_to_ortholog.pkl".format(a_name))
             bpath = os.path.join(input_args.project_dir, "species_data", "{}_phenotype_to_ortholog.pkl".format(b_name))
+            
+            ag2p_path = os.path.join(input_args.project_dir, "species_data", "{}_gene_to_phenotype.tsv".format(a_name))
+            bg2p_path = os.path.join(input_args.project_dir, "species_data", "{}_gene_to_phenotype.tsv".format(b_name))
+
 
             # Ensure all files exist
             if (not os.path.isfile(cpath)) or (not os.path.isfile(apath)) or (not os.path.isfile(bpath)):
@@ -253,8 +528,15 @@ def initiate_phenologs_species_comparison_configs(input_args):
             # Generate two configs for comparison (Species A-->B, and B-->A)
             config_a = {"species_a":a_name,
                         "species_b":b_name,
+
+                        # Phenotype-->ortholog
                         "species_a_phenotype_path":apath,
                         "species_b_phenotype_path":bpath,
+
+                        # Gene-->phenotype
+                        "species_a_g2p_path": ag2p_path,
+                        "species_b_g2p_path": bg2p_path,
+
                         "common_orthologs_path":cpath,
                         "output_directory":check_outdir,
                         "fdr_path":check_file2} # This is the fdr table file computed from the randomized trials
@@ -262,31 +544,290 @@ def initiate_phenologs_species_comparison_configs(input_args):
             # Swap a & b values to get comparison in other direction
             config_b = {"species_a":b_name,
                         "species_b":a_name,
+
+                        # Phenotype-->ortholog
                         "species_a_phenotype_path":bpath,
                         "species_b_phenotype_path":apath,
+
+                        # Gene-->phenotype
+                        "species_a_g2p_path": bg2p_path,
+                        "species_b_g2p_path": ag2p_path,
+
                         "common_orthologs_path":cpath,
                         "output_directory":check_outdir,
                         "fdr_path":check_file2}
             
-            # Just do one config for now
+            # Just do one config for now, (one-way comparison)
             configs.append(config_a)
-            #configs.append(RandomSpeciesComparison.parse_obj(config_a))
+            ##configs.append(config_b)
     
     print("- {} Pairwise comparisons configurations created...".format(len(configs)))
     return t_ids, configs
 
 
+
+    """
+    - Attempts to ensure filepaths required for all computations are resolved before hand, so that
+      calculations don't fail part way through. 
+    - Creates pairwise comparison configuration data structures from
+      input arguments. Either all comparisons or a select set from a comma seperated list of taxon ids
+    - Input species is compared against all other species within the monarch kg
+    """
+
+    # Ensures part1 & part2 of pipeline have been completed
+    species_data_dir = os.path.join(input_args.project_dir, "species_data")
+    check_file = os.path.join(species_data_dir, "species_information_table.tsv")
+    check_outdir = os.path.join(input_args.project_dir, "phenologs_results")
+
+    if not os.path.isfile(check_file):
+        print("- ERROR, Project species information table doesn't seem to exist. Exiting...")
+        sys.exit()
+    
+    if not os.path.isdir(check_outdir):
+        print("- ERROR, Project phenologs_results directory doesn't seem to exist. Exiting...")
+        sys.exit()
+    
+    # Figure out which species ids / names we have and which ones are relevant
+    species_df = pd.read_csv(check_file, sep='\t')
+    species_df = species_df[species_df["Genes with >= 1 phenotype edge"] > 0] # Only want species whith non zero phenotype information
+
+    # Pull out taxon_id information (twice as two separate variables)
+    ids_to_name = {sp_id:"-".join(sp_name.split(" ")) for sp_id, sp_name in zip(list(species_df["Taxon ID"]), list(species_df["Taxon label"]))}
+    org_taxon_ids = copy.copy(ids_to_name)
+    
+    # Format, and add additional keys to make more friendly to input arguments
+    ids_to_name = {sp_id:"-".join(sp_name.split(" ")) for sp_id, sp_name in zip(list(species_df["Taxon ID"]), list(species_df["Taxon label"]))}
+    ids_to_name.update({sp_id.split(":")[1]:v for sp_id,v in ids_to_name.items()}) # Add keys without NCBITaxon: prefix
+    
+    # Figure out which species id(s) we are tasked with comparing to one another
+    valid_species_ids = set(ids_to_name.keys())
+    if input_args.taxon_id in valid_species_ids:
+        sp_id = input_args.taxon_id
+    else:
+        print('- ERROR, relevant taxon id must be supplied for taxon_id argument. Exiting...')
+        sys.exit()
+    
+    # Now we need to filter our comparison species list by relevant / available prediction networks
+    # "phenotype" or "disease" networks are available for use
+        
+    # Format filenames and paths for fdr table
+    sp_name = ids_to_name[sp_id]
+    nformatted = ids_to_name[sp_id].replace("-", "_")
+    res_name = "{}_{}_results".format(nformatted, input_args.prediction_network)
+    res_dir = os.path.join(input_args.project_dir, "phenologs_results", res_name)
+    fdr_path = os.path.join(res_dir, "{}_fdr_table.tsv".format(sp_name))
+    
+    
+    # Check if necessary fdr table exists and gather remaining filepaths necessary
+    if os.path.isdir(res_dir) and os.path.isfile(fdr_path):
+
+        # Our species specific table filepaths from initial steps of pipeline
+        p2o_path = os.path.join(species_data_dir, "{}_{}_to_ortholog.pkl".format(sp_name, input_args.prediction_network))
+        g2o_path = os.path.join(species_data_dir, "{}_gene_to_ortholog.tsv".format(sp_name))
+        g2p_path = os.path.join(species_data_dir, "{}_gene_to_{}.tsv".format(sp_name, input_args.prediction_network))
+        
+        # Pooled phenolog file name (significance cutoff included in name)
+        sig_phenologs_outname = "{}_pooled_phenologs_fdr{}.tsv".format(sp_name, input_args.fdr)
+        sig_phenologs_outpath = os.path.join(res_dir, sig_phenologs_outname)
+        
+        
+        # Generate dictionary to hold our filepaths for easy processing downstream
+        sp_file_info = {"project_dir":input_args.project_dir,
+                        "results_dir":res_dir,
+                        "taxon_id":input_args.taxon_id,
+                        
+                        "prediction_network":input_args.prediction_network,
+                        "fdr_path":fdr_path,
+                        "fdr":input_args.fdr,
+                        "kneighbs":input_args.kneighbs,
+                        "rank_metric":input_args.rank_metric,
+                        "sig_phenologs_path":sig_phenologs_outpath,
+                        
+                        "phen_to_orth_path":p2o_path,
+                        "gene_to_orth_path":g2o_path,
+                        "gene_to_phen_path":g2p_path,
+                        "species_name":sp_name} # Note, phen_path can be disease or phenoptype (but phen is the general programmtic name)
+        
+    return sp_file_info
+
+
+
+
+# Distance / weighting metric conversion of hypergeomatric parameters to arrays for pearson correlation calc
+def expand_hg_params_to_binary_pearson(hg_param_set):
+    """
+    Takes list hypergeomatric test parameters (c, N, m, n)
+    c = overlap count
+    N = total number of elements in the "bag"
+    m = number of success marbles in the bag (number of 1s in array2) 
+    n = number of times we draw from the bag (number of 1s in array1)
+    """
+    
+    ## hg_param_set should be in the following format 
+    ## [hg_overlap_counts, hg_world_counts, hg_b_counts, hg_a_counts]
+    
+    array0, array1 = [],[]
+    if hg_param_set[0] > 0:
+        
+        # Fill in overlapping values....
+        for i in range(0, hg_param_set[0]):
+            array0.append(1)
+            array1.append(1)
+        
+        c1 = hg_param_set[0]
+        c2 = hg_param_set[0]
+        for i in range(0, hg_param_set[1]-hg_param_set[0]):
+            
+            # Fill in ones for array0 # Note, last element in parameter set is the one we want to use here
+            if c1 < hg_param_set[3]:
+                c1 += 1
+                array0.append(1)
+                array1.append(0)
+            
+            # Fill in ones for array1
+            elif c2 < hg_param_set[2]:
+                c2 += 1
+                array0.append(0)
+                array1.append(1)
+            
+            else:
+                array0.append(0)
+                array1.append(0)
+    
+    return array0, array1
+    #return pearsonr(array0, array1).pvalue
+
+  
+# Computes hypergeometric test from an input list of parameter sets [(c,N,m,n), ...]
 def bulk_compute_hyper_geom(params):
-    return {pr:float(hypergeom.pmf(*pr)) for pr in params}
+    """
+    Relevent SciPy documentation: http://docs.scipy.org/doc/scipy-0.14.0/reference/generated/scipy.stats.hypergeom.html#scipy.stats.hypergeom
+    c = number of common orthologs between phenotypes (ortholog matches)
+    N = total number of orthologs shared between species
+    m = number of orthologs in species B phenotype (how many desired objects are in bag)
+    n = number of orthologs in species A phenotype (how many times we draw from bag)
+
+    params argument should be in the following format 
+    params = [(c,N,m,n), (c,N,m,n), ...] List of tuples where each is a set of hg parameters to compute
+    """
+
+    return {pr:float(hypergeom.pmf(*pr)) for pr in params} # Expand hg argments using the "*" character
 
 
+# Expands the hyper geometric parameter sets into arrays for pearson correlation instead via scipy
+def bulk_compute_pearson_from_hg_params(hg_params):
+    pr_pvals, pr_coeffs = {}, {}
+    for pr in hg_params:
+        x, y = expand_hg_params_to_binary_pearson(pr)
+        res = pearsonr(x, y)
+        pr_pvals.update({pr:res.pvalue})
+        pr_coeffs.update({pr:res.correlation})
+    
+    return pr_pvals, pr_coeffs
+
+
+# For post initial phenologs comparison calculations (last portions of the analysis pipeline) 
+def load_fdr_table_to_lookup(fdr_path):
+    """
+    Loads fdr .tsv file to {(species a, species b, fdr):pvalue, ...} lookup datastructure
+    """
+
+    # Load fdr table for this species set of data and generate pvalue lookuptable from the computed fdr values
+    fdr_df = pd.read_csv(fdr_path, sep='\t')
+    fdr_lookup = {}
+    for cname,pval,fdrval in zip(list(fdr_df["species_comparison"]), 
+                                 list(fdr_df["pvalue_cutoff"]), 
+                                 list(fdr_df["fdr"])):
+
+        spa,spb = cname.split(',')
+        key = (spa, spb, round(float(fdrval), 4))
+        fdr_lookup.update({key:float(pval)})
+
+    return fdr_lookup
+
+
+def pool_phenologs_data(results_dir, fdr_lookup_table, sig_outpath, fdr_level:float, compress:bool=False):
+    """
+    Important note... The fdr lookup table is used to determin which value we need to use for each 
+    _all_phenologs.tsv file that is present 
+    (i.e. which fdr-pvalue cutoff we need to use for each SpeciesA-SpeciesB comparison)
+    """
+        
+    # Assemble relevant phenologs results filepaths
+    phenologs_paths = [os.path.join(results_dir, fname) for fname in os.listdir(results_dir) if fname.endswith("_all_phenologs.tsv")]
+    if len(phenologs_paths) == 0:
+        print("- Error, No files ending with _all_phenologs.tsv found in {}... Exiting".format(results_dir))
+        sys.exit()
+    
+    
+    # Loop through all x species phenologs files and pool together the data that passes pvalue criteria
+    sig_phenologs_df = {}
+    df_init_var = 0
+    for rpath in phenologs_paths:
+        
+        
+        # Generate fdr-pvalue to filter data by from fdr table file by filename scheme formatting
+        # Filename should look something like this speci-es-A_vs_sp-ciesB_all_phenologs.tsv)
+        spa, spb = rpath.split('/')[-1].replace("_all_phenologs.tsv", "").split("_vs_")
+        fdr_key = (spa, spb, fdr_level)
+        if fdr_key not in fdr_lookup_table:
+            print("- ERROR, Non existant fdr lookup value... Try .95, .99, .999, .9999, etc... Exiting")
+        pval_max = fdr_lookup_table[fdr_key]
+        
+        # Load phenologs data and filter for significant phenologs only
+        phenologs_df = pd.read_csv(rpath, sep='\t')
+        org_phenolog_count = len(list(phenologs_df["hg_pval"]))
+        
+        phenologs_df["hg_pval"] = phenologs_df["hg_pval"].astype(float)
+        phenologs_df = phenologs_df[phenologs_df["hg_pval"] < pval_max]
+        filtered_phenolog_count = len(list(phenologs_df["hg_pval"]))
+        
+        # Create / add new column to dataframe that descibes the cross species comparison that was made
+        xspecies_name = ','.join([spa,spb])
+        phenologs_df["X Species Comparison"] = [xspecies_name for i in range(0, filtered_phenolog_count)]
+        
+        # Initiate our pooled datastructure if this is the first result file we are processing
+        if df_init_var == 0:
+            sig_phenologs_df = phenologs_df
+            df_init_var += 1
+        
+        # Otherwise, add our filtered phenologs to the larger pool
+        else:
+            sig_phenologs_df = pd.concat([sig_phenologs_df, phenologs_df])
+        
+        print("- Loaded {}/{} phenolgs from {} x {} passing with pvalue <= {}".format(format(filtered_phenolog_count, ','),
+                                                                                      format(org_phenolog_count, ','),
+                                                                                      spa, 
+                                                                                      spb, 
+                                                                                      pval_max))
+        
+    # Write pooled results to file ###
+    sig_phenologs_df = sig_phenologs_df.sort_values(by="hg_pval")
+
+    # Default is no gzip
+    if compress == False:
+        sig_phenologs_df.to_csv(sig_outpath, sep='\t', index=False)
+    else:
+        sig_phenologs_df.to_csv(sig_outpath, sep='\t', index=False, compression='gzip')
+
+
+    tot_phenologs = len(sig_phenologs_df["hg_pval"])
+    print("- {} total x species phenologs pooled together...".format(format(tot_phenologs, ',')))
+    print("- Data written to {}".format(sig_outpath))
+
+    return sig_phenologs_df
+
+
+# For initial phenologs comparison / distance calculations
 class SpeciesComparison(BaseModel):
-    species_a: str
+    species_a: str # Example: Homo-sampiens, Mus-musculus, Xenopus-tropicalis...
     species_b: str
-    species_a_phenotype_path: str
+    species_a_phenotype_path: str # Example: Homo-sapiens_phenotype_to_ortholog.pkl	
     species_b_phenotype_path: str
-    common_orthologs_path: str
-
+    common_orthologs_path: str # Example: common_orthologs_Homo-sapiens_vs_Mus-musculus.tsv
+    
+    species_a_g2p_path: Optional[str] = None # Example Homo-sampiens_gene_to_phenotype.tsv
+    species_b_g2p_path: Optional[str] = None 
     base_a_p2g: Optional[dict] = None
     base_b_p2g: Optional[dict] = None
     base_pool: Optional[list] = None
@@ -294,6 +835,9 @@ class SpeciesComparison(BaseModel):
     output_directory: Optional[str] = None
     
     fdr_path: Optional[str] = None
+    prediction_network_type: Optional[str] = None # phenotype or disease
+    leave_out_validate_set: Optional[set] = set() # Panther ortholog ids... For example set(["PTHR11482", ...])
+    leave_out_validate_fdr: Optional[float] = .95 # FDR lookup value to use to lookup pvalue cutoff we need to use
     
     
     def load_species_ortholog_information(self):
@@ -323,11 +867,40 @@ class SpeciesComparison(BaseModel):
      
     
     def subset_species_to_common_orthologs(self):
+        """
+        According to the 2013 implementaiton of phenologs, we want to be using the concept of orthogroup
+        for orthology. We do NOT want 1:1 orthology representation, but rather collapse to protein family.
+        Therefore, all gene ids (subfamilies) of the same phylogenetic tree, get collapsed to a single 
+        protein family node (or otholog node). All phenotypes linking to genes beloning to the same 
+        protein family will now link to the single ortholog node that is created. 
 
+        However, this leaves the question of "frequency" of phenotype terms per protein family, meaning
+        the same phenotype can map to multiple gene ids within the same protein family.
+        Current implmentation collapses the frequency data to 1 for all terms. 
+
+        - Only include genes (ortholog ids) that have >= 1 phenotype id linked to them
+        - Only include genes (ortholog ids) that are common between both species
+        - Hyper geometric paramters can then be computed
+          - Number of common orthologs between two species is the world size parameter
+          - The draw size, and number of potentially matching terms can be computed from the 
+            number of orthologs associated with a particular phenotype in species a, and species b
+          - The "success" parameter is simply the number of the common ortholog ids found in the underlying
+            gene networks between species a phenotype, and species b phenotype
+        
+        - Note, lists are used to represent orthologs because this is the required input type for random sampling
+        """
+
+        # Common orths is common orthologs between the two species
         common_orths = set(self.base_pool)
         a_sub, b_sub = {}, {}
+
         for k,v in self.base_a_p2g.items():
-            orth_list = list(set([vv for vv in v if vv in common_orths]))
+
+            # For model cross validation. Default is include everything
+            # Note, our global "commonality" parameter doesn't change. This is because is theory, the set of 
+            # orthologs we are leaving out still exist between the two species, its just the edges that get removed.
+            # Default is empty set so everything relevant is included
+            orth_list = list(set([vv for vv in v if (vv in common_orths) and (vv not in self.leave_out_validate_set)]))
             if len(orth_list) > 0:
                 a_sub.update({k:orth_list})
 
@@ -339,6 +912,8 @@ class SpeciesComparison(BaseModel):
         return common_orths, a_sub, b_sub
 
 
+# Takes advantage of the fact that we don't actually care about the in depth nature of the
+# randomized results. So we can compress and combine calculations across trials to save compute
 class RandomSpeciesComparison(SpeciesComparison):
     super(SpeciesComparison)
     
@@ -358,30 +933,30 @@ class RandomSpeciesComparison(SpeciesComparison):
         # Load initial data
         self.load_species_ortholog_information()
         
-        # NEW / Current way - Subset out only the common orthologs for each species
+        # Subset only the common orthologs for each species
+        # a_sub,b_sub are in the form of {phenotype:[ortholog_id, ortholog_id], ...}
+        # common_orths is set(list(self.base_pool)) # Same number of entries as self.base_pool
         common_orths, a_sub, b_sub = self.subset_species_to_common_orthologs()
 
         #print("- {}, {}".format(len(a_sub), len(b_sub)))
         #print("- {}".format(self.common_ortholog_count))
         #print("- {}, {}".format(max([len(v) for v in a_sub.values()]), max([len(v) for v in b_sub.values()])))
 
-        # Generate randomized dataset
+        # Generate randomized dataset (Using only common orthologs from each species that have phenotypes)
         randomized_a = {phen:random.sample(self.base_pool, len(orths)) for phen,orths in a_sub.items()}
         randomized_b = {phen:random.sample(self.base_pool, len(orths)) for phen,orths in b_sub.items()}
-
-        # OLD WAY (Will leave until confirmation of proper hg params is found)
-        # Generate randomized dataset
-        ##randomized_a = {phen:random.sample(self.base_pool, len(orths)) for phen,orths in self.base_a_p2g.items()}
-        ##randomized_b = {phen:random.sample(self.base_pool, len(orths)) for phen,orths in self.base_b_p2g.items()}
-        ##print("- Randomized data generation complete")
         
-        # Convert to compact list data structure (instead of big numpy array)
+
+        # Convert to compact list of lists data structure (instead of big numpy array or sparse array)
         b_matrix = [v for v in randomized_b.values()]
-        b_matrix_lengths = {i:len(v) for i, v in enumerate(b_matrix)}
+
+        # Precompute / grab partial hyper geometric paramter lookups
+        b_matrix_lengths = {i:len(v) for i,v in enumerate(b_matrix)}
         hg_a_count_params = {k:len(v) for k,v in randomized_a.items()}
         hg_b_count_params = {k:len(v) for k,v in randomized_b.items()}
 
         # Map each unique value (ortholog id) in our data to the rows it belongs to (pre processing step)
+        # Crucial piece of code in allowing fast computation of gene network overlaps between cross species phenotypes.
         orth_to_coords = {}
         for i, row in enumerate(b_matrix):
             for v in row:
@@ -410,7 +985,9 @@ class RandomSpeciesComparison(SpeciesComparison):
             counts = np.zeros(b_phenotype_count)
             a_ortho_count = hg_a_count_params[a_phen]
             
-            # Compute commonality between each ortholog and species b orthologs
+            # Compute commonality between each ortholog and species b orthologs.
+            # We are able to compare the entiriety of species b's phenotypes using a single lookup
+            # and then tallying the results. 
             for orth in a_orthologs:
                 if orth in orth_to_coords:
                     counts[orth_to_coords[orth]] += 1
@@ -419,11 +996,6 @@ class RandomSpeciesComparison(SpeciesComparison):
             # This gives back an oddly shaped data array that we can flatten to get all non-zero row indices
             inds = np.argwhere(counts > 0).flatten()
             ind_count = len(inds)
-            
-
-            # TO DO: Confirm proper hg parameters are pulled here. The old way (previous code base) would break
-            # because in the most literal sense, if you physically assigned our data to marbles and bags, you would 
-            # have actually been drawing from different bags, which the test is not designed for. 
             
             # World size parameter is set to the number of common orthologs between species a and b.
             # Therefore, our phenotype<-->gene networks must ONLY consist of genes that are orthologous between a and b.
@@ -489,6 +1061,10 @@ class RandomSpeciesComparison(SpeciesComparison):
         # Now compute our hyper geometric tests in bulk
         hg_pvals = bulk_compute_hyper_geom(hg_params)
         print("- Hypergeometric tests computed {}...".format(format(len(hg_pvals), ',')))
+
+        # TO DO?: Is the the proper framing of this calculation / proper version of pearson we are computing... 
+        pears_pvals, pears_coeffs = bulk_compute_pearson_from_hg_params(hg_params)
+
         
         # Map to pvalues, and write data files
         for trial_num, trial_data in data.items():
@@ -498,7 +1074,9 @@ class RandomSpeciesComparison(SpeciesComparison):
                                         "{}_vs_{}_{}.tsv.gz".format(self.species_a, self.species_b, trial_num))
                                         
             # Map data back to computed pvalues, and format our trial data for easy writing to file
-            pvals = [hg_pvals[tuple(k)] for k in trial_data]
+            pvals1 = [hg_pvals[tuple(k)] for k in trial_data]
+            pvals2 = [pears_pvals[tuple(k)] for k in trial_data]
+            coeffs = [pears_coeffs[tuple(k)] for k in trial_data]
             #param_data = np.asarray(trial_data).T
             
             # Reduced file size version
@@ -510,10 +1088,11 @@ class RandomSpeciesComparison(SpeciesComparison):
                           "b_ortholog_count":param_data[1],
                           "overlap_count":param_data[2],
                           "common_ortholog_count":param_data[3],
-                          "hg_pval":pvals, ## Full file size version).to_csv(outfile_path, sep='\t', index=False)
-
-                         # Compact / reduced file size version (10 fold line count reduction for human mouse comparison)
-                         "occurrence":occurrence}).to_csv(outfile_path, sep='\t', index=False, compression='gzip')
+                          "hg_pval":pvals1, ## Full file size version).to_csv(outfile_path, sep='\t', index=False)
+                          "pearson_pval":pvals2,
+                          "pearson_coeff":coeffs,
+                          # Compact / reduced file size version (10 fold line count reduction for human mouse comparison)
+                          "occurrence":occurrence}).to_csv(outfile_path, sep='\t', index=False, compression='gzip')
 
             print("- Data written to file for trial {}...".format(trial_num))
         
@@ -581,42 +1160,21 @@ class RandomSpeciesComparison(SpeciesComparison):
         return data, hg_params
     
 
+# For initial phenologs comparison / distance calculations
 class PhenologsSpeciesComparison(SpeciesComparison):
     super(SpeciesComparison)
     
     
-    def get_fdr_info_from_fdr_file(self):
+    def get_phenolog_params(self, leave_out_a=set()):
         """
-        Assumes fdr table file path is being passed in where the header looks like
-        fdr table file should obey the following format -- Sinlge header line, with a single row of information
-
-        For example:
-        fdr:0.05    fdr:0.01    fdr:0.001    fdr:0.0001
-        .005       .0005        .00005       .000001
-        """
-        
-        fdrs = {}
-        fdr_df = pd.read_csv(self.fdr_path, sep='\t')
-        for fval in fdr_df.columns:
-            if len(fdr_df[fval]) > 1:
-                print("- ERROR, Likely wrong fdr table file type/path provided...")
-                sys.exit()
-            
-            pval_cutoff = float(fdr_df[fval][0])
-            fdrs.update({pval_cutoff:fval})
-            
-        return fdrs
-    
-    
-    def get_phenolog_params(self):
-        """
-        Pairwise comparisons between inter species phenotypes are made
-        by computing the number of orthologs that overlap between them. Note that
+        Pairwise comparisons between inter species phenotypes are made by computing the
+        number of orthologs that overlap between the underlying gene networks. Note that
         ths does NOT compute pvalues, but rather gathers the set(s) of parameters used
         to calculate pvalues and full dataset of non zero overlap count parameters.
         """
 
-        # Load initial data
+        # Load initial data and reduce down to relevant sets of phenotypes / common orthologs.
+        # Only phenotypes that link to one or more orthologs are included for each species
         self.load_species_ortholog_information()
         common_orths, a_sub, b_sub = self.subset_species_to_common_orthologs()
         a_phens = list(a_sub.keys())
@@ -673,7 +1231,7 @@ class PhenologsSpeciesComparison(SpeciesComparison):
             inds = np.argwhere(counts > 0).flatten()
             ind_count = len(inds)
 
-            # If we want non zero overlap terms
+            # Only tallying up non zero overlap comparisons (saves time / space)
             hg_overlap_counts += list(counts[inds].astype(int))
             hg_b_counts += [b_matrix_lengths[ind] for ind in inds]
             hg_a_counts += [a_ortho_count] * ind_count
@@ -681,8 +1239,7 @@ class PhenologsSpeciesComparison(SpeciesComparison):
             species_a_phens += [a_phen] * ind_count
             species_b_phens += [b_phens[ind] for ind in inds]
 
-            # This is if we want ALL data 
-            # TO DO: Confirm proper hg params are pulled here
+            # This is if we want ALL data ()
             #hg_overlap_counts += list(counts.astype(int))
             #hg_b_counts += [b_matrix_lengths[ind] for ind in range(0, b_phenotype_count)]
             #hg_a_counts += [a_ortho_count] * b_phenotype_count
@@ -721,8 +1278,18 @@ class PhenologsSpeciesComparison(SpeciesComparison):
     def compute_cross_species_phenologs(self):
         
         # Read in fdr table to get pvalue cutoffs
-        fdr_info = self.get_fdr_info_from_fdr_file()
-        
+        ##fdr_info = self.get_fdr_info_from_fdr_file()
+
+        # Read in gene_to_phenotype file to get phenotype names for each species (for writing to final tables)
+        species_a_g2p_df = pd.read_csv(self.species_a_g2p_path, sep='\t')
+        species_b_g2p_df = pd.read_csv(self.species_b_g2p_path, sep='\t')
+
+        # Create mapping tables of phenotype:id --> phenotype name
+        # Note, we need to specify what type of predictions we are trying to make (phenotype or disease)
+        akey = self.prediction_network_type
+        ap2name = {k:v for k,v in zip(list(species_a_g2p_df[akey]), list(species_a_g2p_df["{}_name".format(akey)]))}
+        bp2name = {k:v for k,v in zip(list(species_b_g2p_df["phenotype"]), list(species_b_g2p_df["phenotype_name"]))}
+
         # Compute parameters for hyper geometric tests
         hg_params, comparison_data = self.get_phenolog_params()
         print("- {} vs. {} -- hg parameters computed {}...".format(self.species_a,
@@ -731,36 +1298,234 @@ class PhenologsSpeciesComparison(SpeciesComparison):
         
         # Compute hyper geometric tests
         hg_pvals = bulk_compute_hyper_geom(hg_params)
+
+        # TO DO?: Is the the proper framing of this calculation / proper version of pearson we are computing... 
+        #pears_pvals, pears_coeffs = bulk_compute_pearson_from_hg_params(hg_params)
         
-        # Map each row's set of hg params back to the repsective pvalue
-        pval_col, sig_col = [], []
-        for c_param, N_param, m_param, n_param in zip(comparison_data["Overlap Count"], 
-                                                      comparison_data["Common Ortholog Count"],
-                                                      comparison_data["Ortholog Count B"],
-                                                      comparison_data["Ortholog Count A"]):
+        pval_hg_col, sig_col = [], []
+        pval_pe_col, coeff_pe_col = [], []
+        apname_col, bpname_col = [], []
+
+        # Map each row's set of hg params back to the repsective pvalue (Note -- c,N,m,n param ordering matters)
+        for a_phid, b_phid, c_param, N_param, m_param, n_param in zip(comparison_data["Species A Phenotype ID"],
+                                                                      comparison_data["Species B Phenotype ID"],
+                                                                      comparison_data["Overlap Count"], 
+                                                                      comparison_data["Common Ortholog Count"],
+                                                                      comparison_data["Ortholog Count B"],
+                                                                      comparison_data["Ortholog Count A"]):
             
             # Note that ordering here matters
             key = tuple((c_param, N_param, m_param, n_param))
-            pval = hg_pvals.get(key, 1.0)
-            pval_col.append(pval)
-            
+            pval_hg = hg_pvals.get(key, 1.0)
+            #pval_pe = pears_pvals[key]
+            #coeff_pe = pears_coeffs[key]
+
+            # Map phenotype id to human readable name
+            phena_name = ap2name[a_phid]
+            phenb_name = bp2name[b_phid]
+
+            # Add info to new output data "columns"
+            pval_hg_col.append(pval_hg)
+            #pval_pe_col.append(pval_pe)
+            #coeff_pe_col.append(coeff_pe)
+
+            apname_col.append(phena_name)
+            bpname_col.append(phenb_name)
+
         # Add pvalues and convert to data frame
-        comparison_data.update({"P-Value":pval_col})
+        comparison_data.update({"hg_pval":pval_hg_col})
+        #comparison_data.update({"pearson_pval":pval_pe_col})
+        #comparison_data.update({"pearson_coeff":coeff_pe_col})
+
+        comparison_data.update({"Species A Phenotype Name":apname_col})
+        comparison_data.update({"Species B Phenotype Name":bpname_col})
         comparison_data = pd.DataFrame(comparison_data)
+
+        fname = "{}_vs_{}_all_phenologs.tsv".format(self.species_a, self.species_b)
+        outpath_name = os.path.join(self.output_directory, fname)
+        comparison_data.sort_values("hg_pval").to_csv(outpath_name, sep='\t', index=False)
         
         # Write select pvalue / fdr cuttoff phenologs
-        for pval_cutoff,f_ext in fdr_info.items():
+        #for pval_cutoff,f_ext in fdr_info.items():
 
             # Format output filenames
-            fname = "{}_vs_{}_phenologs_{}.tsv".format(self.species_a, self.species_b, f_ext)
-            outpath_name = os.path.join(self.output_directory, fname)
+        #    fname = "{}_vs_{}_phenologs_{}.tsv".format(self.species_a, self.species_b, f_ext)
+        #    outpath_name = os.path.join(self.output_directory, fname)
 
             # Subset df and write data
-            comparison_data[comparison_data["P-Value"] <= pval_cutoff].to_csv(outpath_name, sep='\t', index=False)
-            print("- {} written...".format(outpath_name))
+
+        #    comparison_data[comparison_data["P-Value"] <= pval_cutoff].sort_values("P-Value").to_csv(outpath_name, sep='\t', index=False)
+            #comparison_data[comparison_data["P-Value"] <= pval_cutoff].to_csv(outpath_name, sep='\t', index=False)
+        #    print("- {} written...".format(outpath_name))
         
         # TO DO: Do we need this? It's a bit excessive in terms of filesize...
         # Write all data
         ##outpath_name = os.path.join(out_directory, "{}_vs_{}_fulldata.tsv".format(self.species_a, self.species_b))                                                                   
         ##comparison_data.to_csv(outpath_name)
         return 
+
+
+
+# For computing gene-->phenotype ranking "matrices" (last portions of the analysis pipeline)
+class OrthologToPhenotypeCalculations(BaseModel):
+    
+    # Arguments passed in from command line
+    project_dir:str
+    results_dir:str
+    prediction_network:str # disease or phenotype
+    taxon_id:str
+    
+    fdr_path:str
+    fdr:float=.95
+    kneighbs:int=10
+    rank_metric:str
+        
+    sig_phenologs_path:str
+    phen_to_orth_path:str
+    gene_to_orth_path:str
+    gene_to_phen_path:str
+    species_name:str
+    
+    
+    def build_ortholog_to_phenotype_data(self):
+    
+        # Load phenotype (or disease) to ortholog datastructure {phenotype_id:[ortholog_id, ...]}
+        p2o = pickle.load(open(self.phen_to_orth_path, 'rb'))
+
+        # Identify unique set of orthologs available for this species from loaded data
+        unique_orths = {k:'' for orths in p2o.values() for k in orths}
+        print("- {} unique phenotypes found from {}".format(format(len(unique_orths), ','), 
+                                                            self.phen_to_orth_path))
+
+        # Build "matrix" linking each ortholog (protein family in this case) to the avialable set of phenotypes
+        o2p_dists = {g:{p:1. for p in p2o.keys()} for g in unique_orths}
+
+        return o2p_dists
+    
+    
+    def build_species_phenotype_to_orths_data(self, prediction_network):
+    
+        species_data_dir = os.path.join(self.project_dir, "species_data")
+        species_data = {}
+        for fname in os.listdir(species_data_dir):
+
+            suffi = "_{}_to_ortholog.pkl".format(prediction_network)
+            if not fname.endswith(suffi):
+                continue
+
+            # Load phenotype/disease to ortholog data, and convert to set() instead of list for easy downstream processing
+            # Note, we are collapsing repeat orthologs for any given phenotype 
+            # This is one of the benefits of the orthogroup abstraction, although using "frequency" information 
+            # (i.e how many times a protein family/ortho_id shows up for this phenotype) may still be possible...
+            spname = fname.replace(suffi, "")
+            p2o = pickle.load(open(os.path.join(species_data_dir, fname), 'rb'))
+            for k in p2o:
+                p2o[k] = set(p2o[k])
+
+            species_data.update({spname:p2o})
+            print("- {} read into memory...".format(fname))
+
+
+        return species_data
+    
+    
+    def compute_ortholog_phenotype_distances(self, sig_phens_path):
+        
+        # FDR tsv table to dictionary lookup {(species a, species b, fdr):pvalue, ...} 
+        fdr_lookup = load_fdr_table_to_lookup(self.fdr_path)
+
+        # Read in significant phenologs table (presumably pooled from cross species data, but can be anything)
+        if sig_phens_path.endswith(".gz"):
+            sig_phenologs_df = pd.read_csv(sig_phens_path, sep='\t', compression="gzip")
+        else:
+            sig_phenologs_df = pd.read_csv(sig_phens_path, sep='\t')
+
+        # Compute gene-->phenotype rankings ###
+        # Precomputes "gene" to "phenotype" dictionary {gene:{phenotype:distance}}, that we can fill in later
+        # Equivilant to adjacency matrix, but in dictionary form...
+        o2p_dists = self.build_ortholog_to_phenotype_data()
+
+        # Loads "prediction" species relevent network that we want predictions for (phenotype or disease)
+        sp_p2o = self.build_species_phenotype_to_orths_data(self.prediction_network)
+                                                       
+
+        # Load all species phenotype-->ortholog files
+        p2o_species = self.build_species_phenotype_to_orths_data("phenotype")
+
+        # Build "k-nearest neighbor" data structure for each "phenotype" we want to assign gene rankings to
+        # First, map row indices to each phenotype
+        ind = 0
+        p2_phens = {}
+
+        #Species A Phenotype ID  Species B Phenotype ID  Ortholog Count A        Ortholog Count B        Overlap Count   Common Ortholog Count   hg_pval Species A Phenotype Name        Species B Phenotype Name             X Species Comparison
+        for phen_id, phen_dist_val in zip(list(sig_phenologs_df["Species A Phenotype ID"]), 
+                                          list(sig_phenologs_df["hg_pval"])):
+
+            if phen_id not in p2_phens:
+                p2_phens.update({phen_id:[]})
+            p2_phens[phen_id].append(ind)
+            ind += 1
+        
+        
+        # Now make mini dataframes for each "phenotype" identifier and sort by best "distance" 
+        # for whichever metric is chosen
+        zero_sig_phens = {}
+        for k in p2_phens:
+            p2_phens[k] = copy.copy(sig_phenologs_df.iloc[p2_phens[k]])
+            p2_phens[k] = p2_phens[k].sort_values(by="hg_pval")
+
+            # Ensure data is of proper type for calculations
+            p2_phens[k]["Overlap Count"] = p2_phens[k]["Overlap Count"].astype(float)
+            p2_phens[k]["Ortholog Count B"] = p2_phens[k]["Ortholog Count B"].astype(float)
+
+            # Now compute from our subsetted data, the cumulitive probability from 
+            # "naive bayes" method, hg method?, or other?
+            knear = 1
+            prob_val_naiv_bayes = 1.
+            hg_c, hg_N, hg_m, hg_n = 0, 0, 0, 0
+
+            guilty_orths = set()
+            for dist_val, overlap_val, comm_val, ortho_a_val, ortho_b_val, phen_id, sp_comp in zip(p2_phens[k]["hg_pval"], 
+                                                                                                   p2_phens[k]["Overlap Count"], 
+                                                                                                   p2_phens[k]["Common Ortholog Count"],
+                                                                                                   p2_phens[k]["Ortholog Count A"],
+                                                                                                   p2_phens[k]["Ortholog Count B"],
+                                                                                                   p2_phens[k]["Species B Phenotype ID"],
+                                                                                                   p2_phens[k]["X Species Comparison"]):
+
+                # Compute probability via "naive bayes" method
+                prob_val_naiv_bayes *= ( 1. - ((overlap_val/ortho_b_val)*(1. - dist_val)) )
+
+                # Compute probability via second round of hyper geometric...
+                hg_c += overlap_val
+                hg_N += comm_val
+                hg_m += ortho_b_val
+                hg_n += ortho_a_val
+
+
+                # Keep track of "implicated" genes/orthologs by leveraging lookup tables made earlier
+                spa_name, spb_name = sp_comp.split(",")
+                guilty_orths = guilty_orths | p2o_species[spb_name][phen_id]
+                knear += 1
+
+                if knear > self.kneighbs:
+                    break
+
+            # Note, for naive bayes method... we are computing the probability of at least one association NOT occuring 
+            # within the top knearest neighbors. Then all gene orthologs associated get weighted equally  
+
+            # Edge case for no significant orthologs associated with phenotype
+            if len(guilty_orths) == 0:
+                zero_sig_phens.update({k:''})
+                continue
+
+            # Now fill in gene-phenotype "matrix"
+            for gorth in guilty_orths:
+                if gorth not in o2p_dists: # Not a common ortholog between the two species so we can't make a statement
+                    continue
+
+                o2p_dists[gorth][k] = prob_val_naiv_bayes
+                #o2p_dists[gorth][k] = float(hypergeom.pmf(hg_c, hg_N, hg_m, hg_n))
+        
+        return o2p_dists
+        

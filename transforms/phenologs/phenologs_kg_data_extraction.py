@@ -279,6 +279,7 @@ def compute_taxon_info(input_graph, taxon_id: str, taxon_nodes: list, outpath_di
     outpath_g2d = os.path.join(outpath_dir, "{}_gene_to_disease.tsv".format(tx_formatted))
     outpath_g2o = os.path.join(outpath_dir, "{}_gene_to_ortholog.tsv".format(tx_formatted))
     outpath_p2o = os.path.join(outpath_dir, "{}_phenotype_to_ortholog.pkl".format(tx_formatted))
+    outpath_d2o = os.path.join(outpath_dir, "{}_disease_to_ortholog.pkl".format(tx_formatted))
     
     # Write gene-->phenotype file
     gene_to_phens_lines = np.asarray(gene_to_phens_lines).T
@@ -303,6 +304,10 @@ def compute_taxon_info(input_graph, taxon_id: str, taxon_nodes: list, outpath_di
     
     # Write phenotype-->ortholog .pkl file ({phenotype_id:[panther_id1, panther_id1, panther_id2, etc...]})
     pickle.dump(p2o, open(outpath_p2o, "wb"))
+
+    # Write disease-->ortholog .pkl file ({phenotype_id:[panther_id1, panther_id1, panther_id2, etc...]})
+    if len(d2o) > 0:
+        pickle.dump(d2o, open(outpath_d2o, "wb"))
 
     # Write out gene-->ortholog_id
     genes_to_orths = np.asarray([[k,v] for k,v in g2o.items()]).T

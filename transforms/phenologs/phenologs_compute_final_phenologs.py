@@ -12,9 +12,8 @@ from IPython.display import display
 from phenologs_utils import (SpeciesComparison,
                              PhenologsSpeciesComparison,
                              divide_workload,
-                             initiate_phenologs_species_comparison_configs,
+                             initiate_phenologs_species_comparison_configs_v2,
                              bulk_compute_hyper_geom)
-
 
 
 def run_final_phenologs_parallel(configs, num_proc: int = 1):
@@ -25,7 +24,7 @@ def run_final_phenologs_parallel(configs, num_proc: int = 1):
 
     # Deal with - and 0 type edge cases, and instantiate all our objects before running computation
     num_proc = max(1, num_proc)
-    run_objs = [PhenologsSpeciesComparison.parse_obj(config) for config in configs]
+    run_objs = [PhenologsSpeciesComparison.model_validate(config) for config in configs]
 
     # Evenly (as possible) divide our data into baskets within a basket (list[list,list,list,...])
     if len(run_objs) > 1:
@@ -42,8 +41,6 @@ def run_final_phenologs_parallel(configs, num_proc: int = 1):
     return output
 
 
-
-
 if __name__ == '__main__':
     ################
 	## ARG PARSE ###
@@ -52,9 +49,9 @@ if __name__ == '__main__':
                                                       are written for each species comparison based on fdr levels.')
 
         parser.add_argument("-p", "--project_dir", help="Top most project directory", required=True, type=str)
-        parser.add_argument("-c", "--cpu_cores", help="Number of cores to use.", required=False, type=int, default=1)
-        parser.add_argument("-taxon_ids", help="Comma separated list of taxon_ids to use", required=False, type=str)
-        parser.add_argument("-all", help="Compare all available species to one another", required=False, action='store_true')
+        parser.add_argument("-c", "--cpu_cores", help="Number of cpu cores to use.", required=False, type=int, default=1)
+        parser.add_argument("-taxon_id", help='Specicies specific taxon id or "all" are allowed', required=True, type=str)
+        parser.add_argument("-prd", "--prediction_network", help="phenotype or disease (which type of network to use for base species comparisons)", required=True, default="phenotype")
         return parser.parse_args()
 
     args = parse_input_command()
@@ -65,9 +62,15 @@ if __name__ == '__main__':
     # Basic run command (Human vs. Mouse for 100 trials across 10 cores)
     ###python phenologs_compute_final_phenologs.py -taxon_ids 9606,10090 -c 10 -p path/to/top_level_project_dir/
 
-    taxon_ids, comparison_configs = initiate_phenologs_species_comparison_configs(args)
+    # TO DO: Do we want to have this compute Pearson correlation coeffiecient as well?
+    # We are computing the "column vector" distances here from the 2013 methods explanation.
+    # This computation can serve both as the function to compute k-nearest neighbors AND the weighting funciton.
+    # In other words, we can compute both pearson and hyper geometric distances and mix and match methods
+    # for combining via naive bayes (and or additive method) from 2010/2013 papers.  
+    taxon_ids, comparison_configs = initiate_phenologs_species_comparison_configs_v2(args)
     run_final_phenologs_parallel(comparison_configs, num_proc=args.cpu_cores)
     
+    # Run linearly
     #for config in comparison_configs:
     #    print("- Computing phenologs calculations for {} -- {}".format(config["species_a"], config["species_b"]))
     #    PhenologsSpeciesComparison.parse_obj(config).compute_cross_species_phenologs(outdir)
