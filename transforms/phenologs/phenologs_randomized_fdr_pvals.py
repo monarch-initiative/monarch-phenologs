@@ -11,7 +11,7 @@ from IPython.display import display
 from phenologs_utils import (SpeciesComparison, 
                              RandomSpeciesComparison, 
                              divide_workload,
-                             initiate_random_species_comparison_configs_v2,
+                             initiate_random_species_comparison_configs,
                              bulk_compute_hyper_geom)
 
 
@@ -276,7 +276,7 @@ if __name__ == '__main__':
     # Basic run command (Human vs. Mouse for 100 trials across 10 cores)
     ###python phenologs_randomized_fdr_pvals.py -taxon_ids 9606,10090 -n 100 -c 10 -p path/to/top_level_project_dir/
 
-    taxon_ids, comparison_configs = initiate_random_species_comparison_configs_v2(args)
+    taxon_ids, comparison_configs = initiate_random_species_comparison_configs(args)
     for config in comparison_configs:
         print("- Computing {} random trials between {} -- {}".format(args.num_trials, 
                                                                      config["species_a"], 

@@ -1,3 +1,4 @@
+# General imports
 import os
 import sys
 import pickle
@@ -10,7 +11,7 @@ from scipy.stats import pearsonr
 from collections import Counter
 from IPython.display import display
 from pydantic import BaseModel
-from typing import Union, Literal, Dict, List, Any, Optional
+from typing import Dict, List, Optional
 
 
 # For multiprocessing
@@ -43,125 +44,8 @@ def divide_workload(data_list, num_proc: int=1) -> list:
         return baskets
 
 
-
-
-
-
-
-# Leveraged in phenologs_randomized_fdr_pvals
+# Used in phenologs calculations for randomized trial versions
 def initiate_random_species_comparison_configs(input_args):
-    """
-    - Attempts to ensure filepaths required for all computations are resolved before hand, so that
-      calculations don't fail part way through. 
-    - Creates pairwise comparison configuration data structures from
-      input arguments. Either all comparisons or a select set from a comma seperated list of taxon ids
-    """
-
-    # Ensures part1 & part2 of pipeline have been completed
-    check_file = os.path.join(input_args.project_dir, "species_data", "species_information_table.tsv")
-    check_outdir = os.path.join(input_args.project_dir, "random_trials")
-    
-    if not os.path.isfile(check_file):
-        print("- ERROR, Project species information table doesn't seem to exist. Exiting...")
-        sys.exit()
-    
-    if not os.path.isdir(check_outdir):
-        print("- ERROR, Project random_trials directory doesn't seem to exist. Exiting...")
-        sys.exit()
-    
-    # Figure out which species ids / names we have and which ones are relevant
-    species_df = pd.read_csv(check_file, sep='\t')
-    species_df = species_df[species_df['Total Phenotype Edges'] > 0] # Only want species whith non zero phenotype information
-    
-
-    # Pull out taxon_id information (twice as two separate variables)
-    ids_to_name = {sp_id:"-".join(sp_name.split(" ")) for sp_id, sp_name in zip(list(species_df["Taxon ID"]), list(species_df["Taxon Label"]))}
-    org_taxon_ids = copy.copy(ids_to_name)
-    
-    
-    # Format, and add additional keys to make more friendly to input arguments
-    ids_to_name = {sp_id:"-".join(sp_name.split(" ")) for sp_id, sp_name in zip(list(species_df["Taxon ID"]), list(species_df["Taxon Label"]))}
-    ids_to_name.update({sp_id.split(":")[1]:v for sp_id,v in ids_to_name.items()}) # Add keys without NCBITaxon: prefix
-    display(species_df)
-
-    # Simple table mapping species name to the total number of genes (with at least one phenotype term associated with them)
-    species_g_count = {t:int(v) for t,v in zip(list(species_df["Taxon Label"]), list(species_df["Genes >= 1 Phenotype"]))}
-
-    # Figure out which species ids we are tasked with comparing to one another
-    valid_species_ids = set(ids_to_name.keys())
-    if not input_args.all:
-        if not input_args.taxon_ids:
-            print('- ERROR, -all or -taxon_ids argument must be specified. Exiting...')
-            sys.exit()
-        
-        t_ids = input_args.taxon_ids.split(",")
-        tot_species = len(t_ids)
-        print(valid_species_ids)
-
-        # Ensure input is compatible with data in graph
-        if tot_species < 2:
-            print('- ERROR, Total number of input taxon ids must be greater than 1. For example 9606,8355... Exiting...')
-            sys.exit()
-        
-        if len(set(t_ids) & valid_species_ids) != len(t_ids):
-            print('- ERROR, One or more incompatible taxon_ids input. Exiting...')
-            sys.exit()
-        
-    else:
-        t_ids = list(org_taxon_ids.keys())
-    
-    tot_species = len(t_ids)
-    tot_comps = (tot_species*(tot_species-1))/2
-    print("- Species found for comparison {}, Total comparisons to make {}".format(tot_species, tot_comps))
-
-    # Generate our input configurations list
-    # This ensures that all filepaths exist for all comparisons before we start making any computations
-
-    # The following double for loop performs all pairwise comparisons with out repeats (i.e. a->b but not b->a)
-    # TO DO: Do we want to double this? (i.e. a->b, and b->a)
-    configs = []
-    for i, species_a in enumerate(t_ids[:-1]):
-        a_name = ids_to_name[species_a]
-        for species_b in t_ids[i+1:]:
-            b_name = ids_to_name[species_b]
-
-            # Base level config
-            cpath = os.path.join(input_args.project_dir, "species_data", "common_orthologs_{}_vs_{}.tsv".format(a_name, b_name))
-            apath = os.path.join(input_args.project_dir, "species_data", "{}_phenotype_to_ortholog.pkl".format(a_name))
-            bpath = os.path.join(input_args.project_dir, "species_data", "{}_phenotype_to_ortholog.pkl".format(b_name))
-
-            # Ensure all files exist
-            if (not os.path.isfile(cpath)) or (not os.path.isfile(apath)) or (not os.path.isfile(bpath)):
-                print("- ERROR, Species {} vs {} is missing common orthologs and or phenotype files...".format(a_name,
-                                                                                                               b_name))
-                sys.exit()
-            
-            # Generate two configs for comparison (Species A-->B, and B-->A)
-            config_a = {"species_a":a_name,
-                        "species_b":b_name,
-                        "species_a_phenotype_path":apath,
-                        "species_b_phenotype_path":bpath,
-                        "common_orthologs_path":cpath,
-                        "output_directory":check_outdir}
-            
-            # Swap a & b values to get comparison in other direction
-            config_b = {"species_a":b_name,
-                        "species_b":a_name,
-                        "species_a_phenotype_path":bpath,
-                        "species_b_phenotype_path":apath,
-                        "common_orthologs_path":cpath,
-                        "output_directory":check_outdir}
-            
-            # Perform comparison in both directions (overkill, but easier for downstream anlysis)
-            configs.append(config_a)
-            configs.append(config_b)
-    
-    print("- {} Pairwise comparisons configurations created...".format(len(configs)))
-    return t_ids, configs
-
-
-# Leveraged in phenologs_randomized_fdr_pvals
-def initiate_random_species_comparison_configs_v2(input_args):
     """
     - Attempts to ensure filepaths required for all computations are resolved before hand, so that
       calculations don't fail part way through. 
@@ -275,8 +159,8 @@ def initiate_random_species_comparison_configs_v2(input_args):
     return t_ids, configs
 
 
-# Leveraged in phenologs_randomized_fdr_pvals
-def initiate_phenologs_species_comparison_configs_v2(input_args):
+# Used in computing real phenologs calculations and leave xyz out validations
+def initiate_phenologs_species_comparison_configs(input_args):
     """
     - Attempts to ensure filepaths required for all computations are resolved before hand, so that
       calculations don't fail part way through. 
@@ -404,256 +288,10 @@ def initiate_phenologs_species_comparison_configs_v2(input_args):
     return t_ids, configs
 
 
-# Leveraged in phenologs_compute_final_phenologs
-def initiate_phenologs_species_comparison_configs(input_args):
-    """
-    input_args is the return value of argparse.ArgumentParser(...).parse_args()
-    input_args must have following attributes
-        input_args.project_dir
-        input_args.taxon_ids OR input_args.all must be specified
-
-    Performs the following
-    - Attempts to ensure filepaths required for all computations are resolved before hand, so that
-      calculations don't fail part way through. 
-    - Creates pairwise comparison configuration data structures from
-      input arguments. Either all comparisons or a select set from a comma seperated list of taxon ids
-    """
-
-    # Ensures parts 1, 2, and 3 have been completed (species info table, random trial results and fdr table)
-    check_file1 = os.path.join(input_args.project_dir, "species_data", "species_information_table.tsv")
-    check_file2 = os.path.join(input_args.project_dir, "random_trials_fdr", "fdr_table.tsv")
-    check_inputdir = os.path.join(input_args.project_dir, "random_trials")
-    check_outdir = os.path.join(input_args.project_dir, "phenologs_results")
-    
-    if not os.path.isfile(check_file1):
-        print("- ERROR, Project species information table doesn't seem to exist. Exiting...")
-        sys.exit()
-    
-    if not os.path.isfile(check_file2):
-        print("- ERROR, fdr table file doesn't seem to exist. Exiting...")
-        sys.exit()
-    
-    if not os.path.isdir(check_inputdir):
-        print("- ERROR, Project random_trials directory doesn't seem to exist. Exiting...")
-        sys.exit()
-    
-    elif len([fname for fname in os.listdir(check_inputdir) if "_vs_" in fname]) == 0:
-        print("- ERROR, Project random_trials directory has no relevant file types ('_vs_' in the name). Exiting...")
-        sys.exit()
-
-    if not os.path.isdir(check_outdir):
-        print("- Making output directory at {}".format(check_outdir))
-        os.makedirs(check_outdir)
-    
-    # Figure out which species ids / names we have and which ones are relevant
-    species_df = pd.read_csv(check_file1, sep='\t')
-    species_df = species_df[species_df['Total Phenotype Edges'] > 0] # Only want species whith non zero phenotype information
-    
-    # This shouldn't happen, but if it does it means something fundementally went wrong with the monarch kg
-    # data extraction process...
-    if len(species_df['Total Phenotype Edges']) == 0:
-        print("- ERROR, No species found with phenotypes in monarch kg... Issue with monarch kg data extraction process")
-        sys.exit()
-
-    # Pull out taxon_id information (twice as two separate variables)
-    ids_to_name = {sp_id:"-".join(sp_name.split(" ")) for sp_id, sp_name in zip(list(species_df["Taxon ID"]), list(species_df["Taxon Label"]))}
-    org_taxon_ids = copy.copy(ids_to_name)
-    
-    # Format, and add additional keys to make more friendly to input arguments
-    ids_to_name = {sp_id:"-".join(sp_name.split(" ")) for sp_id, sp_name in zip(list(species_df["Taxon ID"]), list(species_df["Taxon Label"]))}
-    ids_to_name.update({sp_id.split(":")[1]:v for sp_id,v in ids_to_name.items()}) # Add keys without NCBITaxon: prefix
-    display(species_df)
-
-    # Simple table mapping species name to the total number of genes (with at least one phenotype term associated with them)
-    species_g_count = {t:int(v) for t,v in zip(list(species_df["Taxon Label"]), list(species_df["Genes >= 1 Phenotype"]))}
-
-    # Figure out which species ids we are tasked with comparing to one another
-    valid_species_ids = set(ids_to_name.keys())
-    if not input_args.all:
-        if not input_args.taxon_ids:
-            print('- ERROR, -all or -taxon_ids argument must be specified. Exiting...')
-            sys.exit()
-        
-        t_ids = input_args.taxon_ids.split(",")
-        tot_species = len(set(t_ids))
-
-        # Ensure only unique taxon_ids are input (cannot have repeats)
-        if len(set(t_ids)) != len(t_ids):
-            print("- ERROR, Repeat input taxon ids found. Each unique taxon id can only be used once. Exiting...")
-            sys.exit()
-
-        # Make sure we have more than one species to compare to one another
-        if tot_species < 2:
-            print('- ERROR, Total number of unique input taxon ids must be greater than 1. For example 9606,8355... Exiting...')
-            sys.exit()
-        
-        # Ensure input is compatible with data in graph
-        if len(set(t_ids) & valid_species_ids) != len(t_ids):
-            print('- ERROR, One or more incompatible taxon_ids input. Exiting...')
-            sys.exit()
-        
-    else:
-        t_ids = list(org_taxon_ids.keys())
-    
-    tot_species = len(t_ids)
-    tot_comps = (tot_species*(tot_species-1))/2
-    print("- Species found for comparison {}, Total comparisons to make {}".format(tot_species, tot_comps))
-
-    # Generate our input configurations list
-    # This ensures that all filepaths exist for all comparisons before we start making any computations
-
-    # The following double for loop performs all pairwise comparisons with out repeats (i.e. a->b but not b->a)
-    # TO DO: Do we want to double this? (i.e. a->b, and b->a)
-    configs = []
-    for i, species_a in enumerate(t_ids[:-1]):
-        a_name = ids_to_name[species_a]
-        for species_b in t_ids[i+1:]:
-            b_name = ids_to_name[species_b]
-
-            # Base level config
-            cpath = os.path.join(input_args.project_dir, "species_data", "common_orthologs_{}_vs_{}.tsv".format(a_name, b_name))
-            apath = os.path.join(input_args.project_dir, "species_data", "{}_phenotype_to_ortholog.pkl".format(a_name))
-            bpath = os.path.join(input_args.project_dir, "species_data", "{}_phenotype_to_ortholog.pkl".format(b_name))
-            
-            ag2p_path = os.path.join(input_args.project_dir, "species_data", "{}_gene_to_phenotype.tsv".format(a_name))
-            bg2p_path = os.path.join(input_args.project_dir, "species_data", "{}_gene_to_phenotype.tsv".format(b_name))
-
-
-            # Ensure all files exist
-            if (not os.path.isfile(cpath)) or (not os.path.isfile(apath)) or (not os.path.isfile(bpath)):
-                print("- ERROR, Species {} vs {} is missing common orthologs and or phenotype files...".format(a_name,
-                                                                                                               b_name))
-                sys.exit()
-
-            # Generate two configs for comparison (Species A-->B, and B-->A)
-            config_a = {"species_a":a_name,
-                        "species_b":b_name,
-
-                        # Phenotype-->ortholog
-                        "species_a_phenotype_path":apath,
-                        "species_b_phenotype_path":bpath,
-
-                        # Gene-->phenotype
-                        "species_a_g2p_path": ag2p_path,
-                        "species_b_g2p_path": bg2p_path,
-
-                        "common_orthologs_path":cpath,
-                        "output_directory":check_outdir,
-                        "fdr_path":check_file2} # This is the fdr table file computed from the randomized trials
-            
-            # Swap a & b values to get comparison in other direction
-            config_b = {"species_a":b_name,
-                        "species_b":a_name,
-
-                        # Phenotype-->ortholog
-                        "species_a_phenotype_path":bpath,
-                        "species_b_phenotype_path":apath,
-
-                        # Gene-->phenotype
-                        "species_a_g2p_path": bg2p_path,
-                        "species_b_g2p_path": ag2p_path,
-
-                        "common_orthologs_path":cpath,
-                        "output_directory":check_outdir,
-                        "fdr_path":check_file2}
-            
-            # Just do one config for now, (one-way comparison)
-            configs.append(config_a)
-            ##configs.append(config_b)
-    
-    print("- {} Pairwise comparisons configurations created...".format(len(configs)))
-    return t_ids, configs
-
-
-
-    """
-    - Attempts to ensure filepaths required for all computations are resolved before hand, so that
-      calculations don't fail part way through. 
-    - Creates pairwise comparison configuration data structures from
-      input arguments. Either all comparisons or a select set from a comma seperated list of taxon ids
-    - Input species is compared against all other species within the monarch kg
-    """
-
-    # Ensures part1 & part2 of pipeline have been completed
-    species_data_dir = os.path.join(input_args.project_dir, "species_data")
-    check_file = os.path.join(species_data_dir, "species_information_table.tsv")
-    check_outdir = os.path.join(input_args.project_dir, "phenologs_results")
-
-    if not os.path.isfile(check_file):
-        print("- ERROR, Project species information table doesn't seem to exist. Exiting...")
-        sys.exit()
-    
-    if not os.path.isdir(check_outdir):
-        print("- ERROR, Project phenologs_results directory doesn't seem to exist. Exiting...")
-        sys.exit()
-    
-    # Figure out which species ids / names we have and which ones are relevant
-    species_df = pd.read_csv(check_file, sep='\t')
-    species_df = species_df[species_df["Genes with >= 1 phenotype edge"] > 0] # Only want species whith non zero phenotype information
-
-    # Pull out taxon_id information (twice as two separate variables)
-    ids_to_name = {sp_id:"-".join(sp_name.split(" ")) for sp_id, sp_name in zip(list(species_df["Taxon ID"]), list(species_df["Taxon label"]))}
-    org_taxon_ids = copy.copy(ids_to_name)
-    
-    # Format, and add additional keys to make more friendly to input arguments
-    ids_to_name = {sp_id:"-".join(sp_name.split(" ")) for sp_id, sp_name in zip(list(species_df["Taxon ID"]), list(species_df["Taxon label"]))}
-    ids_to_name.update({sp_id.split(":")[1]:v for sp_id,v in ids_to_name.items()}) # Add keys without NCBITaxon: prefix
-    
-    # Figure out which species id(s) we are tasked with comparing to one another
-    valid_species_ids = set(ids_to_name.keys())
-    if input_args.taxon_id in valid_species_ids:
-        sp_id = input_args.taxon_id
-    else:
-        print('- ERROR, relevant taxon id must be supplied for taxon_id argument. Exiting...')
-        sys.exit()
-    
-    # Now we need to filter our comparison species list by relevant / available prediction networks
-    # "phenotype" or "disease" networks are available for use
-        
-    # Format filenames and paths for fdr table
-    sp_name = ids_to_name[sp_id]
-    nformatted = ids_to_name[sp_id].replace("-", "_")
-    res_name = "{}_{}_results".format(nformatted, input_args.prediction_network)
-    res_dir = os.path.join(input_args.project_dir, "phenologs_results", res_name)
-    fdr_path = os.path.join(res_dir, "{}_fdr_table.tsv".format(sp_name))
-    
-    
-    # Check if necessary fdr table exists and gather remaining filepaths necessary
-    if os.path.isdir(res_dir) and os.path.isfile(fdr_path):
-
-        # Our species specific table filepaths from initial steps of pipeline
-        p2o_path = os.path.join(species_data_dir, "{}_{}_to_ortholog.pkl".format(sp_name, input_args.prediction_network))
-        g2o_path = os.path.join(species_data_dir, "{}_gene_to_ortholog.tsv".format(sp_name))
-        g2p_path = os.path.join(species_data_dir, "{}_gene_to_{}.tsv".format(sp_name, input_args.prediction_network))
-        
-        # Pooled phenolog file name (significance cutoff included in name)
-        sig_phenologs_outname = "{}_pooled_phenologs_fdr{}.tsv".format(sp_name, input_args.fdr)
-        sig_phenologs_outpath = os.path.join(res_dir, sig_phenologs_outname)
-        
-        
-        # Generate dictionary to hold our filepaths for easy processing downstream
-        sp_file_info = {"project_dir":input_args.project_dir,
-                        "results_dir":res_dir,
-                        "taxon_id":input_args.taxon_id,
-                        
-                        "prediction_network":input_args.prediction_network,
-                        "fdr_path":fdr_path,
-                        "fdr":input_args.fdr,
-                        "kneighbs":input_args.kneighbs,
-                        "rank_metric":input_args.rank_metric,
-                        "sig_phenologs_path":sig_phenologs_outpath,
-                        
-                        "phen_to_orth_path":p2o_path,
-                        "gene_to_orth_path":g2o_path,
-                        "gene_to_phen_path":g2p_path,
-                        "species_name":sp_name} # Note, phen_path can be disease or phenoptype (but phen is the general programmtic name)
-        
-    return sp_file_info
-
-
-
-
 # Distance / weighting metric conversion of hypergeomatric parameters to arrays for pearson correlation calc
+# If we really want to include pearson "distance" metric from the 2013 paper, then we need to compute by hand
+# from the hg parameters that we generate in order to maintain the performance in terms of speed...
+# This is currently very slow because it expands back out, and then uses scipy to calculate
 def expand_hg_params_to_binary_pearson(hg_param_set):
     """
     Takes list hypergeomatric test parameters (c, N, m, n)
@@ -718,7 +356,9 @@ def bulk_compute_hyper_geom(params):
 def bulk_compute_pearson_from_hg_params(hg_params):
     pr_pvals, pr_coeffs = {}, {}
     for pr in hg_params:
-        x, y = expand_hg_params_to_binary_pearson(pr)
+
+        # Note, Could speed up dramatically by computing by hand instead of expanding and using scipy
+        x, y = expand_hg_params_to_binary_pearson(pr) 
         res = pearsonr(x, y)
         pr_pvals.update({pr:res.pvalue})
         pr_coeffs.update({pr:res.correlation})
@@ -746,7 +386,9 @@ def load_fdr_table_to_lookup(fdr_path):
     return fdr_lookup
 
 
-def pool_phenologs_data(results_dir, fdr_lookup_table, sig_outpath, fdr_level:float, compress:bool=False):
+# Takes _all_phenologs.tsv results files from within the results_dir, 
+# pools and filters by relevant pvalue cutoff for input fdr_levle (.95 is default (i.e. 5%))
+def pool_phenologs_data(results_dir, fdr_lookup_table, sig_outpath, fdr_level:.95, compress:bool=False):
     """
     Important note... The fdr lookup table is used to determin which value we need to use for each 
     _all_phenologs.tsv file that is present 
@@ -816,6 +458,8 @@ def pool_phenologs_data(results_dir, fdr_lookup_table, sig_outpath, fdr_level:fl
     print("- Data written to {}".format(sig_outpath))
 
     return sig_phenologs_df
+
+
 
 
 # For initial phenologs comparison / distance calculations
@@ -1365,8 +1009,8 @@ class PhenologsSpeciesComparison(SpeciesComparison):
         return 
 
 
-
 # For computing gene-->phenotype ranking "matrices" (last portions of the analysis pipeline)
+# We make this an object, so we can multiprocess easier leave xyz out validation results
 class OrthologToPhenotypeCalculations(BaseModel):
     
     # Arguments passed in from command line

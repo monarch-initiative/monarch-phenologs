@@ -1,34 +1,10 @@
-'''
-Purpose: Acquire the source datasets needed for calculating phenologs and gene candidate predictions.
-
-Datasets needed:
--Monarch KG
--Either Mondo->HPO disease to phenotype annotation from Monarch API (or KGX files) or HPOA
--
-
-Rat Genome Database
-- mouse Genome Database
-- Zebrafish Information Network
-
-Rat
-mouse
-Zebrafish
-Worm
-Chicken
-Fission yeast?
-
-These data sources can be expanded and the process rerun as additional model organism gene-phenotype annotations + panther orthologs are made available.
-
-'''
-
+# General imports
 import os
 import argparse
 import requests
 import tarfile
 import pickle
 
-#from phenologs_utils import (species_dict,
-#                             phenologs_data_paths)
 
 def download_file_url(url: str, outdir: str, extract_gz: bool = False, overwrite: bool = False):
     """
@@ -61,7 +37,8 @@ if __name__ == '__main__':
     def parse_input_command():
         parser = argparse.ArgumentParser(description='Performs phenologs setup steps. Makes relevant directory structures, \
                                                       downloads monarch kg, and upacks the kg files. Will not overwrite \
-                                                      existing data or monarch-kg data if already exists')
+                                                      existing data or monarch-kg data if already exists within specified \
+                                                      projece_dir')
         parser.add_argument("-p", "--project_dir", help="Directory to write files to", required=True, type=str)
         return parser.parse_args()
 
@@ -114,7 +91,6 @@ if __name__ == '__main__':
         print("- Skipping HP ontology download... File already exists at {}".format(kg_hp_path))
     
         
-
 
 # Note about orthology source(s).. We could use panther orthology connections / tables directly.
 # But it seems easier to gather this informaiton from the monarch kg, but will leave link here

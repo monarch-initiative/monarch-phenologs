@@ -1,28 +1,17 @@
+# General imports
 import os
 import sys
 import shutil
 import argparse
-import pickle
-import math
 import copy
-import numpy as np
 import pandas as pd
-from scipy.stats import hypergeom
-from IPython.display import display
-from collections import Counter
 from pathlib import Path
-import matplotlib.pyplot as plt
-
-from pronto import Ontology
-from pydantic import BaseModel
-from typing import Union, Literal, Dict, List, Any, Optional
-
 
 # Custom imports
 from phenologs_utils import (divide_workload,
                              load_fdr_table_to_lookup,
                              pool_phenologs_data,
-                             initiate_phenologs_species_comparison_configs_v2,
+                             initiate_phenologs_species_comparison_configs,
                              PhenologsSpeciesComparison)
 
 
@@ -188,7 +177,7 @@ if __name__ == '__main__':
     fdr_lookup = load_fdr_table_to_lookup(sp_config["fdr_path"])
 
     # Inititate set of base level configurations to serve as base and                    
-    t_ids, base_configs = initiate_phenologs_species_comparison_configs_v2(args)
+    t_ids, base_configs = initiate_phenologs_species_comparison_configs(args)
 
     # Make copies of fdr table and divy up
     div_fdr_lookups = divide_workload([copy.copy(fdr_lookup) for i in range(0, num_proc)], num_proc=num_proc)

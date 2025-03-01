@@ -1,19 +1,12 @@
 # General imports
 import os
-import sys
 import argparse
-import copy
-import pandas as pd
 import multiprocessing as mp
-from IPython.display import display
-
 
 # Custom imports
-from phenologs_utils import (SpeciesComparison,
-                             PhenologsSpeciesComparison,
+from phenologs_utils import (PhenologsSpeciesComparison,
                              divide_workload,
-                             initiate_phenologs_species_comparison_configs_v2,
-                             bulk_compute_hyper_geom)
+                             initiate_phenologs_species_comparison_configs)
 
 
 def run_final_phenologs_parallel(configs, num_proc: int = 1):
@@ -67,7 +60,7 @@ if __name__ == '__main__':
     # This computation can serve both as the function to compute k-nearest neighbors AND the weighting funciton.
     # In other words, we can compute both pearson and hyper geometric distances and mix and match methods
     # for combining via naive bayes (and or additive method) from 2010/2013 papers.  
-    taxon_ids, comparison_configs = initiate_phenologs_species_comparison_configs_v2(args)
+    taxon_ids, comparison_configs = initiate_phenologs_species_comparison_configs(args)
     run_final_phenologs_parallel(comparison_configs, num_proc=args.cpu_cores)
     
     # Run linearly

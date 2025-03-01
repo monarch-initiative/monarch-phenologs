@@ -1,16 +1,11 @@
+# General imports
 import os
 import argparse
 import pandas as pd
 import numpy as np
 import networkx as nx
-import matplotlib.pyplot as plt
 import pickle
-
 from collections import Counter
-from pydantic import BaseModel
-from typing import Optional, Any, List, Dict, Union
-
-from IPython.display import display
 
 
 # General function to read an .obo ontontolgy file into memory using pronto to gather all terms that do not fall under a particular parent class

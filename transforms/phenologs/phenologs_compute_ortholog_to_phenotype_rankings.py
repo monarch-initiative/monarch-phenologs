@@ -1,20 +1,9 @@
+# General imports
 import os
 import sys
 import argparse
-import pickle
-import math
 import copy
-import numpy as np
 import pandas as pd
-from scipy.stats import hypergeom
-from IPython.display import display
-from collections import Counter
-from pathlib import Path
-import matplotlib.pyplot as plt
-
-from pronto import Ontology
-from pydantic import BaseModel
-from typing import Union, Literal, Dict, List, Any, Optional
 
 # Custom imports
 from phenologs_utils import (load_fdr_table_to_lookup,
