@@ -144,6 +144,7 @@ def run_comparisons_parallel_v2(config, n_trials: int = 1, num_proc: int = 1):
     
     # Retrieve results
     output_part3 = [ p.get() for p in results ]
+    pool.close()
     print("- PART3 COMPLETE...")
 
     return output_part3

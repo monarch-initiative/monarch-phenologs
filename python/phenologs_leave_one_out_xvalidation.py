@@ -5,6 +5,7 @@ import shutil
 import argparse
 import copy
 import pandas as pd
+import multiprocessing as mp
 from pathlib import Path
 
 # Custom imports
@@ -102,7 +103,6 @@ def batch_compute_leave_one_out(batch_configs, fdr_lookup_table):
     # Load fdr data into memory
     
     # Each config_set is a leave xyz out comparison set that we need to make (multiple species comparisons)
-    ccc = 0
     for config_set in batch_configs:
         
         # Pull out variables from config and create new ones
@@ -122,7 +122,7 @@ def batch_compute_leave_one_out(batch_configs, fdr_lookup_table):
         
         # Pool together _all_phenologs.tsv and filter via fdr pvalue (and write results)
         # First, format pooled output filename / path
-        sig_outname = "{}_{}_pooled_phenologs_fdr{}.tsv".format(species_name, outdir_name, fdr_level)
+        sig_outname = "{}_{}_pooled_phenologs_fdr{}.tsv.gz".format(species_name, outdir_name, fdr_level)
         sig_outpath = os.path.join(parent_outdir, sig_outname)
         
         # Next, gather up the filepaths of the files we just wrote
@@ -132,10 +132,8 @@ def batch_compute_leave_one_out(batch_configs, fdr_lookup_table):
         # Delete all data within leave one out directory we just computed so we don't
         # create massive amount of data (~7,500 datasets we would end up making for human)
         shutil.rmtree(outdir)
-        print("WOOOOOOOOOOOOOOOO")
-        ccc += 1
-        if ccc >= 5:
-            break
+    
+    return
         
 
 if __name__ == '__main__':
@@ -219,45 +217,12 @@ if __name__ == '__main__':
         
 
     # Divy up our xvalidate datasets to calculate
-    div_configs = divide_workload(xvalidate_config_sets, num_proc=num_proc)
+    div_configs = divide_workload(xvalidate_config_sets[0:8], num_proc=num_proc)
 
-    batch_compute_leave_one_out(div_configs[0], div_fdr_lookups[0][0])
-        
-
-    # # Deal with - and 0 type edge cases, and instantiate all our objects before running computation
-    # num_proc = max(1, num_proc)
-    # run_objs = [PhenologsSpeciesComparison.model_validate(config) for config in configs]
-
-    # # Evenly (as possible) divide our data into baskets within a basket (list[list,list,list,...])
-    # if len(run_objs) > 1:
-    #     div_configs = divide_workload(run_objs, num_proc=num_proc)
-    # else:
-    #     div_configs = [configs]
-
-    # # Setup parallel processing overhead, kick off jobs via asynchronous processing, and retrieve results
-    # output = mp.Queue()
-    # pool = mp.Pool(processes=num_proc)
-    # results = [pool.apply_async(robj.compute_cross_species_phenologs, args=()) for robj in run_objs]
-    # output = [ p.get() for p in results ]
-    # print("- Done!")
-    # return output
-
-
-    #[pool.apply_async(batch_compute_leave_one_out, args(bconfs, prdirs, fdlk)) 
-    # for bconfs, prdirs, fdlk in zip(div_configs, )
-
-
-
-
-
-
-    # Gathers necessary filepaths for building cross species phenologs tables
-    ####spaths = initiate_g2p_ranking_calculation_filepaths(in_args)
-
-    # Copy and alter initial set of configs to satisfy cross validation scheme.
-    # Each core will recieve a list of "packaged" configs to process one by one 
-    # Each packeged set of configs is the full set of cross species comparisons we need to make with the current set of data
-    # So the results for all cross species phenologs are computed, written, pooled, and then redundant data removed
-
-    #fpaths = initiate_phenologs_cross_validation_configs(in_args)
-    #for sp_id in spaths:
+    # Setup parallel processing overhead, kick off jobs via asynchronous processing, and retrieve results
+    output = mp.Queue()
+    pool = mp.Pool(processes=num_proc)
+    results = [pool.apply_async(batch_compute_leave_one_out, args=(dvc, fdcl[0])) for dvc,fdcl in zip(div_configs, div_fdr_lookups)]
+    output = [ p.get() for p in results ]
+    pool.close()
+    print("- Done!")
