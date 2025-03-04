@@ -10,6 +10,7 @@ from scipy.stats import hypergeom
 from scipy.stats import pearsonr
 from collections import Counter
 from IPython.display import display
+from pathlib import Path
 from pydantic import BaseModel
 from typing import Dict, List, Optional
 
@@ -460,6 +461,91 @@ def pool_phenologs_data(results_dir, fdr_lookup_table, sig_outpath, fdr_level:.9
     return sig_phenologs_df
 
 
+# Creates compute configs from input args for ortholog-->phenotype rankings (used in 06 step in pipeline and xvalidation)
+def initiate_ortholog_to_phenotype_ranking_calculation_config(input_args):
+    """
+    - Attempts to ensure filepaths required for all computations are resolved before hand, so that
+      calculations don't fail part way through. 
+    - Creates pairwise comparison configuration data structures from
+      input arguments. Either all comparisons or a select set from a comma seperated list of taxon ids
+    - Input species is compared against all other species within the monarch kg
+    """
+
+    # Ensures part1 & part2 of pipeline have been completed
+    species_data_dir = os.path.join(input_args.project_dir, "species_data")
+    check_file = os.path.join(species_data_dir, "species_information_table.tsv")
+    check_outdir = os.path.join(input_args.project_dir, "phenologs_results")
+
+    if not os.path.isfile(check_file):
+        print("- ERROR, Project species information table doesn't seem to exist. Exiting...")
+        sys.exit()
+    
+    if not os.path.isdir(check_outdir):
+        print("- ERROR, Project phenologs_results directory doesn't seem to exist. Exiting...")
+        sys.exit()
+    
+    # Figure out which species ids / names we have and which ones are relevant
+    species_df = pd.read_csv(check_file, sep='\t')
+    species_df = species_df[species_df["Genes with >= 1 phenotype edge"] > 0] # Only want species whith non zero phenotype information
+
+    # Pull out taxon_id information (twice as two separate variables)
+    ids_to_name = {sp_id:"-".join(sp_name.split(" ")) for sp_id, sp_name in zip(list(species_df["Taxon ID"]), list(species_df["Taxon label"]))}
+    org_taxon_ids = copy.copy(ids_to_name)
+    
+    # Format, and add additional keys to make more friendly to input arguments
+    ids_to_name = {sp_id:"-".join(sp_name.split(" ")) for sp_id, sp_name in zip(list(species_df["Taxon ID"]), list(species_df["Taxon label"]))}
+    ids_to_name.update({sp_id.split(":")[1]:v for sp_id,v in ids_to_name.items()}) # Add keys without NCBITaxon: prefix
+    
+    # Figure out which species id(s) we are tasked with comparing to one another
+    valid_species_ids = set(ids_to_name.keys())
+    if input_args.taxon_id in valid_species_ids:
+        sp_id = input_args.taxon_id
+    else:
+        print('- ERROR, relevant taxon id must be supplied for taxon_id argument. Exiting...')
+        sys.exit()
+    
+    # Now we need to filter our comparison species list by relevant / available prediction networks
+    # "phenotype" or "disease" networks are available for use
+        
+    # Format filenames and paths for fdr table
+    sp_name = ids_to_name[sp_id]
+    nformatted = ids_to_name[sp_id].replace("-", "_")
+    res_name = "{}_{}_results".format(nformatted, input_args.prediction_network)
+    res_dir = os.path.join(input_args.project_dir, "phenologs_results", res_name)
+    fdr_path = os.path.join(res_dir, "{}_fdr_table.tsv".format(sp_name))
+    
+    
+    # Check if necessary fdr table exists and gather remaining filepaths necessary
+    if os.path.isdir(res_dir) and os.path.isfile(fdr_path):
+
+        # Our species specific table filepaths from initial steps of pipeline
+        p2o_path = os.path.join(species_data_dir, "{}_{}_to_ortholog.pkl".format(sp_name, input_args.prediction_network))
+        g2o_path = os.path.join(species_data_dir, "{}_gene_to_ortholog.tsv".format(sp_name))
+        g2p_path = os.path.join(species_data_dir, "{}_gene_to_{}.tsv".format(sp_name, input_args.prediction_network))
+        
+        # Pooled phenolog file name (significance cutoff included in name)
+        sig_phenologs_outname = "{}_pooled_phenologs_fdr{}.tsv".format(sp_name, input_args.fdr)
+        sig_phenologs_outpath = os.path.join(res_dir, sig_phenologs_outname)
+        
+        
+        # Generate dictionary to hold our filepaths for easy processing downstream
+        sp_file_info = {"project_dir":input_args.project_dir,
+                        "results_dir":res_dir,
+                        "taxon_id":input_args.taxon_id,
+                        
+                        "prediction_network":input_args.prediction_network,
+                        "fdr_path":fdr_path,
+                        "fdr":input_args.fdr,
+                        "kneighbs":input_args.kneighbs,
+                        "rank_metric":input_args.rank_metric,
+                        "sig_phenologs_path":sig_phenologs_outpath,
+                        
+                        "phen_to_orth_path":p2o_path,
+                        "gene_to_orth_path":g2o_path,
+                        "gene_to_phen_path":g2p_path,
+                        "species_name":sp_name} # Note, phen_path can be disease or phenoptype (but phen is the general programmtic name)
+        
+    return sp_file_info
 
 
 # For initial phenologs comparison / distance calculations
@@ -1042,7 +1128,8 @@ class OrthologToPhenotypeCalculations(BaseModel):
                                                             self.phen_to_orth_path))
 
         # Build "matrix" linking each ortholog (protein family in this case) to the avialable set of phenotypes
-        o2p_dists = {g:{p:1. for p in p2o.keys()} for g in unique_orths}
+        #o2p_dists = {g:{p:1. for p in p2o.keys()} for g in unique_orths}
+        o2p_dists = {g:{} for g in unique_orths} 
 
         return o2p_dists
     
@@ -1069,32 +1156,39 @@ class OrthologToPhenotypeCalculations(BaseModel):
             species_data.update({spname:p2o})
             print("- {} read into memory...".format(fname))
 
+        # Give a warning if nothing is found...
+        if len(species_data) == 0:
+            print("- Error, no relevant {}_to_ortholog.pkl files found in {}".format(prediction_network, species_data_dir))
 
         return species_data
     
-    
-    def compute_ortholog_phenotype_distances(self, sig_phens_path):
-        
-        # FDR tsv table to dictionary lookup {(species a, species b, fdr):pvalue, ...} 
-        fdr_lookup = load_fdr_table_to_lookup(self.fdr_path)
 
-        # Read in significant phenologs table (presumably pooled from cross species data, but can be anything)
-        if sig_phens_path.endswith(".gz"):
-            sig_phenologs_df = pd.read_csv(sig_phens_path, sep='\t', compression="gzip")
-        else:
-            sig_phenologs_df = pd.read_csv(sig_phens_path, sep='\t')
+    def compute_ortholog_phenotype_distances(self, sig_phens_path: Optional[str] = None):
+        
+        allowed_dists = {"hg":'hyper_geometric', "nb":"naive_bayes"}
+        if self.rank_metric not in allowed_dists:
+            print("- ERROR, hg or nb are allowed for rank_metric argument not {}".format(self.rank_metric))
+            sys.exit()
+
+
+        # Load all species phenotype-->ortholog files
+        p2o_species = self.build_species_phenotype_to_orths_data("phenotype")
 
         # Compute gene-->phenotype rankings ###
         # Precomputes "gene" to "phenotype" dictionary {gene:{phenotype:distance}}, that we can fill in later
         # Equivilant to adjacency matrix, but in dictionary form...
         o2p_dists = self.build_ortholog_to_phenotype_data()
 
-        # Loads "prediction" species relevent network that we want predictions for (phenotype or disease)
-        sp_p2o = self.build_species_phenotype_to_orths_data(self.prediction_network)
-                                                       
+        # Read in significant phenologs table (presumably pooled from cross species data, but can be anything)
+        # Can pass in phenolog file here to get all filepaths from base level config,
+        # or default is to use the filepath that is passed when initializing the object
+        if not sig_phens_path:
+            sig_phens_path = self.sig_phenologs_path
 
-        # Load all species phenotype-->ortholog files
-        p2o_species = self.build_species_phenotype_to_orths_data("phenotype")
+        if sig_phens_path.endswith(".gz"):
+            sig_phenologs_df = pd.read_csv(sig_phens_path, sep='\t', compression="gzip")
+        else:
+            sig_phenologs_df = pd.read_csv(sig_phens_path, sep='\t')
 
         # Build "k-nearest neighbor" data structure for each "phenotype" we want to assign gene rankings to
         # First, map row indices to each phenotype
@@ -1109,7 +1203,6 @@ class OrthologToPhenotypeCalculations(BaseModel):
                 p2_phens.update({phen_id:[]})
             p2_phens[phen_id].append(ind)
             ind += 1
-        
         
         # Now make mini dataframes for each "phenotype" identifier and sort by best "distance" 
         # for whichever metric is chosen
@@ -1167,9 +1260,153 @@ class OrthologToPhenotypeCalculations(BaseModel):
             for gorth in guilty_orths:
                 if gorth not in o2p_dists: # Not a common ortholog between the two species so we can't make a statement
                     continue
+                
+                # Fill in data as we need to
+                if k not in o2p_dists[gorth]:
+                    if self.rank_metric == "nb": # Naive bayes scheme
+                        o2p_dists[gorth].update({k:prob_val_naiv_bayes})
+                   
+                    elif self.rank_metric == "hg": # Hypergeometric scheme
 
-                o2p_dists[gorth][k] = prob_val_naiv_bayes
+                        # TO DO: Currently, if 100 or more neighbors are used in the calculation, the pvalues get rounded to zero
+                        # Because we are ranking data, we can divide by a factor of 10 so our rankings don't collapse 
+                        # Is this the best way to do this other than altering the methodology? 
+                        # It seems to perform better than the naive bayes, but improvements could be made
+                        #hgpval = float(hypergeom.pmf(hg_c, hg_N, hg_m, hg_n)
+                        if self.kneighbs >= 100:
+                            res_val = float(hypergeom.pmf(int(hg_c/10.), 
+                                                          int(hg_N/10.), 
+                                                          int(hg_m/10.), 
+                                                          int(hg_n/10.)))
+                        else:
+                            res_val = float(hypergeom.pmf(hg_c, hg_N, hg_m, hg_n))
+                        
+                        o2p_dists[gorth].update({k:res_val})
+
+                #o2p_dists[gorth][k] = prob_val_naiv_bayes
                 #o2p_dists[gorth][k] = float(hypergeom.pmf(hg_c, hg_N, hg_m, hg_n))
         
-        return o2p_dists
+        # Write out data here (current is .pkl dictionary, tor read in later, but might be nice to have
+        # more human readable form... leave xyz out strategy also produces a lot of data so need small file sizes)
+        sgpp = Path(sig_phens_path)
+        n1, n2 = sgpp.name.split("_pooled_phenologs_") # Splits our filename into two parts we can combine
+        outfname = "{}_ortholog_to_{}_{}kneighbs_{}_{}.pkl".format(n1, 
+                                                                self.prediction_network, 
+                                                                self.kneighbs, 
+                                                                self.rank_metric,
+                                                                n2.split(".tsv")[0])
+        outfpath = os.path.join(sgpp.parent, outfname)
+        pickle.dump(o2p_dists, open(outfpath, 'wb'))
+
+        #return o2p_dists
+        #print(format(sum([len(v) for k,v in o2p_dists.items()]), ','), sig_phens_path)
+        ##collapsed_d{orth_id:{phen_id:dist_val for phen_id,dist_val  in op_dists[orth_id].items() if dist_val < 1.} for orth_id in op_dists}
+        return
+    
+
+    ### Experimental...
+    def batch_compute_ortholog_phenotype_distances(self, sig_phens_paths: list):
         
+        #####################################################
+        ### Load as much information up front as possible ###
+
+        # FDR tsv table to dictionary lookup {(species a, species b, fdr):pvalue, ...} 
+        fdr_lookup = load_fdr_table_to_lookup(self.fdr_path)
+
+        # Loads "prediction" species relevent network that we want predictions for (phenotype or disease)
+        sp_p2o = self.build_species_phenotype_to_orths_data(self.prediction_network)
+                                                       
+        # Load all species phenotype-->ortholog files
+        p2o_species = self.build_species_phenotype_to_orths_data("phenotype")
+
+        ##################################################
+        ### Compute results for each filepath provided ###
+
+        for sig_phens_path in sig_phens_paths:
+            if sig_phens_path.endswith(".gz"):
+                sig_phenologs_df = pd.read_csv(sig_phens_path, sep='\t', compression="gzip")
+            else:
+                sig_phenologs_df = pd.read_csv(sig_phens_path, sep='\t')
+            
+            # Compute gene-->phenotype rankings ###
+            # Precomputes "gene" to "phenotype" dictionary {gene:{phenotype:distance}}, that we can fill in later
+            # Equivilant to adjacency matrix, but in dictionary form...
+            o2p_dists = self.build_ortholog_to_phenotype_data()
+
+            # Build "k-nearest neighbor" data structure for each "phenotype" we want to assign gene rankings to
+            # First, map row indices to each phenotype
+            ind = 0
+            p2_phens = {}
+
+            #Species A Phenotype ID  Species B Phenotype ID  Ortholog Count A        Ortholog Count B        Overlap Count   Common Ortholog Count   hg_pval Species A Phenotype Name        Species B Phenotype Name             X Species Comparison
+            for phen_id, phen_dist_val in zip(list(sig_phenologs_df["Species A Phenotype ID"]), 
+                                              list(sig_phenologs_df["hg_pval"])):
+
+                if phen_id not in p2_phens:
+                    p2_phens.update({phen_id:[]})
+                p2_phens[phen_id].append(ind)
+                ind += 1
+            
+            
+            # Now make mini dataframes for each "phenotype" identifier and sort by best "distance" 
+            # for whichever metric is chosen
+            zero_sig_phens = {}
+            for k in p2_phens:
+                p2_phens[k] = copy.copy(sig_phenologs_df.iloc[p2_phens[k]])
+                p2_phens[k] = p2_phens[k].sort_values(by="hg_pval")
+
+                # Ensure data is of proper type for calculations
+                p2_phens[k]["Overlap Count"] = p2_phens[k]["Overlap Count"].astype(float)
+                p2_phens[k]["Ortholog Count B"] = p2_phens[k]["Ortholog Count B"].astype(float)
+
+                # Now compute from our subsetted data, the cumulitive probability from 
+                # "naive bayes" method, hg method?, or other?
+                knear = 1
+                prob_val_naiv_bayes = 1.
+                hg_c, hg_N, hg_m, hg_n = 0, 0, 0, 0
+
+                guilty_orths = set()
+                for dist_val, overlap_val, comm_val, ortho_a_val, ortho_b_val, phen_id, sp_comp in zip(p2_phens[k]["hg_pval"], 
+                                                                                                    p2_phens[k]["Overlap Count"], 
+                                                                                                    p2_phens[k]["Common Ortholog Count"],
+                                                                                                    p2_phens[k]["Ortholog Count A"],
+                                                                                                    p2_phens[k]["Ortholog Count B"],
+                                                                                                    p2_phens[k]["Species B Phenotype ID"],
+                                                                                                    p2_phens[k]["X Species Comparison"]):
+
+                    # Compute probability via "naive bayes" method
+                    prob_val_naiv_bayes *= ( 1. - ((overlap_val/ortho_b_val)*(1. - dist_val)) )
+
+                    # Compute probability via second round of hyper geometric...
+                    hg_c += overlap_val
+                    hg_N += comm_val
+                    hg_m += ortho_b_val
+                    hg_n += ortho_a_val
+
+
+                    # Keep track of "implicated" genes/orthologs by leveraging lookup tables made earlier
+                    spa_name, spb_name = sp_comp.split(",")
+                    guilty_orths = guilty_orths | p2o_species[spb_name][phen_id]
+                    knear += 1
+
+                    if knear > self.kneighbs:
+                        break
+
+                # Note, for naive bayes method... we are computing the probability of at least one association NOT occuring 
+                # within the top knearest neighbors. Then all gene orthologs associated get weighted equally  
+
+                # Edge case for no significant orthologs associated with phenotype
+                if len(guilty_orths) == 0:
+                    zero_sig_phens.update({k:''})
+                    continue
+
+                # Now fill in gene-phenotype "matrix"
+                for gorth in guilty_orths:
+                    if gorth not in o2p_dists: # Not a common ortholog between the two species so we can't make a statement
+                        continue
+
+                    o2p_dists[gorth][k] = prob_val_naiv_bayes
+                    #o2p_dists[gorth][k] = float(hypergeom.pmf(hg_c, hg_N, hg_m, hg_n))
+            
+            #return o2p_dists
+        return

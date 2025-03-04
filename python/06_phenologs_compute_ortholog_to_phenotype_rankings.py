@@ -142,4 +142,4 @@ if __name__ == '__main__':
                                           compress=False)
 
     # Compute gene-->phenotype rank/distance matrix 
-    ddd = OrthologToPhenotypeCalculations.model_validate(sp_config).compute_ortholog_phenotype_distances(sp_config["sig_phenologs_path"])
+    ddd = OrthologToPhenotypeCalculations.model_validate(sp_config).compute_ortholog_phenotype_distances()
