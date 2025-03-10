@@ -197,7 +197,7 @@ if __name__ == '__main__':
         p2o[k] = set(p2o[k]) # Collapse from list to set so we can lookup easier (a)
     
     # Now trim back the set of orthologs to only those that have at least one connection to a disease/phenotype
-    relative_orthologs = {phen:'' for orth_set in p2o.values() for phen in orth_set if phen in global_orths}
+    relative_orthologs = {oid:'' for orth_set in p2o.values() for oid in orth_set if oid in global_orths}
     print("- {} orthologs found with >= 1 phenotype assocation and found within global common ortholog set".format(format(len(relative_orthologs), ',')))
 
     # Make base level xvalidate "results" directory 

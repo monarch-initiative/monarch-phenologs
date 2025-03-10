@@ -6,10 +6,11 @@ import numpy as np
 import networkx as nx
 import pickle
 from collections import Counter
+from pronto import Ontology
 
 
 # General function to read an .obo ontontolgy file into memory using pronto to gather all terms that do not fall under a particular parent class
-def read_ontology_to_accepted_terms(ontology_obo_file, filter_term="HP:0000118", include=True):
+def read_ontology_to_exclusion_terms(ontology_obo_file, umbrella_term="HP:0000118", include=False):
     
     # Read ontology file into memory
     onto = Ontology(ontology_obo_file)
@@ -20,18 +21,22 @@ def read_ontology_to_accepted_terms(ontology_obo_file, filter_term="HP:0000118",
         
         # Gather ancestor terms and update our filtering datastructure accordingly
         parent_terms = {ancestor.id: ancestor.name for ancestor in term.superclasses()}
-        if filter_term not in parent_terms:
-            exclude_terms.update({term.id:term.name})
+        if include == False:
+            if umbrella_term not in parent_terms:
+                exclude_terms.update({term.id:term.name})
 
+        elif include == True:
+            if umbrella_term in parent_terms:
+                exclude_terms.update({term.id:term.name})
     
-    print("- Terms from ontology found that do not belong to parent class {} {}/{}".format(filter_term, 
+    print("- Terms from ontology found that do not belong to parent class {} {}/{}".format(umbrella_term,
                                                                                            format(len(exclude_terms)), 
                                                                                            format(term_count)))
     return exclude_terms
 
 
 # Step 1)
-def initiate_graph_with_nodes(nodes_filepath, node_colname="id", node_type_colname="category"):
+def initiate_graph_with_nodes(nodes_filepath, node_colname="id", node_type_colname="category", filter_nodes={}):
     
     # Our valid node types here
     valid_node_types = {"biolink:Gene":'',
@@ -66,6 +71,10 @@ def initiate_graph_with_nodes(nodes_filepath, node_colname="id", node_type_colna
         
         # Filter for relevant node types
         if node_cat not in valid_node_types:
+            continue
+
+        # Check if our node_id is part of an input set that we DO NOT want to include
+        if node_id in filter_nodes:
             continue
             
         # Check for repeate nodes
@@ -438,6 +447,13 @@ if __name__ == '__main__':
     ###############
     ### PROGRAM ###
 
+    # List out our ontology specific filtering criteria in the form of parent nodes/classes that each node from an ontology
+    # must be under. MONDO we want everything under human disease parent class  "MONDO:0700096"
+    onto_parent_classes = {"MONDO:0700096":os.path.join(args.project_dir, "monarch_kg", "mondo.obo"), ### human disease (we WANT these terms)
+                           "HP:0000118":os.path.join(args.project_dir, "monarch_kg", "hp.obo"),       ### Phenotypic abnormality (we WANT these terms)
+                           "MP:0002873":os.path.join(args.project_dir, "monarch_kg", "mp.obo"),       ### normal phenotype (we do NOT want these terms)
+                           "DDPHENO:0000142":os.path.join(args.project_dir, "monarch_kg", "ddpheno.obo")} ### wild type (we do NOT want these terms)
+
     # Input files
     nodes_file = os.path.join(args.project_dir, "monarch_kg", "monarch-kg_nodes.tsv")
     edges_file = os.path.join(args.project_dir, "monarch_kg", "monarch-kg_edges.tsv")
@@ -446,8 +462,26 @@ if __name__ == '__main__':
     species_data_dir = os.path.join(args.project_dir, "species_data")
     species_info_table_file = os.path.join(species_data_dir, "species_information_table.tsv")
 
+    # Any mondo ontology term not beloning to a sepcific parent class (filter_term) will be output
+    # Here, we only want MONDO human disease terms (not characteristics or anything else)
+    node_ids_to_exclude = {}
+    for onto_term, onto_fpath in onto_parent_classes.items():
+
+        # Add terms to exclusion dict that are under a particular parent term
+        if onto_fpath.endswith("mp.obo") or onto_fpath.endswith("ddpheno.obo"):
+            node_ids_to_exclude.update(read_ontology_to_exclusion_terms(onto_fpath, umbrella_term=onto_term, include=True))
+        
+        # Add terms to exlusion dict that are NOT under a particular parent term
+        else:
+            node_ids_to_exclude.update(read_ontology_to_exclusion_terms(onto_fpath, umbrella_term=onto_term))
+
+
     # Run data extraction pipeline (create nx graph by selecting for specific node and edge types)
-    graph, taxon_names = initiate_graph_with_nodes(nodes_file, node_colname="id", node_type_colname="category")
+    graph, taxon_names = initiate_graph_with_nodes(nodes_filepath=nodes_file, 
+                                                   node_colname="id", 
+                                                   node_type_colname="category", 
+                                                   filter_nodes=node_ids_to_exclude)
+
     graph = fill_in_graph_with_edges(edges_file, graph)
     taxon_stats = compute_association_tables(graph, species_data_dir)
     generate_common_orthologs_files(tables_dir=species_data_dir, taxon_stats=taxon_stats)

@@ -436,8 +436,18 @@ def pool_phenologs_data(results_dir, fdr_lookup_table, sig_outpath, fdr_level:.9
         
         # Otherwise, add our filtered phenologs to the larger pool
         else:
-            sig_phenologs_df = pd.concat([sig_phenologs_df, phenologs_df])
+            sig_phenologs_df = pd.concat([sig_phenologs_df, copy.copy(phenologs_df)])
         
+
+        # Write individual species comparison significant phenologs files
+        phenologs_df = phenologs_df.sort_values(by="hg_pval")
+        # Default is no gzip
+        if compress == False:
+            phenologs_df.to_csv(sig_outpath, sep='\t', index=False)
+        else:
+            phenologs_df.to_csv(sig_outpath, sep='\t', index=False, compression='gzip')
+
+
         print("- Loaded {}/{} phenolgs from {} x {} passing with pvalue <= {}".format(format(filtered_phenolog_count, ','),
                                                                                       format(org_phenolog_count, ','),
                                                                                       spa, 
@@ -503,7 +513,26 @@ def initiate_ortholog_to_phenotype_ranking_calculation_config(input_args):
     else:
         print('- ERROR, relevant taxon id must be supplied for taxon_id argument. Exiting...')
         sys.exit()
-    
+
+
+    # Argument for including only select species during xvalidation ortholog-->phenotype distance calculations
+    # (i.e. so we can observe how each species contributes to the predictions
+    select_taxon_ids = {}
+    try:
+        for tx_id in input_args.xtaxon_ids.split(','):
+
+            # Add taxon-name... For example 9606-->Homo-sapiens
+            if str(tx_id) in ids_to_name or (tx_id in ids_to_name):
+                txname = ids_to_name[tx_id]
+                select_taxon_ids.update({txname:''})
+            else:
+                print('- ERROR, relevant taxon id must be supplied for xtaxon_ids argument. Exiting...')
+                sys.exit()
+
+    # No xtaxon_id argument supplied so we don't do anything
+    except:
+        dummyvar = 1
+
     # Now we need to filter our comparison species list by relevant / available prediction networks
     # "phenotype" or "disease" networks are available for use
         
@@ -545,6 +574,9 @@ def initiate_ortholog_to_phenotype_ranking_calculation_config(input_args):
                         "gene_to_phen_path":g2p_path,
                         "species_name":sp_name} # Note, phen_path can be disease or phenoptype (but phen is the general programmtic name)
         
+        # If we supplied xtaxon_ids argument, we add that information here
+        sp_file_info.update({"xtaxon_ids":select_taxon_ids})
+
     return sp_file_info
 
 
@@ -1115,6 +1147,10 @@ class OrthologToPhenotypeCalculations(BaseModel):
     gene_to_orth_path:str
     gene_to_phen_path:str
     species_name:str
+
+    # For filtering out undesired species
+    xtaxon_ids: Optional[Dict] = None
+    make_new_results_dir: Optional[bool] = False
     
     
     def build_ortholog_to_phenotype_data(self):
@@ -1176,7 +1212,8 @@ class OrthologToPhenotypeCalculations(BaseModel):
 
         # Compute gene-->phenotype rankings ###
         # Precomputes "gene" to "phenotype" dictionary {gene:{phenotype:distance}}, that we can fill in later
-        # Equivilant to adjacency matrix, but in dictionary form...
+        # Equivilant to adjacency matrix, but in dictionary form where we key each row, and
+        # only generate "column" values as the come up
         o2p_dists = self.build_ortholog_to_phenotype_data()
 
         # Read in significant phenologs table (presumably pooled from cross species data, but can be anything)
@@ -1195,9 +1232,19 @@ class OrthologToPhenotypeCalculations(BaseModel):
         ind = 0
         p2_phens = {}
 
+        xspecies_filtered = 0
         #Species A Phenotype ID  Species B Phenotype ID  Ortholog Count A        Ortholog Count B        Overlap Count   Common Ortholog Count   hg_pval Species A Phenotype Name        Species B Phenotype Name             X Species Comparison
-        for phen_id, phen_dist_val in zip(list(sig_phenologs_df["Species A Phenotype ID"]), 
-                                          list(sig_phenologs_df["hg_pval"])):
+        for phen_id, phen_dist_val, xcomp_name in zip(list(sig_phenologs_df["Species A Phenotype ID"]), 
+                                                      list(sig_phenologs_df["hg_pval"]),
+                                                      list(sig_phenologs_df["X Species Comparison"])):
+
+            # Can filter out xyz species id here for comparisons of how each species affects performance
+            spaid, spbid = xcomp_name.split(",")
+            if self.xtaxon_ids:
+                if spbid not in self.xtaxon_ids:
+                    ind += 1 # Still need to update index even though we don't pull this data in
+                    xspecies_filtered += 1
+                    continue
 
             if phen_id not in p2_phens:
                 p2_phens.update({phen_id:[]})
@@ -1290,13 +1337,36 @@ class OrthologToPhenotypeCalculations(BaseModel):
         # more human readable form... leave xyz out strategy also produces a lot of data so need small file sizes)
         sgpp = Path(sig_phens_path)
         n1, n2 = sgpp.name.split("_pooled_phenologs_") # Splits our filename into two parts we can combine
-        outfname = "{}_ortholog_to_{}_{}kneighbs_{}_{}.pkl".format(n1, 
-                                                                self.prediction_network, 
-                                                                self.kneighbs, 
-                                                                self.rank_metric,
-                                                                n2.split(".tsv")[0])
-        outfpath = os.path.join(sgpp.parent, outfname)
-        pickle.dump(o2p_dists, open(outfpath, 'wb'))
+        
+        # We need to deal with our xtaxons ids here so we can delineate output data
+        if self.xtaxon_ids:
+            xtids_formatted = "_".join(list(self.xtaxon_ids.keys()))
+            outdir_name = "ortholog_to_{}_{}_{}kneighbs_{}_{}".format(self.prediction_network, 
+                                                                      xtids_formatted, 
+                                                                      self.kneighbs, 
+                                                                      self.rank_metric,
+                                                                      self.fdr)
+
+        else:
+            outdir_name = "ortholog_to_{}_{}kneighbs_{}_{}".format(self.prediction_network, 
+                                                                   self.kneighbs, 
+                                                                   self.rank_metric,
+                                                                   self.fdr)
+
+
+        # Write data to parent results directory (default mode)
+        if self.make_new_results_dir == False:
+            outfile_path = os.path.join(sgpp.parent, "{}_{}.pkl".format(n1, outdir_name))
+        
+        # Otherwise, make new directory within parent resutls directory
+        elif self.make_new_results_dir == True:
+            outdir_path = os.path.join(sgpp.parent, outdir_name)
+            outfile_path = os.path.join(outdir_path, "{}_{}.pkl".format(n1, outdir_name))
+            if not os.path.isdir(outdir_path):
+                os.makedirs(outdir_path, exist_ok=True)
+        
+        # Write data to designated path/directory
+        pickle.dump(o2p_dists, open(outfile_path, 'wb'))
 
         #return o2p_dists
         #print(format(sum([len(v) for k,v in o2p_dists.items()]), ','), sig_phens_path)

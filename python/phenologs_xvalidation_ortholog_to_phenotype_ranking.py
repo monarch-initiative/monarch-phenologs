@@ -37,6 +37,7 @@ if __name__ == '__main__':
         parser.add_argument("-fdr", help="One minus the false discovery rate.. .95 is default", required=True, type=float, default=.95)
         parser.add_argument("-kneighbs", help="k-nearest phenologs to use when combing across multiple phenologs", required=True, type=int, default=10)
         parser.add_argument("-rank_metric", help="Which metric to use for combining knearest neighbor... default is naive_bayes", required=False, default='naive_bayes')
+        parser.add_argument("-xtaxon_ids", help='Species specific taxon id(s) separated by a comma. For example 7955 would select only zebrafish phenologs. 7955,10090 would select zebrafhish and mouse phenologs', required=False, type=str)
         return parser.parse_args()
 
     args = parse_input_command()
@@ -78,6 +79,7 @@ if __name__ == '__main__':
 
         # Need to alter the results file path that it has by default so we can process it parallel
         new_config["sig_phenologs_path"] = res_paths[i]
+        new_config["make_new_results_dir"] = True
         div_process_objs.append(OrthologToPhenotypeCalculations.model_validate(new_config))
     
     # Compute gene-->phenotype rank/distance matrix 
