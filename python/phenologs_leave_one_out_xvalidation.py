@@ -148,19 +148,7 @@ if __name__ == '__main__':
     ################
 	## ARG PARSE ###
     def parse_input_command():
-        parser = argparse.ArgumentParser(description='OLD DOCUMENTATION NEEDS FIXING \
-                                                     -p argument OR -i & -o arguments are required. Data will either be pulled \
-                                                      from an assumed directory / project structure, or the input and output \
-                                                      directory paths can be supplied individually. This script will gather \
-                                                      randomized trial results (on a per trial basis across all species \
-                                                      and computes a false discovery rate for different significance cutoffs. \
-                                                      In other words, all files pertaining to trial number 1 will have pvalues \
-                                                      pooled into a single distribution, and the pvalue(s) == top5%, for example, \
-                                                      would be taken as a single fdr value (we can do this for multiple cutoffs). \
-                                                      So for N trials we will have N fdr values that we can derive our \
-                                                      pvalue cutoff for the "final phenologs calculation". This information is \
-                                                      ultimately collated into a table for ease of use downstream.')
-
+        parser = argparse.ArgumentParser(description='Leave one gene out cross validation for phenologs calculations')
         parser.add_argument("-p","--project_dir", help="Top most project directory", required=False, type=str, default=None)
         parser.add_argument("-c", "--cpu_cores", help="Number of cpu cores to use. HPC or long runtime is likely required", required=False, type=int, default=1)
         parser.add_argument("-taxon_id", help='Specicies specific taxon id or "all" are allowed', required=True, type=str)
@@ -194,7 +182,7 @@ if __name__ == '__main__':
     # Load our disease/phenotype_to_ortholog data
     p2o = pickle.load(open(sp_config["phen_to_orth_path"], 'rb'))
     for k in p2o:
-        p2o[k] = set(p2o[k]) # Collapse from list to set so we can lookup easier (a)
+        p2o[k] = set(p2o[k]) # Collapse from list to set so we can lookup easier
     
     # Now trim back the set of orthologs to only those that have at least one connection to a disease/phenotype
     relative_orthologs = {oid:'' for orth_set in p2o.values() for oid in orth_set if oid in global_orths}
@@ -231,7 +219,7 @@ if __name__ == '__main__':
         
 
     # Divy up our xvalidate datasets to calculate
-    div_configs = divide_workload(xvalidate_config_sets[:500], num_proc=num_proc)
+    div_configs = divide_workload(xvalidate_config_sets, num_proc=num_proc)
 
     # Setup parallel processing overhead, kick off jobs via asynchronous processing, and retrieve results
     output = mp.Queue()

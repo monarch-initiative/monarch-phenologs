@@ -1303,6 +1303,25 @@ class OrthologToPhenotypeCalculations(BaseModel):
                 zero_sig_phens.update({k:''})
                 continue
 
+
+            
+            # Precompute / determine what value we need to update
+            # TO DO: Currently, if 100 or more neighbors are used in the calculation, the pvalues get rounded to zero
+            # Because we are ranking data, we can divide by a factor of 10 so our rankings don't collapse 
+            # Is this the best way to do this other than altering the methodology? 
+            # It seems to perform better than the naive bayes for larger k but worse for very small k...
+            # but improvements could be made
+            if self.rank_metric == "nb": # Naive bayes scheme
+                metric_val = prob_val_naiv_bayes
+            elif self.rank_metric == "hg": # Hypergeometric scheme
+                if self.kneighbs >= 100:
+                    metric_val = float(hypergeom.pmf(int(hg_c/10.), 
+                                                     int(hg_N/10.), 
+                                                     int(hg_m/10.), 
+                                                     int(hg_n/10.)))
+                else:
+                    metric_val = float(hypergeom.pmf(hg_c, hg_N, hg_m, hg_n))
+            
             # Now fill in gene-phenotype "matrix"
             for gorth in guilty_orths:
                 if gorth not in o2p_dists: # Not a common ortholog between the two species so we can't make a statement
@@ -1310,28 +1329,7 @@ class OrthologToPhenotypeCalculations(BaseModel):
                 
                 # Fill in data as we need to
                 if k not in o2p_dists[gorth]:
-                    if self.rank_metric == "nb": # Naive bayes scheme
-                        o2p_dists[gorth].update({k:prob_val_naiv_bayes})
-                   
-                    elif self.rank_metric == "hg": # Hypergeometric scheme
-
-                        # TO DO: Currently, if 100 or more neighbors are used in the calculation, the pvalues get rounded to zero
-                        # Because we are ranking data, we can divide by a factor of 10 so our rankings don't collapse 
-                        # Is this the best way to do this other than altering the methodology? 
-                        # It seems to perform better than the naive bayes, but improvements could be made
-                        #hgpval = float(hypergeom.pmf(hg_c, hg_N, hg_m, hg_n)
-                        if self.kneighbs >= 100:
-                            res_val = float(hypergeom.pmf(int(hg_c/10.), 
-                                                          int(hg_N/10.), 
-                                                          int(hg_m/10.), 
-                                                          int(hg_n/10.)))
-                        else:
-                            res_val = float(hypergeom.pmf(hg_c, hg_N, hg_m, hg_n))
-                        
-                        o2p_dists[gorth].update({k:res_val})
-
-                #o2p_dists[gorth][k] = prob_val_naiv_bayes
-                #o2p_dists[gorth][k] = float(hypergeom.pmf(hg_c, hg_N, hg_m, hg_n))
+                    o2p_dists[gorth].update({k:metric_val})
         
         # Write out data here (current is .pkl dictionary, tor read in later, but might be nice to have
         # more human readable form... leave xyz out strategy also produces a lot of data so need small file sizes)
