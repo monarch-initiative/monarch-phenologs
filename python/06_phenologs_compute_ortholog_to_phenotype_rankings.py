@@ -135,8 +135,9 @@ if __name__ == '__main__':
     fdr_lookup = load_fdr_table_to_lookup(sp_config["fdr_path"])
 
     # Check if pooled phenologs file exists or not
-    ####if os.path.isfile(sp_config["sig_phenologs_path"]):
-    ####    sig_phenolog_df = pd.read_csv(sp_config["sig_phenologs_path"])
+    if os.path.isfile(sp_config["sig_phenologs_path"]):
+        print("- Pooled phenologs file already exists at {}. Read into memory instead of overwiting...".format(sp_config["sig_phenologs_path"]))
+        sig_phenolog_df = pd.read_csv(sp_config["sig_phenologs_path"])
 
     # Pool significant phenologs and write to file
     sig_phenolog_df = pool_phenologs_data(sp_config["results_dir"], 
