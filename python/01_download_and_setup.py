@@ -61,7 +61,6 @@ if __name__ == '__main__':
     project_dirs = ["monarch_kg",
                     "species_data",
                     "random_trials", 
-                    "random_trials_fdr", 
                     "phenologs_results",
                     "leave_one_out_xvalidation"]
 
