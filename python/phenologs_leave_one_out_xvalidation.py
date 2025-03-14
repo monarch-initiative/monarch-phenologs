@@ -204,7 +204,7 @@ if __name__ == '__main__':
     # Create set of configs for each ortholog we need to remove from our dataset by 
     # creating a copy, and then altering the copy's relevant key,value pairs
     xvalidate_config_sets = []
-    for orth_id in relative_orthologs[0:20]:
+    for orth_id in relative_orthologs:
         
         # This directory will ultimitaly be made, then deleted by the same process
         process_dir = os.path.join(xvalid_dir, orth_id)
@@ -222,7 +222,7 @@ if __name__ == '__main__':
         
 
     # Divy up our xvalidate datasets to calculate
-    div_configs = divide_workload(xvalidate_config_sets, num_proc=num_proc)
+    div_configs = divide_workload(xvalidate_config_sets[0:20], num_proc=num_proc)
 
     # Setup parallel processing overhead, kick off jobs via asynchronous processing, and retrieve results
     output = mp.Queue()
