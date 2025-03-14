@@ -183,9 +183,12 @@ if __name__ == '__main__':
     p2o = pickle.load(open(sp_config["phen_to_orth_path"], 'rb'))
     for k in p2o:
         p2o[k] = set(p2o[k]) # Collapse from list to set so we can lookup easier
-    
+
     # Now trim back the set of orthologs to only those that have at least one connection to a disease/phenotype
-    relative_orthologs = {oid:'' for orth_set in p2o.values() for oid in orth_set if oid in global_orths}
+    # We can only make statements about phenotypes that have more that one neighboring gene/ortholog
+    # Therefore, if an ortholog's only connection is to one of these types of phenotypes it will also be removed.
+    # This is ideal, because it means we do not have to perform a leave one out validation on these orthologs.
+    relative_orthologs = {oid:'' for orth_set in p2o.values() for oid in orth_set if (oid in global_orths) and (len(orth_set) >= 2)}
     print("- {} orthologs found with >= 1 phenotype assocation and found within global common ortholog set".format(format(len(relative_orthologs), ',')))
 
     # Make base level xvalidate "results" directory 
@@ -201,7 +204,7 @@ if __name__ == '__main__':
     # Create set of configs for each ortholog we need to remove from our dataset by 
     # creating a copy, and then altering the copy's relevant key,value pairs
     xvalidate_config_sets = []
-    for orth_id in relative_orthologs:
+    for orth_id in relative_orthologs[0:20]:
         
         # This directory will ultimitaly be made, then deleted by the same process
         process_dir = os.path.join(xvalid_dir, orth_id)
