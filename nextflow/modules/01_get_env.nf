@@ -4,9 +4,6 @@ process get_phenologs_env {
     tag "get_phenologs_env"
     publishDir "./", mode: 'copy'
 
-    cpus 1
-    memory '4GB'
-
     output:
     path "monarch-phenologs"
 

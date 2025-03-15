@@ -4,9 +4,6 @@ process compute_fdr_data {
     tag 'compute_fdr_data'
     publishDir "./", mode: 'copy'
 
-    cpus "${params.cpu_cores}"
-    memory '64GB'
-
     input:
     path phenologs_env_dir
     path phenologs_data_dir

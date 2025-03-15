@@ -4,9 +4,6 @@ process leave_one_out_ortholog_rank_calcs {
     tag 'leave_one_out_calculations'
     publishDir "./", mode: 'copy'
 
-    cpus 1
-    memory '16GB'
-
     input:
     path phenologs_env_dir
     path phenologs_data_dir

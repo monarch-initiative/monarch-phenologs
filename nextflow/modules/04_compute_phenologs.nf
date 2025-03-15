@@ -3,8 +3,7 @@
 process compute_real_phenolog_data {
     tag 'compute_phenolog_data'
     publishDir "./", mode: 'copy'
-    cpus 10
-    memory '64GB'
+    
     input:
     path phenologs_env_dir
     path phenologs_data_dir
