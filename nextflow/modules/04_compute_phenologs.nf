@@ -11,13 +11,13 @@ process compute_real_phenolog_data {
 
     output:
     path "phenologs-from-kg", emit: project_path
-    val "done", emit: comp_sig_real
+    val "done", emit: real_sig
 
     script:
     """
     source ${phenologs_env_dir}/.venv/bin/activate
     python monarch-phenologs/python/04_compute_phenologs.py -p ${phenologs_data_dir} \
-                                                            -c ${params.cpu_cores} \
+                                                            -c ${task.cpus} \
                                                             -taxon_id ${params.taxon_id} \
                                                             -prd ${params.prd}
     """

@@ -11,8 +11,8 @@ include { leave_one_out_ortholog_rank_calcs } from './modules/leave_one_out_rank
 
 
 // Phenologs calculation parameters 
-params.n_random_trials = 2
-params.cpu_cores = 10
+params.n_random_trials = 20
+params.cpu_cores = 10 // Not actuall used (any more... config takes care of this)
 params.taxon_id = 9606
 params.prd = "disease"
 
@@ -45,30 +45,29 @@ workflow {
     // Compute FDR info for significance cut
     compute_fdr_info(get_phenologs_env.out, 
                      get_phenologs_data.out,
-                     compute_fdr_data.out.comp_sig_trials,  // Completion signal for random trials
-                     compute_real_phenolog_data.out.comp_sig_real,
-                     params)  // Completion signal for real phenolog calcs
+                     compute_fdr_data.out.random_sig, 
+                     compute_real_phenolog_data.out.real_sig, // Needs both random and real data calculations to complete
+                     params)
 
     // Compute ortholog to phenotype rankings
     compute_ortholog_rank_calcs(get_phenologs_env.out, 
                                 get_phenologs_data.out,
-                                compute_fdr_info.out.comp_sig_fdr,
+                                compute_fdr_info.out.fdr_sig,
                                 params)  // Completion signal for FDR info 
-    
+
     // Leave one out cross validation
     if (params.xvalidate_calc) {
         leave_one_out_calculations(get_phenologs_env.out, 
-                                   get_phenologs_data.out,
-                                   compute_fdr_info.out.comp_sig_fdr,  // Completion signal for FDR info
+                                   compute_fdr_info.out.project_path,
+                                   compute_fdr_info.out.fdr_sig,  // Completion signal for FDR info
                                    params)
-                                   }  
+                                   } 
     
     // Leave one out cross validation assessment
     if (params.xvalidate_rank) {
         leave_one_out_ortholog_rank_calcs(get_phenologs_env.out, 
-                                        get_phenologs_data.out,
-                                        leave_one_out_calculations.out.comp_sig_xval, // Completion signal for xval calcs
-                                        params)
-    }
+                                          leave_one_out_calculations.out.project_path, // Completion signal is xval calcs project path
+                                          params)
+                                          }
 
 }

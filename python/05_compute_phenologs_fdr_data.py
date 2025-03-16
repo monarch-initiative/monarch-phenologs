@@ -16,6 +16,8 @@ from typing import Dict, Optional
 from phenologs_utils import divide_workload
 
 
+
+
 def gather_trial_data(input_dir):
     """
     Grabs all files within the input directory where
@@ -432,61 +434,6 @@ def initiate_phenologs_fdr_fpaths(input_args):
     return res_paths, rand_paths, sp_names
 
 
-# def write_fdr_tables_from_results(fdr_results, trial_table_outpath, fdr_table_outpath):
-#     """
-#     Writes two tables. One for the fdr averages across trials (a single rowed table minus the header),
-#     and another table for fdr values found across all trials (number of rows == N trials run)
-#     """
-    
-#     df_data = {}
-#     df_fdr_data = {}
-#     for k,v in fdr_results.items():
-#         kk = "fdr:{}".format(k)
-#         df_data.update({kk:v})
-#         df_fdr_data.update({kk:[np.average(v)]})
-    
-#     pd.DataFrame(df_data).to_csv(trial_table_outpath, sep='\t', index=False)
-#     pd.DataFrame(df_fdr_data).to_csv(fdr_table_outpath, sep='\t', index=False)
-#     print("- FDR trials table file written to {}".format(trial_table_outpath))
-#     print("- FDR  table file written to {}".format(fdr_table_outpath))
-    
-
-# # EXPERIMENTAL
-# def read_trials_into_mem_parallel(input_dir, num_proc: int = 1):
-#     """
-#     Reads 
-#     """
-
-#     # Deal with - and 0 type edge cases, and instantiate all our objects before running computation
-#     num_proc = max(1, num_proc)
-
-#     # Run pipeline
-#     trial_info, trials = gather_trial_data(input_dir)
-#     print("- Trial data gathered...")
-
-#     # Copy information as many times as cpu cores
-#     div_trial_info = [copy.copy(trial_info) for i in range(0, num_proc)]
-
-#     # Divide trials for parallel
-#     div_trials = divide_workload(trials, num_proc=num_proc)
-
-#     # Setup parallel processing overhead, kick off jobs via asynchronous processing, and retrieve results
-#     output = mp.Queue()
-#     pool = mp.Pool(processes=num_proc)
-#     results = [pool.apply_async(compute_fdrs_by_trial_nums, args=(d, t)) for d, t in zip(div_trials, div_trial_info)]
-#     output = [ p.get() for p in results ]
-
-#     # Merge results from previous step into single data structure
-#     # Each element in the output list is a dictionary {sival:[pval,pval,...], }
-#     merged_data = {}
-#     for p in output:
-#         for k,v in p.items():
-#             if k not in merged_data:
-#                 merged_data.update({k:[]})
-#             merged_data[k] += v
-
-#     return merged_data
-
 
 
 if __name__ == '__main__':
@@ -500,7 +447,6 @@ if __name__ == '__main__':
                                                       SpeciesA, SpeciesB, fdr, pval... for all data is written to _fdr_table.tsv')
 
         parser.add_argument("-p","--project_dir", help="Top most project directory", required=False, type=str, default=None)
-        parser.add_argument("-c", "--cpu_cores", help="Number of cpu cores to use.", required=False, type=int, default=1)
         parser.add_argument("-taxon_id", help='Specicies specific taxon id or "all" are allowed', required=True, type=str)
         parser.add_argument("-prd", "--prediction_network", help="phenotype or disease (which type of network to use for base species comparisons)", required=True, default="phenotype")
         parser.add_argument("-display_figs", help='Option to walkthrough analysis figure by figure in separate windows', required=False, type=bool, default=False)
