@@ -28,46 +28,65 @@ params.xvalidate_rank = false
 
 workflow {
 
+    Channel.value(params.taxon_id).set{ taxon_id }
+    Channel.value(params.prd).set{ prd }
+    Channel.value(params.n_random_trials).set{ n_random_trials }
+    Channel.value(params.fdr).set{ fdr }
+    Channel.value(params.kneighbs).set{ kneighbs }
+    Channel.value(params.rank_metric).set{ rank_metric }
+
     // Get the monarch-phenologs environment
     get_phenologs_env()
-    get_phenologs_data(get_phenologs_env.out)
+    get_phenologs_data(get_phenologs_env.out.env_path)
 
     // Compute random trials
-    compute_fdr_data(get_phenologs_env.out, 
-                     get_phenologs_data.out,
-                     params)
+    compute_fdr_data(get_phenologs_env.out.env_path, 
+                     get_phenologs_data.out.project_path,
+                     taxon_id,
+                     prd,
+                     n_random_trials)
     
     // Compute real phenolog data
-    compute_real_phenolog_data(get_phenologs_env.out, 
-                               get_phenologs_data.out,
-                               params)
-    
+    compute_real_phenolog_data(get_phenologs_env.out.env_path, 
+                               get_phenologs_data.out.project_path,
+                               taxon_id,
+                               prd)
+
     // Compute FDR info for significance cut
-    compute_fdr_info(get_phenologs_env.out, 
-                     get_phenologs_data.out,
-                     compute_fdr_data.out.random_sig, 
-                     compute_real_phenolog_data.out.real_sig, // Needs both random and real data calculations to complete
-                     params)
+    compute_fdr_info(get_phenologs_env.out.env_path, // Needs both random and real data calculations to complete
+                     compute_fdr_data.out.project_path,
+                     compute_fdr_data.out.random_trials_sig,
+                     compute_real_phenolog_data.out.real_sig,
+                     taxon_id,
+                     prd)
 
     // Compute ortholog to phenotype rankings
-    compute_ortholog_rank_calcs(get_phenologs_env.out, 
-                                get_phenologs_data.out,
-                                compute_fdr_info.out.fdr_sig,
-                                params)  // Completion signal for FDR info 
+    compute_ortholog_rank_calcs(get_phenologs_env.out.env_path,
+                                compute_fdr_info.out.project_path, 
+                                taxon_id,
+                                prd,
+                                fdr,
+                                kneighbs,
+                                rank_metric)
 
     // Leave one out cross validation
     if (params.xvalidate_calc) {
-        leave_one_out_calculations(get_phenologs_env.out, 
+        leave_one_out_calculations(get_phenologs_env.out.env_path,
                                    compute_fdr_info.out.project_path,
-                                   compute_fdr_info.out.fdr_sig,  // Completion signal for FDR info
-                                   params)
+                                   taxon_id,
+                                   prd,
+                                   fdr)
                                    } 
-    
-    // Leave one out cross validation assessment
-    if (params.xvalidate_rank) {
-        leave_one_out_ortholog_rank_calcs(get_phenologs_env.out, 
-                                          leave_one_out_calculations.out.project_path, // Completion signal is xval calcs project path
-                                          params)
-                                          }
 
+    // Leave one out cross validation assessment
+    if (params.xvalidate_rank & params.xvalidate_calc) {
+        leave_one_out_ortholog_rank_calcs(get_phenologs_env.out.env_path, 
+                                          leave_one_out_calculations.out.project_path,
+                                          taxon_id,
+                                          prd,
+                                          fdr,
+                                          kneighbs,
+                                          rank_metric)
+                                          }
+                                          
 }

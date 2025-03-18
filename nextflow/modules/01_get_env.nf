@@ -5,7 +5,7 @@ process get_phenologs_env {
     publishDir "./", mode: 'copy'
 
     output:
-    path "monarch-phenologs"
+    path "monarch-phenologs", emit: env_path
 
     script:
     """

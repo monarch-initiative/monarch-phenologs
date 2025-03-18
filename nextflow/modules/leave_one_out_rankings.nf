@@ -7,21 +7,24 @@ process leave_one_out_ortholog_rank_calcs {
     input:
     path phenologs_env_dir
     path phenologs_data_dir
-    val params
+    val taxon_id
+    val prd
+    val fdr
+    val kneighbs
+    val rank_metric
 
     output:
-    path "phenologs-from-kg", emit: project_path
-    val "done", emit: xval_rank_sig
+    path phenologs_data_dir, emit: project_path
 
     script:
     """
     source ${phenologs_env_dir}/.venv/bin/activate
     python monarch-phenologs/python/phenologs_xvalidation_ortholog_to_phenotype_ranking.py -p ${phenologs_data_dir} \
                                                                                            -c ${task.cpus} \
-                                                                                           -taxon_id ${params.taxon_id} \
-                                                                                           -prd ${params.prd} \
-                                                                                           -fdr ${params.fdr} \
-                                                                                           -kneighbs ${params.kneighbs} \
-                                                                                           -rank_metric ${params.rank_metric}
+                                                                                           -taxon_id ${taxon_id} \
+                                                                                           -prd ${prd} \
+                                                                                           -fdr ${fdr} \
+                                                                                           -kneighbs ${kneighbs} \
+                                                                                           -rank_metric ${rank_metric}
     """
 }

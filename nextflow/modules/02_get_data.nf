@@ -8,7 +8,7 @@ process get_phenologs_data {
     path phenologs_env_dir
 
     output:
-    path "phenologs-from-kg"
+    path "phenologs-from-kg", emit: project_path
 
     script:
     """

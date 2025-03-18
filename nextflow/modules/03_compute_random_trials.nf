@@ -7,19 +7,21 @@ process compute_fdr_data {
     input:
     path phenologs_env_dir
     path phenologs_data_dir
-    val params
+    val taxon_id
+    val prd
+    val n_random_trials
 
     output:
-    path "phenologs-from-kg", emit: project_path
-    val "done", emit: random_sig
+    path phenologs_data_dir, emit: project_path
+    val "done", emit: random_trials_sig
 
     script:
     """
     source ${phenologs_env_dir}/.venv/bin/activate
     python monarch-phenologs/python/03_compute_phenologs_randomized_trials.py -p ${phenologs_data_dir} \
-                                                                              -n ${params.n_random_trials} \
+                                                                              -n ${n_random_trials} \
                                                                               -c ${task.cpus} \
-                                                                              -taxon_id ${params.taxon_id} \
-                                                                              -prd ${params.prd}
+                                                                              -taxon_id ${taxon_id} \
+                                                                              -prd ${prd}
     """
 }

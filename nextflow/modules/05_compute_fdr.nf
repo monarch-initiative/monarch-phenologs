@@ -6,20 +6,21 @@ process compute_fdr_info {
 
     input:
     path phenologs_env_dir
-    path phenologs_data_dir // Both random and real data are needed and point to same directory (i think)
-    val random_sig
+    path phenologs_data_dir
+    val random_trials_sig
     val real_sig
-    val params
+    val taxon_id
+    val prd
 
     output:
-    path "phenologs-from-kg", emit: project_path
-    val "done", emit: fdr_sig
+    path phenologs_data_dir, emit: project_path
+    //val "done", emit: fdr_sig
 
     script:
     """
     source ${phenologs_env_dir}/.venv/bin/activate
     python monarch-phenologs/python/05_compute_phenologs_fdr_data.py -p ${phenologs_data_dir} \
-                                                                     -taxon_id ${params.taxon_id} \
-                                                                     -prd ${params.prd}
+                                                                     -taxon_id ${taxon_id} \
+                                                                     -prd ${prd}
     """
 }
