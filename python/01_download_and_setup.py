@@ -56,6 +56,7 @@ if __name__ == '__main__':
     kg_hp_path = os.path.join(args.project_dir, "monarch_kg", "hp.obo")
     kg_mondo_path = os.path.join(args.project_dir, "monarch_kg", "mondo.obo")
     kg_ddpheno_path = os.path.join(args.project_dir, "monarch_kg", "ddpheno.obo")
+    kg_fypo_path = os.path.join(args.project_dir, "monarch_kg", "fypo.obo")
 
     # Project top level data directories / structure 
     project_dirs = ["monarch_kg",
@@ -86,7 +87,7 @@ if __name__ == '__main__':
     
     # Ontology downloads (download the ones we need to filter terms for. Some ontologies only consist of abnormal terms,
     # so we don't have to do anything up or downstream. But certain ontolgies should be filtered for only relevant terms
-    onto_abbrvs = ["hp", "mondo", "mp", "ddpheno"] # These are currently the only ones that need adjustments
+    onto_abbrvs = ["hp", "mondo", "mp", "ddpheno", "fypo"] # These are currently the only ones that need adjustments
     for onto_abb in onto_abbrvs:
         kg_onto_path = os.path.join(args.project_dir, "monarch_kg", "{}.obo".format(onto_abb))
         if not os.path.isfile(kg_onto_path):

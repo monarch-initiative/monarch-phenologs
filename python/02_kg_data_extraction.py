@@ -452,7 +452,8 @@ if __name__ == '__main__':
     onto_parent_classes = {"MONDO:0700096":os.path.join(args.project_dir, "monarch_kg", "mondo.obo"), ### human disease (we WANT these terms)
                            "HP:0000118":os.path.join(args.project_dir, "monarch_kg", "hp.obo"),       ### Phenotypic abnormality (we WANT these terms)
                            "MP:0002873":os.path.join(args.project_dir, "monarch_kg", "mp.obo"),       ### normal phenotype (we do NOT want these terms)
-                           "DDPHENO:0000142":os.path.join(args.project_dir, "monarch_kg", "ddpheno.obo")} ### wild type (we do NOT want these terms)
+                           "DDPHENO:0000142":os.path.join(args.project_dir, "monarch_kg", "ddpheno.obo"), ### wild type (we do NOT want these terms)
+                           "FYPO:0000257":os.path.join(args.project_dir, "monarch_kg", "fypo.obo")} ### Normal phenotype (we do NOT want these terms)
 
     # Input files
     nodes_file = os.path.join(args.project_dir, "monarch_kg", "monarch-kg_nodes.tsv")
@@ -468,7 +469,7 @@ if __name__ == '__main__':
     for onto_term, onto_fpath in onto_parent_classes.items():
 
         # Add terms to exclusion dict that are under a particular parent term
-        if onto_fpath.endswith("mp.obo") or onto_fpath.endswith("ddpheno.obo"):
+        if onto_fpath.endswith("mp.obo") or onto_fpath.endswith("ddpheno.obo") or onto_fpath.endswith("fypo.obo"):
             node_ids_to_exclude.update(read_ontology_to_exclusion_terms(onto_fpath, umbrella_term=onto_term, include=True))
         
         # Add terms to exlusion dict that are NOT under a particular parent term
