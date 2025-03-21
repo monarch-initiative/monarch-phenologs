@@ -2,7 +2,6 @@
 
 process compute_real_phenolog_data {
     tag 'compute_phenolog_data'
-    publishDir "./", mode: 'copy'
     
     input:
     path phenologs_env_dir

@@ -2,7 +2,6 @@
 
 process leave_one_out_calculations {
     tag 'leave_one_out_calculations'
-    publishDir "./", mode: 'copy'
 
     input:
     path phenologs_env_dir

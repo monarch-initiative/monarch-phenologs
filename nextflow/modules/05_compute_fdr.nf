@@ -2,7 +2,6 @@
 
 process compute_fdr_info {
     tag 'compute_phenolog_data'
-    publishDir "./", mode: 'copy'
 
     input:
     path phenologs_env_dir
