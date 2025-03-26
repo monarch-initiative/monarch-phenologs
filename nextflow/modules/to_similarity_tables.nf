@@ -2,7 +2,7 @@
 
 process convert_to_sim_tables {
     tag 'convert_to_sim_tables'
-    publishDir "./", mode: 'copy', overwrite: true
+    publishDir "./", mode: 'copy'
 
     input:
     path phenologs_env_dir
