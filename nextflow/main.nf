@@ -6,6 +6,7 @@ include { compute_fdr_data } from './modules/03_compute_random_trials.nf'
 include { compute_real_phenolog_data } from './modules/04_compute_phenologs.nf'
 include { compute_fdr_info } from './modules/05_compute_fdr.nf'
 include { compute_ortholog_rank_calcs } from './modules/06_compute_ortholog_rankings.nf'
+include { convert_to_sim_tables } from './modules/to_similarity_tables.nf'
 include { leave_one_out_calculations } from './modules/leave_one_out_calculations.nf'
 include { leave_one_out_ortholog_rank_calcs } from './modules/leave_one_out_rankings.nf'
 
@@ -68,6 +69,13 @@ workflow {
                                 fdr,
                                 kneighbs,
                                 rank_metric)
+
+    // Covert to similarity tables for alternate downstream processing
+    convert_to_sim_tables(get_phenologs_env.out.env_path,
+                          compute_ortholog_rank_calcs.out.project_path,
+                          taxon_id,
+                          prd,
+                          fdr)
 
     // Leave one out cross validation
     if (params.xvalidate_calc) {

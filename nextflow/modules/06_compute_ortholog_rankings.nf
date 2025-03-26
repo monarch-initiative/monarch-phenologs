@@ -15,7 +15,7 @@ process compute_ortholog_rank_calcs {
 
     output:
     path phenologs_data_dir, emit: project_path
-    //val "done", emit: ortho_rank_sig
+    path "monarch-phenologs", emit: project_env
 
     script:
     """
