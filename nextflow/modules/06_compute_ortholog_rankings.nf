@@ -2,7 +2,7 @@
 
 process compute_ortholog_rank_calcs {
     tag 'compute_ortholog_rank_calcs'
-    publishDir "./", mode: 'copy'
+    publishDir "./", mode: 'copy', overwrite: true
 
     input:
     path phenologs_env_dir
