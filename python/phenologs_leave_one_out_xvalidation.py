@@ -222,7 +222,8 @@ if __name__ == '__main__':
         
 
     # Divy up our xvalidate datasets to calculate
-    div_configs = divide_workload(xvalidate_config_sets[0:20], num_proc=num_proc)
+    ##div_configs = divide_workload(xvalidate_config_sets[0:20], num_proc=num_proc) # Limiting to 20 for testing
+    div_configs = divide_workload(xvalidate_config_sets, num_proc=num_proc)
 
     # Setup parallel processing overhead, kick off jobs via asynchronous processing, and retrieve results
     output = mp.Queue()

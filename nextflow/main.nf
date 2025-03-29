@@ -12,7 +12,7 @@ include { leave_one_out_ortholog_rank_calcs } from './modules/leave_one_out_rank
 
 
 // Phenologs calculation parameters 
-params.n_random_trials = 20
+params.n_random_trials = 1
 params.cpu_cores = 10 // Not actuall used (any more... config takes care of this)
 params.taxon_id = 9606
 params.prd = "disease"

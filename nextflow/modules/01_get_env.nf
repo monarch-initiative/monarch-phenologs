@@ -2,6 +2,7 @@
 
 process get_phenologs_env {
     tag "get_phenologs_env"
+    publishDir "./", mode: 'copy'
 
     output:
     path "monarch-phenologs", emit: env_path
