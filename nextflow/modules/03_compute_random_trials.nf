@@ -2,6 +2,7 @@
 
 process compute_fdr_data {
     tag 'compute_fdr_data'
+    publishDir path "./", mode: 'copy'
 
     input:
     path phenologs_env_dir
@@ -11,7 +12,7 @@ process compute_fdr_data {
     val n_random_trials
 
     output:
-    path phenologs_data_dir, emit: project_path
+    path "${phenologs_data_dir}", emit: project_path
     val "done", emit: random_trials_sig
 
     script:

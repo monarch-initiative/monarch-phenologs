@@ -87,7 +87,7 @@ if __name__ == '__main__':
     print("- Processing {} pooled results files...".format(format(len(div_process_objs), ',')))
     output = mp.Queue()
     pool = mp.Pool(processes=num_proc)
-    results = [pool.apply_async(orth_obj.compute_ortholog_phenotype_distances, args=()) for orth_obj in div_process_objs]
+    results = [pool.apply_async(orth_obj.compute_ortholog_phenotype_distances_hg3, args=()) for orth_obj in div_process_objs]
     output = [ p.get() for p in results ]
     pool.close()
     print("- Done!")

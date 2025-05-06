@@ -2,6 +2,7 @@
 
 process get_phenologs_data {
     tag "get_phenologs_data"
+    publishDir path "./", mode: 'copy'
 
     input:
     path phenologs_env_dir
