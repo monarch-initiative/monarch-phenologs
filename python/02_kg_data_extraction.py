@@ -1,39 +1,108 @@
 # General imports
 import os
 import argparse
+import gzip
 import pandas as pd
 import numpy as np
 import networkx as nx
 import pickle
 from collections import Counter
-from pronto import Ontology
 
 
-# General function to read an .obo ontontolgy file into memory using pronto to gather all terms that do not fall under a particular parent class
-def read_ontology_to_exclusion_terms(ontology_obo_file, umbrella_term="HP:0000118", include=False):
+# Functions to read phenio-relation-graph.gz file and build directed graphs for each ontology
+def read_phenio_to_ontologies(phenio_filepath, relevant_ontologies):
+    """
+    Reads through phenio-relation-graph.gz file line by line,
+    and builds a directed graph for each ontology within the relevant_ontolgies argument.
+    Each ontology graph only contains nodes specific to said ontology, 
+    and only edges of the 'rdfs:subClassOf'. Brings in many edges for each ontology, but 
+    because we only care about the descendents of particular terms, this is not an issue as those relationships
+    will still hold true.
+    """
     
-    # Read ontology file into memory
-    onto = Ontology(ontology_obo_file)
-    exclude_terms = {}
-    term_count = len(list(onto.terms()))
-    
-    for term in onto.terms():
+    # Initiate an empty directed graph for each ontology
+    onto_graphs = {k:nx.DiGraph() for k in relevant_ontologies}
+
+    with gzip.open(phenio_filepath, 'rt') as infile: # rt is for read text
         
-        # Gather ancestor terms and update our filtering datastructure accordingly
-        parent_terms = {ancestor.id: ancestor.name for ancestor in term.superclasses()}
-        if include == False:
-            if umbrella_term not in parent_terms:
-                exclude_terms.update({term.id:term.name})
-
-        elif include == True:
-            if umbrella_term in parent_terms:
-                exclude_terms.update({term.id:term.name})
+        # No header line for this file
+        
+        # Read through file and fill in taxon specific gene-->phenotype networks
+        for line in infile:
+            cols = line.strip('\r').strip('\n').split('\t')
+            e1, pred, e2 = cols # Expand into respective variables
+            
+            # We only want rdfs:subClassOf
+            if pred != "rdfs:subClassOf":
+                continue
+        
+            # Ensure both nodes of edge exist in graph
+            eid = (e1, e2)
+            
+            onto1 = e1.split(":")[0]
+            onto2 = e2.split(":")[0]
+            
+            if (onto1 == onto2) and (onto1 in onto_graphs):
+                onto_graphs[onto1].add_edge(e2, e1)
     
-    print("- Terms from ontology found that do not belong to parent class {} {}/{}".format(umbrella_term,
-                                                                                           format(len(exclude_terms)), 
-                                                                                           format(term_count)))
-    return exclude_terms
+    
+    for k,v in onto_graphs.items():
+        print("- Ontolog {} pulled from monarch-kg with {} nodes, and {} edges...".format(k, 
+                                                                                          v.number_of_nodes(), 
+                                                                                          v.number_of_edges()))
+              
+    return onto_graphs
 
+
+def merge_ontology_nodes_to_exclusion_terms(ontology_graphs, ontology_terms):
+    """
+    The goal of this function is to create a set of nodes (consiting of ontology terms) that we need to 
+    exclude from our analysis. The reason being is we are only interested in "abnormal" phenotypes,
+    and there are wild type, and other "normal" phenotypes and or mode of inheritence phenotypes that do not
+    make sense to include given the goal of the overarching analysis.
+    In the original phenologs paper (https://www.pnas.org/doi/10.1073/pnas.0910200107) they only 
+    use "mutational phenotypes between different organisms". We can then take these nodes and avoid them during
+    the construction of the subgraph of relevant data in the following functions.
+    
+    Depending on the ontology, we will need to filter one of two ways to get the nodes that we need to exclude.
+    We either just pull all ancestors + orignal term, or we take all other nodes in the ontology not belonging to
+    the parent term and filter those out. 
+    
+    ontology_graphs = {ontology_name:nx.DiGraph()}
+    ontology_terms = {ontology_name:[parent_term, "Filter"/"Include"], ...}
+    """
+    
+    nodes_to_exclude = set()
+    for onto_name, onto_graph in ontology_graphs.items():
+        parent_term = ontology_terms[onto_name][0]
+        include = ontology_terms[onto_name][1]
+        
+        # Means all terms under parent term (and parent term) need to be avoided in the future when building graph.
+        # So we grab all descendants of this node
+        if include == "Filter":
+            select_nodes = set(nx.descendants(onto_graph, parent_term)) | set([parent_term])
+        
+        # Means we need to include these nodes in the future. 
+        # So we need to grab all other nodes in the ontology so that we know to avoid them in the future.
+        elif include == "Include":
+            select_nodes = set(onto_graph.nodes()) - set(nx.descendants(onto_graph, parent_term))
+            select_nodes = select_nodes | set([parent_term])
+        
+        else:
+            raise ValueError("- ERROR, only 'Filter' or 'Include' allowed... {} found".format(include))
+        
+        
+        # Edge case where there is only one term we need to exclude. In this case, we simply use the input term
+        if len(select_nodes) == 0:
+            select_nodes = set([parent_term])
+        
+        # Add the nodes that we need to avoid in the future to our output datastructure
+        nodes_to_exclude = nodes_to_exclude | select_nodes
+        print("- {} nodes added to filtering {}/{} ".format(onto_name, len(select_nodes), len(onto_graph)))
+        
+    print("- Total nodes found from ontologies to avoid in the futre {}".format(format(len(nodes_to_exclude), ',')))
+    return nodes_to_exclude
+ 
 
 # Step 1)
 def initiate_graph_with_nodes(nodes_filepath, node_colname="id", node_type_colname="category", filter_nodes={}):
@@ -448,40 +517,30 @@ if __name__ == '__main__':
     ### PROGRAM ###
 
     # List out our ontology specific filtering criteria in the form of parent nodes/classes that each node from an ontology
-    # must be under. MONDO we want everything under human disease parent class  "MONDO:0700096"
-    onto_parent_classes = {"MONDO:0700096":os.path.join(args.project_dir, "monarch_kg", "mondo.obo"), ### human disease (we WANT these terms)
-                           "HP:0000118":os.path.join(args.project_dir, "monarch_kg", "hp.obo"),       ### Phenotypic abnormality (we WANT these terms)
-                           "MP:0002873":os.path.join(args.project_dir, "monarch_kg", "mp.obo"),       ### normal phenotype (we do NOT want these terms)
-                           "DDPHENO:0000142":os.path.join(args.project_dir, "monarch_kg", "ddpheno.obo"), ### wild type (we do NOT want these terms)
-                           "FYPO:0000257":os.path.join(args.project_dir, "monarch_kg", "fypo.obo")} ### Normal phenotype (we do NOT want these terms)
+    onto_parent_classes = {'MONDO':['MONDO:0700096', 'Include'],      ### Human disease (we WANT these terms)
+                           'HP':['HP:0000118', 'Include'],            ### Phenotypic abnormality (we WANT these terms)
+                           'FYPO':['FYPO:0001985', 'Include'],        ### Abnormal phenotype (we WANT these terms)
+                           'MP':['MP:0002873', 'Filter'],             ### Normal phenotype (we do NOT want these terms)
+                           'DDPHENO':['DDPHENO:0000142', 'Filter']}   ### Wild type (we do NOT want these terms)
 
     # Input files
     nodes_file = os.path.join(args.project_dir, "monarch_kg", "monarch-kg_nodes.tsv")
     edges_file = os.path.join(args.project_dir, "monarch_kg", "monarch-kg_edges.tsv")
+    phenio_file = os.path.join(args.project_dir, "monarch_kg", "phenio-relation-graph.gz")
 
     # Output files / info
     species_data_dir = os.path.join(args.project_dir, "species_data")
     species_info_table_file = os.path.join(species_data_dir, "species_information_table.tsv")
 
-    # Any mondo ontology term not beloning to a sepcific parent class (filter_term) will be output
-    # Here, we only want MONDO human disease terms (not characteristics or anything else)
-    node_ids_to_exclude = {}
-    for onto_term, onto_fpath in onto_parent_classes.items():
-
-        # Add terms to exclusion dict that are under a particular parent term
-        if onto_fpath.endswith("mp.obo") or onto_fpath.endswith("ddpheno.obo") or onto_fpath.endswith("fypo.obo"):
-            node_ids_to_exclude.update(read_ontology_to_exclusion_terms(onto_fpath, umbrella_term=onto_term, include=True))
-        
-        # Add terms to exlusion dict that are NOT under a particular parent term
-        else:
-            node_ids_to_exclude.update(read_ontology_to_exclusion_terms(onto_fpath, umbrella_term=onto_term))
-
+    # Read through phenio-relation-graph to pull in relevant ontologies so we can filter out nodes downstream
+    phenio_onto_graphs = read_phenio_to_ontologies(phenio_file, relevant_ontologies=onto_parent_classes)
+    nodes_to_exclude = merge_ontology_nodes_to_exclusion_terms(phenio_onto_graphs, onto_parent_classes)
 
     # Run data extraction pipeline (create nx graph by selecting for specific node and edge types)
     graph, taxon_names = initiate_graph_with_nodes(nodes_filepath=nodes_file, 
                                                    node_colname="id", 
                                                    node_type_colname="category", 
-                                                   filter_nodes=node_ids_to_exclude)
+                                                   filter_nodes=nodes_to_exclude)
 
     graph = fill_in_graph_with_edges(edges_file, graph)
     taxon_stats = compute_association_tables(graph, species_data_dir)

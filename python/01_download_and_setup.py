@@ -15,7 +15,7 @@ def download_file_url(url: str, outdir: str, extract_gz: bool = False, overwrite
     # Download and write file
     filename = os.path.join(outdir, url.split("/")[-1])
 
-    if overwrite == True:
+    if overwrite != True:
         if os.path.isfile(filename):
             print("- Warning, file {} already exists... Set overwrite to True to download and replace")
             return
@@ -48,15 +48,11 @@ if __name__ == '__main__':
     ###############
     ### PROGRAM ###
 
-    # KG download nodes, edges paths
+    # KG download nodes, edges paths, phenio
     kg_dir_path = os.path.join(args.project_dir, "monarch_kg")
     kg_edges_path = os.path.join(args.project_dir, "monarch_kg", "monarch-kg_edges.tsv")
+    phenio_path = os.path.join(args.project_dir, "monarch_kg", "phenio-relation-graph.gz")
     
-    # Ontology download paths
-    kg_hp_path = os.path.join(args.project_dir, "monarch_kg", "hp.obo")
-    kg_mondo_path = os.path.join(args.project_dir, "monarch_kg", "mondo.obo")
-    kg_ddpheno_path = os.path.join(args.project_dir, "monarch_kg", "ddpheno.obo")
-    kg_fypo_path = os.path.join(args.project_dir, "monarch_kg", "fypo.obo")
 
     # Project top level data directories / structure 
     project_dirs = ["monarch_kg",
@@ -74,35 +70,19 @@ if __name__ == '__main__':
     for pdir in project_dirs:
         os.makedirs(os.path.join(args.project_dir, pdir), exist_ok=True)
 
+
     # Download and upack monarch-kg
     if not os.path.isfile(kg_edges_path):
-
-        # Fetch Monarch KG and upack (.gz file)
-        print("- Downloading and upacking monarch kg to {}".format(kg_dir_path))
         URL = 'https://data.monarchinitiative.org/monarch-kg-dev/latest/monarch-kg.tar.gz'
         download_file_url(URL, kg_dir_path, extract_gz=True, overwrite=False)
         print("- Download and upacking of monarch kg succesfull...")
     else:
         print("- Skipping monarch kg download... An edges file already exists at {}".format(kg_edges_path))
     
-    # Ontology downloads (download the ones we need to filter terms for. Some ontologies only consist of abnormal terms,
-    # so we don't have to do anything up or downstream. But certain ontolgies should be filtered for only relevant terms
-    onto_abbrvs = ["hp", "mondo", "mp", "ddpheno", "fypo"] # These are currently the only ones that need adjustments
-    for onto_abb in onto_abbrvs:
-        kg_onto_path = os.path.join(args.project_dir, "monarch_kg", "{}.obo".format(onto_abb))
-        if not os.path.isfile(kg_onto_path):
-            # Download latest version hp.obo file 
-            print("- Downloading {} .obo file to {}".format(onto_abb, kg_onto_path))
-            URL = "http://purl.obolibrary.org/obo/{}.obo".format(onto_abb)
-            download_file_url(URL, kg_dir_path, extract_gz=False, overwrite=False)
-            print("- Download of {}.obo file succesfull...".format(onto_abb))
-        else:
-            print("- Skipping {} ontology download... File already exists at {}".format(onto_abb, kg_onto_path))
-
-
-
-# Note about orthology source(s).. We could use panther orthology connections / tables directly.
-# But it seems easier to gather this informaiton from the monarch kg, but will leave link here
-# # Fetch Panther data (.gz file)
-# URL = 'http://data.pantherdb.org/ftp/generic_mapping/panther_classifications.tar.gz'
-# download_file_url(URL, kg_dir_path, extract_gz=True)
+    # Download phenio relation graph (leave gzip format to save space as we can read through it as is)
+    if not os.path.isfile(phenio_path):
+        URL = 'https://github.com/monarch-initiative/phenio/releases/latest/download/phenio-relation-graph.gz'
+        download_file_url(URL, kg_dir_path, extract_gz=False, overwrite=False)
+        print("- Download of phenio relation graph succesfull...")
+    else:
+        print("- Skipping phenio relation graph download... File already exists at {}".format(phenio_path))

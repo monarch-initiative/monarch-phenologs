@@ -449,7 +449,7 @@ if __name__ == '__main__':
         parser.add_argument("-p","--project_dir", help="Top most project directory", required=False, type=str, default=None)
         parser.add_argument("-taxon_id", help='Specicies specific taxon id or "all" are allowed', required=True, type=str)
         parser.add_argument("-prd", "--prediction_network", help="phenotype or disease (which type of network to use for base species comparisons)", required=True, default="phenotype")
-        parser.add_argument("-display_figs", help='Option to walkthrough analysis figure by figure in separate windows', required=False, type=bool, default=False)
+        parser.add_argument("-display_figs", help='Option to walkthrough analysis figure by figure in separate windows', required=False, action='store_true')
         return parser.parse_args()
 
     args = parse_input_command()

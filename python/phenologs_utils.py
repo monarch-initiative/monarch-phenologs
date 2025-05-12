@@ -89,14 +89,12 @@ def validate_species_arguments(species_dict, org_taxon_ids, input_taxon_id, pred
     # Ensure input species id is valid
     input_taxon_id = str(input_taxon_id)
     if input_taxon_id not in species_dict:
-        print('- ERROR, relevant taxon id must be supplied for taxon_id argument. Exiting...')
-        sys.exit()
+        raise ValueError("- ERROR, relevant taxon id must be supplied for taxon_id argument. Exiting...")
 
     # Ensure input species has necessary disease/phenotype information available
     fpath = getattr(species_dict[input_taxon_id], "gene_to_{}_path".format(prediction_network))
     if fpath == None:
-        print("- ERROR, Species {} is missing gene_to_{} file... Exiting".format(input_taxon_id, prediction_network))
-        sys.exit()
+        raise ValueError("- ERROR, Species {} is missing gene_to_{} file... Exiting".format(input_taxon_id, prediction_network))
     
     # Return the ncbi taxon id NUMBER (i.e. 9606 instead of NCBITaxon:9606)
     return species_dict[input_taxon_id].taxon_id
@@ -298,8 +296,7 @@ def initiate_ortholog_to_phenotype_ranking_calculation_config(input_args):
             if tx_id in species_dict:
                 select_taxon_ids.update({species_dict[tx_id].species_name:''})
             else:
-                print('- ERROR, relevant taxon id must be supplied for xtaxon_ids argument. Exiting...')
-                sys.exit()
+                raise ValueError("- ERROR, relevant taxon id must be supplied for xtaxon_ids argument. Exiting...")
 
     # No xtaxon_id argument supplied so we don't do anything
     except:
@@ -608,7 +605,7 @@ def convert_phenologs_to_similarity_tables(infile_path, out_dir, gzip=True):
 ############################################################################
 ### Class's for performing phenologs calculations and validation methods ###
 
-# For initial phenologs comparison / distance calculations
+# Base class for species comparison objects to load data and hold cross species comparison information
 class SpeciesComparison(BaseModel):
     species_a: str # Example: Homo-sampiens, Mus-musculus, Xenopus-tropicalis...
     species_b: str
@@ -853,7 +850,7 @@ class RandomSpeciesComparison(SpeciesComparison):
         print("- Hypergeometric tests computed {}...".format(format(len(hg_pvals), ',')))
 
         # TO DO?: Is the the proper framing of this calculation / proper version of pearson we are computing... 
-        pears_pvals, pears_coeffs = bulk_compute_pearson_from_hg_params(hg_params)
+        ###pears_pvals, pears_coeffs = bulk_compute_pearson_from_hg_params(hg_params)
 
         
         # Map to pvalues, and write data files
@@ -865,11 +862,13 @@ class RandomSpeciesComparison(SpeciesComparison):
                                         
             # Map data back to computed pvalues, and format our trial data for easy writing to file
             pvals1 = [hg_pvals[tuple(k)] for k in trial_data]
-            pvals2 = [pears_pvals[tuple(k)] for k in trial_data]
-            coeffs = [pears_coeffs[tuple(k)] for k in trial_data]
-            #param_data = np.asarray(trial_data).T
+            ###pvals2 = [pears_pvals[tuple(k)] for k in trial_data]
+            ###coeffs = [pears_coeffs[tuple(k)] for k in trial_data]
             
-            # Reduced file size version
+            # Full write out of all data (includes repeate values)
+            ###param_data = np.asarray(trial_data).T
+            
+            # Reduced file size version (10 fold line count reduction for human mouse comparison)
             param_data = np.asarray(list(trial_data.keys())).T
             occurrence = list(trial_data.values())
             
@@ -878,76 +877,14 @@ class RandomSpeciesComparison(SpeciesComparison):
                           "b_ortholog_count":param_data[1],
                           "overlap_count":param_data[2],
                           "common_ortholog_count":param_data[3],
-                          "hg_pval":pvals1, ## Full file size version).to_csv(outfile_path, sep='\t', index=False)
-                          "pearson_pval":pvals2,
-                          "pearson_coeff":coeffs,
-                          # Compact / reduced file size version (10 fold line count reduction for human mouse comparison)
+                          "hg_pval":pvals1,
+                          ###"pearson_pval":pvals2,
+                          ###"pearson_coeff":coeffs,
                           "occurrence":occurrence}).to_csv(outfile_path, sep='\t', index=False, compression='gzip')
 
             print("- Data written to file for trial {}...".format(trial_num))
         
-        ##return hg_pvals, data
         return
-    
-
-    # EXPERIMENTAL (Need a separate function to write data for run_comparisons_parallel_v2)
-    def write_trial_data(self, trial_list, hg_pvals):
-        
-        for data in trial_list:
-
-            # Map to pvalues, and write data files
-            for trial_num, trial_data in data.items():
-                
-                # Define our outfile path and map params to pvalues 
-                outfile_path = os.path.join(self.output_directory, 
-                                            "{}_vs_{}_{}.tsv.gz".format(self.species_a, self.species_b, trial_num))
-                                            
-                # Map data back to computed pvalues, and format our trial data for easy writing to file
-                pvals = [hg_pvals[tuple(k)] for k in trial_data]
-                #param_data = np.asarray(trial_data).T
-                
-                # Reduced file size version
-                param_data = np.asarray(list(trial_data.keys())).T
-                occurrence = list(trial_data.values())
-                
-                # Write data using pandas
-                pd.DataFrame({"a_ortholog_count":param_data[0],
-                            "b_ortholog_count":param_data[1],
-                            "overlap_count":param_data[2],
-                            "common_ortholog_count":param_data[3],
-                            "hg_pval":pvals, ## Full file size version).to_csv(outfile_path, sep='\t', index=False)
-
-                            # Compact / reduced file size version (10 fold line count reduction for human mouse comparison)
-                            "occurrence":occurrence}).to_csv(outfile_path, sep='\t', index=False, compression='gzip')
-
-                print("- Data written to file for trial {}...".format(trial_num))
-        
-        ##return hg_pvals, data
-        return
-
-
-    # EXPERIMENTAL This version is more piece mail and will not compute hg pvals or write data
-    def run_randomized_comparison_trials_v2(self, n_trials: List[int]):
-        
-        # Keep track of unique sets of hyper geometric tests to compute so we don't recalculate
-        hg_params = set()
-        data = {}
-        for i, n_trial in enumerate(n_trials):
-            # Generate randomized data
-            trial_hg_params, trial_data = self.run_randomized_comparison_pipeline()
-            
-            # Update our hire level output datastructures
-            hg_params = hg_params | trial_hg_params
-            data.update({n_trial:trial_data})
-            print("- Total hg_params computed {} for {}/{} trials".format(format(len(hg_params), ','), 
-                                                                          i+1, 
-                                                                          format(len(n_trials), ',')))
-        
-        print("- {} vs. {} pairwise phenotype-->ortholog networks overlaps computed for {} trials".format(self.species_a,
-                                                                                                          self.species_b,
-                                                                                                          len(n_trials)))
-        
-        return data, hg_params
     
 
 # For initial phenologs comparison / distance calculations
@@ -1090,7 +1027,7 @@ class PhenologsSpeciesComparison(SpeciesComparison):
         hg_pvals = bulk_compute_hyper_geom(hg_params)
 
         # TO DO?: Is the the proper framing of this calculation / proper version of pearson we are computing... 
-        #pears_pvals, pears_coeffs = bulk_compute_pearson_from_hg_params(hg_params)
+        ###pears_pvals, pears_coeffs = bulk_compute_pearson_from_hg_params(hg_params)
         
         pval_hg_col, sig_col = [], []
         pval_pe_col, coeff_pe_col = [], []
@@ -1107,8 +1044,8 @@ class PhenologsSpeciesComparison(SpeciesComparison):
             # Note that ordering here matters
             key = tuple((c_param, N_param, m_param, n_param))
             pval_hg = hg_pvals.get(key, 1.0)
-            #pval_pe = pears_pvals[key]
-            #coeff_pe = pears_coeffs[key]
+            ###pval_pe = pears_pvals[key]
+            ###coeff_pe = pears_coeffs[key]
 
             # Map phenotype id to human readable name
             phena_name = ap2name[a_phid]
@@ -1116,16 +1053,16 @@ class PhenologsSpeciesComparison(SpeciesComparison):
 
             # Add info to new output data "columns"
             pval_hg_col.append(pval_hg)
-            #pval_pe_col.append(pval_pe)
-            #coeff_pe_col.append(coeff_pe)
+            ###pval_pe_col.append(pval_pe)
+            ###coeff_pe_col.append(coeff_pe)
 
             apname_col.append(phena_name)
             bpname_col.append(phenb_name)
 
         # Add pvalues and convert to data frame
         comparison_data.update({"hg_pval":pval_hg_col})
-        #comparison_data.update({"pearson_pval":pval_pe_col})
-        #comparison_data.update({"pearson_coeff":coeff_pe_col})
+        ###comparison_data.update({"pearson_pval":pval_pe_col})
+        ###comparison_data.update({"pearson_coeff":coeff_pe_col})
 
         comparison_data.update({"Species A Phenotype Name":apname_col})
         comparison_data.update({"Species B Phenotype Name":bpname_col})
@@ -1135,23 +1072,8 @@ class PhenologsSpeciesComparison(SpeciesComparison):
         outpath_name = os.path.join(self.output_directory, fname)
         comparison_data.sort_values("hg_pval").to_csv(outpath_name, sep='\t', index=False)
         
-        # Write select pvalue / fdr cuttoff phenologs
-        #for pval_cutoff,f_ext in fdr_info.items():
 
-            # Format output filenames
-        #    fname = "{}_vs_{}_phenologs_{}.tsv".format(self.species_a, self.species_b, f_ext)
-        #    outpath_name = os.path.join(self.output_directory, fname)
 
-            # Subset df and write data
-
-        #    comparison_data[comparison_data["P-Value"] <= pval_cutoff].sort_values("P-Value").to_csv(outpath_name, sep='\t', index=False)
-            #comparison_data[comparison_data["P-Value"] <= pval_cutoff].to_csv(outpath_name, sep='\t', index=False)
-        #    print("- {} written...".format(outpath_name))
-        
-        # TO DO: Do we need this? It's a bit excessive in terms of filesize...
-        # Write all data
-        ##outpath_name = os.path.join(out_directory, "{}_vs_{}_fulldata.tsv".format(self.species_a, self.species_b))                                                                   
-        ##comparison_data.to_csv(outpath_name)
         return 
 
 
