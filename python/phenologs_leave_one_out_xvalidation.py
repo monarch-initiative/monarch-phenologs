@@ -174,7 +174,6 @@ if __name__ == '__main__':
     # Inititate set of base level configurations to serve as base and                    
     t_ids, base_configs = initiate_phenologs_species_comparison_configs(args)
 
-
     # Gather our "global" set of orthologs shared by speciesA and at least one other species
     global_orths = list(set([panther_id for c in base_configs for panther_id in list(pd.read_csv(c["common_orthologs_path"], sep='\t')["ortholog_id"])]))
     print("- {} global common ortholog set found".format(format(len(global_orths), ',')))
@@ -222,8 +221,8 @@ if __name__ == '__main__':
         
 
     # Divy up our xvalidate datasets to calculate
-    ##div_configs = divide_workload(xvalidate_config_sets[0:20], num_proc=num_proc) # Limiting to 20 for testing
-    div_configs = divide_workload(xvalidate_config_sets, num_proc=num_proc)
+    div_configs = divide_workload(xvalidate_config_sets[0:20], num_proc=num_proc) # Limiting to 20 for testing
+    ##div_configs = divide_workload(xvalidate_config_sets, num_proc=num_proc)
 
     # Setup parallel processing overhead, kick off jobs via asynchronous processing, and retrieve results
     output = mp.Queue()
