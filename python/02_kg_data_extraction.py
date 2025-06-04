@@ -61,8 +61,8 @@ def merge_ontology_nodes_to_exclusion_terms(ontology_graphs, ontology_terms):
     and there are wild type, and other "normal" phenotypes and or mode of inheritence phenotypes that do not
     make sense to include given the goal of the overarching analysis.
     In the original phenologs paper (https://www.pnas.org/doi/10.1073/pnas.0910200107) they only 
-    use "mutational phenotypes between different organisms". We can then take these nodes and avoid them during
-    the construction of the subgraph of relevant data in the following functions.
+    use "mutational phenotypes between different organisms". We can then take the non-abnormal phenotype nodes 
+    and avoid them during the construction of the subgraph of relevant data in the following functions.
     
     Depending on the ontology, we will need to filter one of two ways to get the nodes that we need to exclude.
     We either just pull all ancestors + orignal term, or we take all other nodes in the ontology not belonging to
@@ -105,13 +105,21 @@ def merge_ontology_nodes_to_exclusion_terms(ontology_graphs, ontology_terms):
  
 
 # Step 1)
-def initiate_graph_with_nodes(nodes_filepath, node_colname="id", node_type_colname="category", filter_nodes={}):
+def initiate_graph_with_nodes(nodes_filepath, 
+                              node_colname="id", 
+                              node_cat_colname="category", 
+                              node_type_colname="type",
+                              filter_nodes={}):
     
     # Our valid node types here
     valid_node_types = {"biolink:Gene":'',
                         "biolink:PhenotypicFeature":'',
                         "biolink:Disease":''}
     
+    # Protein coding from http://www.sequenceontology.org/browser/current_svn/term/SO:0001217
+    ###protein_coding_term = "SO:0001217" # NOTE, this does not work for all species within the graph.
+    ### But I am leaving this here for future reference if we are able to get this information incorporated for all species
+    ### within the graph 
     taxa_node_prefix = "NCBITaxon:"
     taxons = {}
 
@@ -136,7 +144,8 @@ def initiate_graph_with_nodes(nodes_filepath, node_colname="id", node_type_colna
         # Add node based on column index that maps to node_colname
         # and keep track of repeate nodes
         node_id = cc[col_inds[node_colname]]
-        node_cat = cc[col_inds[node_type_colname]]
+        node_cat = cc[col_inds[node_cat_colname]]
+        node_type = cc[col_inds[node_type_colname]]
         
         # Filter for relevant node types
         if node_cat not in valid_node_types:
@@ -145,6 +154,13 @@ def initiate_graph_with_nodes(nodes_filepath, node_colname="id", node_type_colna
         # Check if our node_id is part of an input set that we DO NOT want to include
         if node_id in filter_nodes:
             continue
+        
+        # Check if node is a protein coding gene.
+        # Note, this only works for a handful of species within the graph.
+        # If / when the SO term is incorportated across all genes for all species, we can leverage this methodology
+        ###if node_cat == "biolink:Gene":
+        ###    if node_type != protein_coding_term:
+        ###        continue
             
         # Check for repeate nodes
         if graph.has_node(node_id):
@@ -539,7 +555,8 @@ if __name__ == '__main__':
     # Run data extraction pipeline (create nx graph by selecting for specific node and edge types)
     graph, taxon_names = initiate_graph_with_nodes(nodes_filepath=nodes_file, 
                                                    node_colname="id", 
-                                                   node_type_colname="category", 
+                                                   node_cat_colname="category", 
+                                                   node_type_colname="type",
                                                    filter_nodes=nodes_to_exclude)
 
     graph = fill_in_graph_with_edges(edges_file, graph)

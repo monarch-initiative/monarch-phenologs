@@ -1,8 +1,7 @@
 #!/usr/bin/env nextflow
 
 process compute_real_phenolog_data {
-    tag 'compute_phenolog_data'
-    publishDir path "./", mode: 'copy'
+    tag 'compute_real_phenolog_data'
     
     input:
     path phenologs_env_dir
@@ -11,8 +10,7 @@ process compute_real_phenolog_data {
     val prd
 
     output:
-    path "${phenologs_data_dir}" emit: project_path
-    val "done", emit: real_sig
+    path "${phenologs_data_dir}/phenologs_results/*", emit: data_path
 
     script:
     """

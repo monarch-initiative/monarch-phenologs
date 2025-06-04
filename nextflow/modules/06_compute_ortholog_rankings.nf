@@ -2,7 +2,6 @@
 
 process compute_ortholog_rank_calcs {
     tag 'compute_ortholog_rank_calcs'
-    publishDir path "./", mode: 'copy'
 
     input:
     path phenologs_env_dir
@@ -14,7 +13,7 @@ process compute_ortholog_rank_calcs {
     val rank_metric
 
     output:
-    path "${phenologs_data_dir}", emit: project_path
+    path phenologs_data_dir, emit: project_path
 
     script:
     """

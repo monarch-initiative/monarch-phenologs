@@ -1,8 +1,8 @@
 #!/usr/bin/env nextflow
 
 process leave_one_out_ortholog_rank_calcs {
-    tag 'leave_one_out_calculations'
-    publishDir "./", mode: 'copy', overwrite: true
+    tag 'leave_one_out_ortholog_rank_calcs'
+    publishDir "./", mode: 'copy'
 
     input:
     path phenologs_env_dir

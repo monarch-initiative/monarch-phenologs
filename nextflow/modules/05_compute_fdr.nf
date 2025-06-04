@@ -1,19 +1,16 @@
 #!/usr/bin/env nextflow
 
 process compute_fdr_info {
-    tag 'compute_phenolog_data'
-    publishDir path "./", mode: 'copy'
+    tag 'compute_fdr_info'
 
     input:
     path phenologs_env_dir
     path phenologs_data_dir
-    val random_trials_sig
-    val real_sig
     val taxon_id
     val prd
 
     output:
-    path "${phenologs_data_dir}", emit: project_path
+    path phenologs_data_dir, emit: project_path
 
     script:
     """

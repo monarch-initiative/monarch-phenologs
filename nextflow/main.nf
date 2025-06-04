@@ -9,11 +9,11 @@ include { compute_ortholog_rank_calcs } from './modules/06_compute_ortholog_rank
 include { convert_to_sim_tables } from './modules/to_similarity_tables.nf'
 include { leave_one_out_calculations } from './modules/leave_one_out_calculations.nf'
 include { leave_one_out_ortholog_rank_calcs } from './modules/leave_one_out_rankings.nf'
+include { merge_outputs } from './modules/merge_outputs.nf'
 
 
 // Phenologs calculation parameters 
 params.n_random_trials = 1
-params.cpu_cores = 10 // Not actuall used (any more... config takes care of this)
 params.taxon_id = 9606
 params.prd = "disease"
 
@@ -40,6 +40,7 @@ workflow {
     get_phenologs_env()
     get_phenologs_data(get_phenologs_env.out.env_path)
 
+    // Run next two steps in parallel
     // Compute random trials
     compute_fdr_data(get_phenologs_env.out.env_path, 
                      get_phenologs_data.out.project_path,
@@ -52,12 +53,16 @@ workflow {
                                get_phenologs_data.out.project_path,
                                taxon_id,
                                prd)
+    
+    // Merge outputs from random trials and real phenolog data
+    merge_outputs(get_phenologs_data.out.project_path,
+                  compute_fdr_data.out.data_path,
+                  compute_real_phenolog_data.out.data_path)
+
 
     // Compute FDR info for significance cut
     compute_fdr_info(get_phenologs_env.out.env_path, // Needs both random and real data calculations to complete
-                     compute_fdr_data.out.project_path,
-                     compute_fdr_data.out.random_trials_sig,
-                     compute_real_phenolog_data.out.real_sig,
+                     merge_outputs.out.project_path,
                      taxon_id,
                      prd)
 
