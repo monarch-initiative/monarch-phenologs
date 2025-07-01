@@ -47,7 +47,7 @@ def read_phenio_to_ontologies(phenio_filepath, relevant_ontologies):
     
     
     for k,v in onto_graphs.items():
-        print("- Ontolog {} pulled from monarch-kg with {} nodes, and {} edges...".format(k, 
+        print("- Ontology {} pulled from phenio with {} nodes, and {} edges...".format(k, 
                                                                                           v.number_of_nodes(), 
                                                                                           v.number_of_edges()))
               
@@ -100,7 +100,7 @@ def merge_ontology_nodes_to_exclusion_terms(ontology_graphs, ontology_terms):
         nodes_to_exclude = nodes_to_exclude | select_nodes
         print("- {} nodes added to filtering {}/{} ".format(onto_name, len(select_nodes), len(onto_graph)))
         
-    print("- Total nodes found from ontologies to avoid in the futre {}".format(format(len(nodes_to_exclude), ',')))
+    print("- Total nodes found from ontologies to avoid in the future {}".format(format(len(nodes_to_exclude), ',')))
     return nodes_to_exclude
  
 
@@ -359,8 +359,8 @@ def compute_taxon_info(input_graph, taxon_id: str, taxon_nodes: list, outpath_di
     
     # Don't do anything if no phenotype data is present
     if (len(gene_to_phens_lines) == 0) or (len(g2o) == 0):
-        print("- Skipping taxon id/name {} {}... Missing phenotype or orthology data".format(tx_id, tx_name))
-        return {}
+       print("- Skipping taxon id/name {} {}... Missing phenotype or orthology data".format(tx_id, tx_name))
+       return {}
 
     # Generate outputfile paths
     tx_formatted = "-".join(tx_name.split())
@@ -509,6 +509,41 @@ def generate_common_orthologs_files(tables_dir, taxon_stats):
     print("- Common orthologs files written (A-->B and B-->A) {}".format(format(cc, ',')))
 
 
+# Step 5)
+def generate_ortho_edges_file(input_graph, outfile):
+    
+    # Output datastructure
+    ortholog_edges = {"taxon_a":[],
+                      "gene_a":[],
+                      "gene_a_name":[],
+                      "taxon_b":[],
+                      "gene_b":[],
+                      "gene_b_name":[],
+                      "panther_id":[]}
+
+    rel_edges = [e for e in input_graph.edges() if input_graph.edges[e]["predicate"] == "biolink:orthologous_to"]
+    for e in rel_edges:
+        # Gene ids are node ids, and gene names are nodes attribute "name"
+        n1, n2 = e[0], e[1]
+        taxon_a = input_graph.nodes[n1]["in_taxon"]
+        taxon_b = input_graph.nodes[n2]["in_taxon"]
+        gene_a_name = input_graph.nodes[n1]["name"]
+        gene_b_name = input_graph.nodes[n2]["name"]
+        panth_id = input_graph.edges[e]["has_evidence"].replace("PANTHER.FAMILY:", "")
+
+        ortholog_edges["taxon_a"].append(taxon_a)
+        ortholog_edges["gene_a"].append(n1)
+        ortholog_edges["gene_a_name"].append(gene_a_name)
+        ortholog_edges["taxon_b"].append(taxon_b)
+        ortholog_edges["gene_b"].append(n2)
+        ortholog_edges["gene_b_name"].append(gene_b_name)
+        ortholog_edges["panther_id"].append(panth_id)
+    
+    # Write out ortholog edges file
+    pd.DataFrame(ortholog_edges).to_csv(outfile, sep='\t', index=False)
+    print("- Orthologs edges file written with {} edges...".format(format(len(ortholog_edges["taxon_a"]), ',')))
+
+
 if __name__ == '__main__':
     ################
 	## ARG PARSE ###
@@ -547,6 +582,7 @@ if __name__ == '__main__':
     # Output files / info
     species_data_dir = os.path.join(args.project_dir, "species_data")
     species_info_table_file = os.path.join(species_data_dir, "species_information_table.tsv")
+    ortholog_edges_file = os.path.join(species_data_dir, "ortholog_edges.tsv")
 
     # Read through phenio-relation-graph to pull in relevant ontologies so we can filter out nodes downstream
     phenio_onto_graphs = read_phenio_to_ontologies(phenio_file, relevant_ontologies=onto_parent_classes)
@@ -565,6 +601,9 @@ if __name__ == '__main__':
     
     # Write taxon stats table to file
     pd.DataFrame(taxon_stats).to_csv(species_info_table_file, sep='\t', index=False)
+
+    # Write orthologs edges file
+    generate_ortho_edges_file(graph, outfile=ortholog_edges_file)
 
     print("- Species information table (used in downstream steps) written to {}...".format(species_info_table_file))
     print("- Data extraction pipeline complete...")

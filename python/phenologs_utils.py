@@ -6,7 +6,7 @@ import random
 import copy
 import numpy as np
 import pandas as pd
-from scipy.stats import hypergeom
+import scipy
 from scipy.stats import pearsonr
 from collections import Counter
 from IPython.display import display
@@ -386,21 +386,33 @@ def expand_hg_params_to_binary_pearson(hg_param_set):
     return array0, array1
     #return pearsonr(array0, array1).pvalue
 
-  
-# Computes hypergeometric test from an input list of parameter sets [(c,N,m,n), ...]
+
+def hyper_geom(c, N, m, n):
+    """
+    c = How many specific objects we want to sample (or more)
+    N = How many objects are in the bag
+    m = Number of objects matching specification in the bag
+    n = How many times we draw from the bag
+
+    Relevent SciPy documentation: http://docs.scipy.org/doc/scipy-0.14.0/reference/generated/scipy.stats.hypergeom.html#scipy.stats.hypergeom
+    https://alexlenail.medium.com/understanding-and-implementing-the-hypergeometric-test-in-python-a7db688a7458
+    """
+
+    # Inverse of the Cumulitive distribution function to get the probability (survival function)
+    # Relevent SciPy documentation: http://docs.scipy.org/doc/scipy-0.14.0/reference/generated/scipy.stats.hypergeom.html#scipy.stats.hypergeom
+    prob = scipy.stats.hypergeom.sf(max(c-1, 0), N, m, n)
+    
+    return prob  
+
+
+# Computes bulk hypergeometric tests from an input list of parameter sets [(c,N,m,n), ...]
 def bulk_compute_hyper_geom(params):
     """
-    Relevent SciPy documentation: http://docs.scipy.org/doc/scipy-0.14.0/reference/generated/scipy.stats.hypergeom.html#scipy.stats.hypergeom
-    c = number of common orthologs between phenotypes (ortholog matches)
-    N = total number of orthologs shared between species
-    m = number of orthologs in species B phenotype (how many desired objects are in bag)
-    n = number of orthologs in species A phenotype (how many times we draw from bag)
-
     params argument should be in the following format 
     params = [(c,N,m,n), (c,N,m,n), ...] List of tuples where each is a set of hg parameters to compute
     """
 
-    return {pr:float(hypergeom.pmf(*pr)) for pr in params} # Expand hg argments using the "*" character
+    return {pr:hyper_geom(*pr) for pr in params} # Expand hg argments using the "*" character
 
 
 # Expands the hyper geometric parameter sets into arrays for pearson correlation instead via scipy

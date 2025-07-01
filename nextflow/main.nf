@@ -10,12 +10,13 @@ include { convert_to_sim_tables } from './modules/to_similarity_tables.nf'
 include { leave_one_out_calculations } from './modules/leave_one_out_calculations.nf'
 include { leave_one_out_ortholog_rank_calcs } from './modules/leave_one_out_rankings.nf'
 include { merge_outputs } from './modules/merge_outputs.nf'
+include { disease_gene_candidate_ranking } from './modules/disease_gene_candidate_ranking.nf'
 
 
 // Phenologs calculation parameters 
 params.n_random_trials = 1
 params.taxon_id = 9606
-params.prd = "disease"
+params.prd = "disease" // "phenotype" or "disease"
 
 // Phenologs ortholog to phenotype ranking params
 params.fdr = .95
@@ -29,6 +30,7 @@ params.xvalidate_rank = false
 
 workflow {
 
+    // Set up the parameters for the workflow
     Channel.value(params.taxon_id).set{ taxon_id }
     Channel.value(params.prd).set{ prd }
     Channel.value(params.n_random_trials).set{ n_random_trials }
@@ -81,6 +83,14 @@ workflow {
                           taxon_id,
                           prd,
                           fdr)
+    
+    // Compute disease gene candidate rankings
+    if (params.taxon_id == 9606 && params.prd == "disease") {
+        disease_gene_candidate_ranking(get_phenologs_env.out.env_path,
+                                       convert_to_sim_tables.out.project_path,
+                                       fdr)
+                                       }
+
 
     // Leave one out cross validation
     if (params.xvalidate_calc) {
@@ -101,5 +111,4 @@ workflow {
                                           kneighbs,
                                           rank_metric)
                                           }
-                                          
 }
