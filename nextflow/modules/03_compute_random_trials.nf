@@ -1,0 +1,25 @@
+#!/usr/bin/env nextflow
+
+process compute_fdr_data {
+    tag 'compute_fdr_data'
+
+    input:
+    path phenologs_env_dir
+    path phenologs_data_dir
+    val taxon_id
+    val prd
+    val n_random_trials
+
+    output:
+    path "${phenologs_data_dir}/random_trials/*", emit: data_path
+
+    script:
+    """
+    source ${phenologs_env_dir}/.venv/bin/activate
+    python monarch-phenologs/python/03_compute_phenologs_randomized_trials.py -p ${phenologs_data_dir} \
+                                                                              -n ${n_random_trials} \
+                                                                              -c ${task.cpus} \
+                                                                              -taxon_id ${taxon_id} \
+                                                                              -prd ${prd}
+    """
+}
