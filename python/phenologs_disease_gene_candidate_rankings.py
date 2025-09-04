@@ -19,7 +19,7 @@ def get_gene_phenotype_networks(species_info_dict, taxon_id):
     base_species_name = species_info_dict[str(taxon_id)].species_name
     common_orths = {}
     global_orths = set()
-    for fpath in species_info[str(taxon_id)].common_orthologs_paths:
+    for fpath in species_info_dict[str(taxon_id)].common_orthologs_paths:
         species_name = fpath.split('/')[-1].split("_vs_")[-1].replace(".tsv", "")
         orths = set(pd.read_csv(fpath)["ortholog_id"])
         common_orths.update({species_name:orths})
@@ -37,14 +37,20 @@ def get_gene_phenotype_networks(species_info_dict, taxon_id):
     xspecies_g2p = {}
     xspecies_p2g = {}
     for species_name in common_orths.keys():
-        g2p_df = pd.read_csv(species_info[species_name].gene_to_phenotype_path, sep='\t')
+
+        # Means common orthologs were computed, but at least one of the species has no phenotype information
+        if species_name not in species_info_dict:
+            print("- Skipping {} as it has no phenotype information".format(species_name))
+            continue
+
+        g2p_df = pd.read_csv(species_info_dict[species_name].gene_to_phenotype_path, sep='\t')
         for g_id, p_id, orth_id in zip(g2p_df["gene"],  
                                        g2p_df["phenotype"], 
                                        g2p_df["ortholog_id"]):
             
             gkey = (species_name, g_id)
             pkey = (species_name, p_id)
-            
+
             # We only want genes that are orthologous between our base species and comparison species
             if orth_id in common_orths[species_name]:
                 
@@ -187,8 +193,10 @@ def rank_disease_top_phenolog_genes(species_phenotype2gene,
                                     phenotype2phenotype_results_df, 
                                     map_to_base, 
                                     gene_name_map,
-                                    gene_disease_map,
+                                    disease_gene_map,
                                     disease_name_map,
+                                    taxon_g2p_occurence,
+                                    taxon_g2orth,
                                     outdirectory=False):
     
     # If we want to write results files or not we need to make our output directory
@@ -211,9 +219,6 @@ def rank_disease_top_phenolog_genes(species_phenotype2gene,
         base_mapped_genes = {}
         for p_id, p_name, xspe in zip(phen_ids, phen_names, xspecies):
             phenolog_genes = species_phenotype2gene[(xspe, p_id)]
-
-            #if xspe != "Dictyostelium-discoideum":
-            #    continue
 
             # Loop through genes associated with said phenolog/phenotype
             for pgene in phenolog_genes:
@@ -242,27 +247,44 @@ def rank_disease_top_phenolog_genes(species_phenotype2gene,
                   "Association_exists":[], 
                   "XSpecies_occurence":[], 
                   "p-value":[], 
-                  "XSpecies_phenotypes":[]}
+                  "XSpecies_phenotypes":[],
+                  "Protein_family_id":[]}
         
         for bgene, gdata in base_mapped_genes.items():
-            hg_m = base_taxon_g2p_occurence[bgene]
+            
+            # Grab hyper geometric params and pval
+            hg_m = taxon_g2p_occurence[bgene]
             hg_c = gdata["occurence"]
             pval = hyper_geom(hg_c, hg_N, hg_m, hg_n)
 
             out_df["Gene"].append(bgene)
             out_df["Gene_name"].append(gene_name_map[bgene])
-            
+
             # Tells us weather this gene-->disease association has been found before or not
-            if bgene in gene_disease_map:
-                out_df["Association_exists"].append("True")
-            else:
-                out_df["Association_exists"].append("False")
-            
+            exists_already = "False"
+            if k in disease_gene_map:
+                if bgene in disease_gene_map[k]:
+                    exists_already = "True"
+
+            out_df["Association_exists"].append(exists_already)            
             out_df["XSpecies_occurence"].append(','.join(["{}:{}".format(kk,vv) for kk,vv in gdata["xspecies"].items()]))
             out_df["p-value"].append(pval)
             out_df["XSpecies_phenotypes"].append(';'.join(list(gdata["phenotypes"].keys())))
+            out_df["Protein_family_id"].append(taxon_g2orth[bgene])
             #print("  - Gene={} | Species={} | p-value={}".format(bgene, gdata["xspecies"], pval))
 
+        # Add missing gene associations here at the end, with no pvalues
+        missing_genes = set(list(disease_gene_map[k].keys())) - set(list(base_mapped_genes.keys()))
+        for bgene in missing_genes:
+            out_df["Gene"].append(bgene)
+            out_df["Gene_name"].append(gene_name_map[bgene])
+            out_df["Association_exists"].append("True")
+            out_df["XSpecies_occurence"].append(None)
+            out_df["p-value"].append(None)
+            out_df["XSpecies_phenotypes"].append(None)
+            orth_id = taxon_g2orth.get(bgene, None)
+            out_df["Protein_family_id"].append(orth_id)
+            
         out_df = pd.DataFrame(out_df)
         out_df_sorted = out_df.sort_values(by="p-value")
         
@@ -302,17 +324,19 @@ if __name__ == '__main__':
 # Currently this is hard coded to human, but could be applied to non-human diseases like horse when they are
 # eventualy inorporated into the graph
 taxon_id = "9606"
-specieces_data_dir = os.path.join(args.project_dir, "species_data")
+species_data_dir = os.path.join(args.project_dir, "species_data")
 disease_results_dir = os.path.join(args.project_dir, "phenologs_results", "Homo_sapiens_disease_results")
 sig_phens_file = os.path.join(disease_results_dir, "Homo-sapiens_pooled_phenologs_fdr{}.tsv".format(args.fdr))
-orth_edges_file = os.path.join(specieces_data_dir, "ortholog_edges.tsv")
+orth_edges_file = os.path.join(species_data_dir, "ortholog_edges.tsv")
 output_directory = os.path.join(disease_results_dir, "Homo_sapiens_disease_gene_candidates_fdr{}".format(args.fdr))
+base_g2orth_file = os.path.join(species_data_dir, "Homo-sapiens_gene_to_ortholog.tsv")
+
 
 # Make sure our relevant files exist beforehand
 if not os.path.isfile(sig_phens_file):
     raise FileNotFoundError("- pooled phenologs results file not found {}...".format(sig_phens_file))
 
-if not os.path.isfile(sig_phens_file):
+if not os.path.isfile(orth_edges_file):
     raise FileNotFoundError("- orthologs edges file not found {}...".format(orth_edges_file))
 
 
@@ -323,10 +347,25 @@ map_to_base, species_gnames = read_ortholog_edges_to_gene_maps(orth_edges_file, 
 base_taxon_g2p_occurence = compute_background_base_g2p(xspecies_g2p=species_g2p, base_taxon_gmap=map_to_base)
 p2p_dict_df = group_sig_phenologs_by_phen(sig_phens_file)
 
+# Grab human gene to pantherid mapping
+human_orth_df = pd.read_csv(base_g2orth_file, sep='\t')
+human_orth_map = {k:v for k,v in zip(human_orth_df["gene"], human_orth_df["ortholog_id"])}
+
 # Grab human disease name info
 g2d = pd.read_csv(species_info[str(taxon_id)].gene_to_disease_path, sep='\t')
 disease_name_map = {d_id:dname for d_id,dname in zip(g2d["disease"], g2d["disease_name"])}
-gene2disease_map = {g_id:dname for g_id,dname in zip(g2d["gene"], g2d["disease_name"])}
+
+# Map each disease to associated genes (and add in gene names where there exists no ortholog available in the graph )
+disease2gene_map = {}
+for g_id,g_name,d_id in zip(g2d["gene"], g2d["gene_name"], g2d["disease"]):
+    if d_id not in disease2gene_map:
+        disease2gene_map.update({d_id:{}})
+    disease2gene_map[d_id].update({g_id:None})
+
+    # Our original gene name map is derived from human genes with at least one ortholog available
+    # Our gene --> disease map can have human genes without orthologs, so we want to bring them into the map
+    if g_id not in species_gnames:
+        species_gnames[g_id] = g_name
 
 # Now pull everything together and compute our disease candidate gene rankings
 print("- Computing disease candidate gene rankings for taxon id {}...".format(taxon_id))
@@ -334,6 +373,8 @@ rank_disease_top_phenolog_genes(species_phenotype2gene=species_p2g,
                                 phenotype2phenotype_results_df=p2p_dict_df,
                                 map_to_base=map_to_base,
                                 gene_name_map=species_gnames,
-                                gene_disease_map=gene2disease_map,
+                                disease_gene_map=disease2gene_map,
                                 disease_name_map=disease_name_map,
+                                taxon_g2p_occurence=base_taxon_g2p_occurence,
+                                taxon_g2orth=human_orth_map,
                                 outdirectory=output_directory)
