@@ -34,7 +34,7 @@ if __name__ == '__main__':
         parser.add_argument("-prd", "--prediction_network", help="phenotype or disease (which type of network to use for base species comparisons)", required=True, default="phenotype")
         parser.add_argument("-fdr", help="One minus the false discovery rate.. .95 is default", required=True, type=float, default=.95)
         parser.add_argument("-kneighbs", help="k-nearest phenologs to use when combing across multiple phenologs", required=True, type=int, default=10)
-        parser.add_argument("-rank_metric", help="Which metric to use for combining knearest neighbor... default is naive_bayes (nb), (hg is hyper geometric)", required=False, choices=['nb', 'hg', 'hg3'], default='nb')
+        parser.add_argument("-rank_metric", help="Which metric to use for combining knearest neighbor... default is naive_bayes (nb), (hg is hyper geometric)", required=False, choices=['nb', 'hg'], default='nb')
         return parser.parse_args()
 
     args = parse_input_command()
@@ -63,4 +63,5 @@ if __name__ == '__main__':
                                             compress=False)
     
     # Compute gene-->phenotype rank/distance matrix 
+    ##ddd = OrthologToPhenotypeCalculations.model_validate(sp_config).compute_ortholog_phenotype_distances()
     ddd = OrthologToPhenotypeCalculations.model_validate(sp_config).compute_ortholog_phenotype_distances()

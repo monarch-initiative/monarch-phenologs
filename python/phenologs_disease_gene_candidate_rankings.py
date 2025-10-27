@@ -203,13 +203,11 @@ def rank_disease_top_phenolog_genes(species_phenotype2gene,
     if outdirectory != False:
         os.makedirs(outdirectory, exist_ok=True)
 
-    hg_N = len(species_phenotype2gene) # Global phenotype count across all species
+    # Global phenotype association count across all species
+    hg_N = sum([len(v) for v in species_phenotype2gene.values()])
     count = 0
     for k,v in phenotype2phenotype_results_df.items():
         
-        # "Draw size" parameter for hg test
-        hg_n = len(v) # How many significant phenologs found for this phenotype
-
         # Phenotype and species names
         phen_ids = list(v["Species B Phenotype ID"])
         phen_names = list(v["Species B Phenotype Name"])
@@ -250,6 +248,9 @@ def rank_disease_top_phenolog_genes(species_phenotype2gene,
                   "XSpecies_phenotypes":[],
                   "Protein_family_id":[]}
         
+        # "Draw size" parameter for hg test
+        # How many gene annotations we ultimately pull from the k-nearest phenologs 
+        hg_n = sum([vvv["occurence"] for vvv in base_mapped_genes.values()])
         for bgene, gdata in base_mapped_genes.items():
             
             # Grab hyper geometric params and pval
@@ -291,7 +292,7 @@ def rank_disease_top_phenolog_genes(species_phenotype2gene,
         # Write data
         if outdirectory != False:
             dname_formatted = disease_name_map[k].replace(" ", "-").replace(",", "-").replace("/", "-")
-            outname = "{}_{}_gene_candidates.tsv".format(k, dname_formatted)
+            outname = "{}_{}_gene_candidates.tsv".format(k, dname_formatted).replace(":", "-") # MONDO:0091-->MONDO-0091
             outfile_path = os.path.join(outdirectory, outname)
             out_df_sorted.to_csv(outfile_path, sep='\t', index=False)
 

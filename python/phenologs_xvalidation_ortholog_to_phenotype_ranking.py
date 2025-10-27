@@ -36,7 +36,7 @@ if __name__ == '__main__':
         parser.add_argument("-prd", "--prediction_network", help="phenotype or disease (which type of network to use for base species comparisons)", required=True, default="phenotype")
         parser.add_argument("-fdr", help="One minus the false discovery rate.. .95 is default", required=True, type=float, default=.95)
         parser.add_argument("-kneighbs", help="k-nearest phenologs to use when combing across multiple phenologs", required=True, type=int, default=10)
-        parser.add_argument("-rank_metric", help="Which metric to use for combining knearest neighbor... default is naive_bayes", required=False, default='naive_bayes')
+        parser.add_argument("-rank_metric", help="Which metric to use for combining knearest neighbor... default is naive_bayes", required=False, choices=['nb', 'hg'], default='nb')
         parser.add_argument("-xtaxon_ids", help='Species specific taxon id(s) separated by a comma. For example 7955 would select only zebrafish phenologs. 7955,10090 would select zebrafhish and mouse phenologs', required=False, type=str)
         return parser.parse_args()
 
@@ -87,7 +87,7 @@ if __name__ == '__main__':
     print("- Processing {} pooled results files...".format(format(len(div_process_objs), ',')))
     output = mp.Queue()
     pool = mp.Pool(processes=num_proc)
-    results = [pool.apply_async(orth_obj.compute_ortholog_phenotype_distances_hg3, args=()) for orth_obj in div_process_objs]
+    results = [pool.apply_async(orth_obj.compute_ortholog_phenotype_distances, args=()) for orth_obj in div_process_objs]
     output = [ p.get() for p in results ]
     pool.close()
     print("- Done!")
