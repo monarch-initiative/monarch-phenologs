@@ -35,6 +35,7 @@ if __name__ == '__main__':
         parser.add_argument("-fdr", help="One minus the false discovery rate.. .95 is default", required=True, type=float, default=.95)
         parser.add_argument("-kneighbs", help="k-nearest phenologs to use when combing across multiple phenologs", required=True, type=int, default=10)
         parser.add_argument("-rank_metric", help="Which metric to use for combining knearest neighbor... default is naive_bayes (nb), (hg is hyper geometric)", required=False, choices=['nb', 'hg'], default='nb')
+        parser.add_argument("-rank_type", help="Which type of analyis to perform, gene ranking or protein family ranking", required=False, choices=["protein_family", "gene"], default='protein_family')
         return parser.parse_args()
 
     args = parse_input_command()
@@ -64,4 +65,10 @@ if __name__ == '__main__':
     
     # Compute gene-->phenotype rank/distance matrix 
     ##ddd = OrthologToPhenotypeCalculations.model_validate(sp_config).compute_ortholog_phenotype_distances()
-    ddd = OrthologToPhenotypeCalculations.model_validate(sp_config).compute_ortholog_phenotype_distances()
+    ##ddd = OrthologToPhenotypeCalculations.model_validate(sp_config).compute_ortholog_phenotype_distances()
+
+    if args.rank_type == "protein_family":
+        ddd = OrthologToPhenotypeCalculations.model_validate(sp_config).compute_ortholog_phenotype_distances()
+    
+    elif args.rank_type == "gene":
+        ddd = OrthologToPhenotypeCalculations.model_validate(sp_config).compute_ortholog_phenotype_distances_gene_centric()

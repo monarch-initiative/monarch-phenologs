@@ -1203,6 +1203,185 @@ class OrthologToPhenotypeCalculations(BaseModel):
         return orth_global_counts, hg_world_value
 
 
+
+    def get_gene_phenotype_networks(self, species_info_dict, taxon_id):
+
+        # Read our common orthologs into memory for our species of interest (should be human)
+        base_species_name = species_info_dict[str(taxon_id)].species_name
+        common_orths = {}
+        global_orths = set()
+        for fpath in species_info_dict[str(taxon_id)].common_orthologs_paths:
+            species_name = fpath.split('/')[-1].split("_vs_")[-1].replace(".tsv", "")
+            orths = set(pd.read_csv(fpath)["ortholog_id"])
+            common_orths.update({species_name:orths})
+            global_orths = global_orths | orths
+        
+        print("- Using input arg taxon_id {} --> {} as base species...".format(taxon_id, base_species_name))
+        print("- Total protein families with >= 1 cross species orthology {}...".format(format(len(global_orths), ',')))
+        for k,v in common_orths.items():
+            print("- {}, Common protein families found with {}".format(k, format(len(v), ',')))
+        
+        # Read gene-phenotype networks into memory for each species, but only include the genes
+        # that can be mapped to our species of interest (i.e. only common protein families)
+        
+        # Need to figure out how many times a gene shows up (and sum across species)
+        xspecies_g2p = {}
+        xspecies_p2g = {}
+        for species_name in common_orths.keys():
+
+            # Means common orthologs were computed, but at least one of the species has no phenotype information
+            if species_name not in species_info_dict:
+                print("- Skipping {} as it has no phenotype information".format(species_name))
+                continue
+
+            g2p_df = pd.read_csv(species_info_dict[species_name].gene_to_phenotype_path, sep='\t')
+            for g_id, p_id, orth_id in zip(g2p_df["gene"],  
+                                        g2p_df["phenotype"], 
+                                        g2p_df["ortholog_id"]):
+                
+                gkey = (species_name, g_id)
+                pkey = (species_name, p_id)
+
+                # We only want genes that are orthologous between our base species and comparison species
+                if orth_id in common_orths[species_name]:
+                    
+                    # Gene to phenotype network 
+                    if gkey not in xspecies_g2p:
+                        xspecies_g2p.update({gkey:{}})
+                    xspecies_g2p[gkey].update({p_id:''})
+                    
+                    # Phenotype to gene network
+                    if pkey not in xspecies_p2g:
+                        xspecies_p2g.update({pkey:{}})
+                    xspecies_p2g[pkey].update({g_id:''})
+        
+        return xspecies_g2p, xspecies_p2g
+
+
+    def read_ortholog_edges_to_gene_maps(self, orths_edges_file, base_taxon_id: str, taxon_id_to_name: dict):
+    
+        # Read data into memory as df
+        orth_edges_df = pd.read_csv(orths_edges_file, sep='\t')
+        
+        base_taxon = base_taxon_id
+        if "NCBITaxon:" not in base_taxon_id:
+            base_taxon = "NCBITaxon:{}".format(base_taxon_id)
+        base_taxon_name = taxon_id_to_name[base_taxon]
+            
+
+        base_taxon_map = {}
+        species_gene_names = {}
+        mapped_base_genes = {}
+        for tx_a, g_a, g_an, tx_b, g_b, g_bn in zip(orth_edges_df["taxon_a"],
+                                                    orth_edges_df["gene_a"],
+                                                    orth_edges_df["gene_a_name"],
+                                                    orth_edges_df["taxon_b"],
+                                                    orth_edges_df["gene_b"],
+                                                    orth_edges_df["gene_b_name"]):
+            
+
+            # Pull in data for select species
+            if (tx_a not in taxon_id_to_name) or (tx_b not in taxon_id_to_name):
+                continue
+            
+            # Format our taxon_id (NCBITaxon:...--> human readable name)
+            tx_a = taxon_id_to_name[tx_a]
+            tx_b = taxon_id_to_name[tx_b]
+            
+            # Update our gene_id --> gene_names
+            if g_a not in species_gene_names:
+                species_gene_names.update({g_a:g_an})
+            elif g_an != species_gene_names[g_a]:
+                raise ValueError("- Different name found for gene id {}-->{}, {}".format(g_a, 
+                                                                                        species_gene_names[g_a],
+                                                                                        g_an))
+            if g_b not in species_gene_names:
+                species_gene_names.update({g_b:g_bn})
+            elif g_bn != species_gene_names[g_b]:
+                raise ValueError("- Different name found for gene id {}-->{}, {}".format(g_b, 
+                                                                                        species_gene_names[g_b],
+                                                                                        g_bn))
+            
+            # Only deal with edges that include a base_taxon gene node
+            if (base_taxon_name != tx_a) and (base_taxon_name != tx_b):
+                continue
+
+            if base_taxon_name == tx_a:
+                map_to = g_a
+                map_from = (tx_b, g_b)
+            else:
+                map_to = g_b
+                map_from = (tx_a, g_a)
+
+            if map_from not in base_taxon_map:
+                base_taxon_map.update({map_from:{}})
+
+            base_taxon_map[map_from].update({map_to:''})
+            mapped_base_genes.update({map_to:''})
+        
+        
+        base_genes_mapped = len(set([vv for v in base_taxon_map.values() for vv in v]))
+        print("- Cross species orthologs genes mapped back to taxon {} = {}".format(base_taxon,
+                                                                                    format(len(base_taxon_map), ',')))
+        print("- Taxon {} genes with mapping from >= 1 species = {}".format(base_taxon, 
+                                                                            format(base_genes_mapped, ',')))
+        return base_taxon_map, species_gene_names, mapped_base_genes
+
+
+    def compute_background_base_g2p(self, xspecies_g2p, base_taxon_gmap):
+    
+        base_taxon_gene_background = Counter()
+        for k,v in xspecies_g2p.items():
+
+            if k not in base_taxon_gmap:
+                continue
+
+            base_genes = base_taxon_gmap[k]
+            for gg in base_genes:
+                base_taxon_gene_background[gg] += len(v)
+        
+        tot = len(base_taxon_gene_background)
+        print("- {} genes found >= 1 phenotype association across all species...".format(format(tot, ',')))
+        return base_taxon_gene_background
+
+    
+    def group_sig_phenologs_by_phen(self, sig_phens_path):
+
+        if sig_phens_path.endswith(".gz"):
+            sig_phenologs_df = pd.read_csv(sig_phens_path, sep='\t', compression="gzip")
+        else:
+            sig_phenologs_df = pd.read_csv(sig_phens_path, sep='\t')
+
+        # Build "k-nearest neighbor" data structure for each "phenotype" we want to assign gene rankings to
+        # First, map row indices to each phenotype
+        ind = 0
+        p2_phens = {}
+
+        xspecies_filtered = 0
+        #Species A Phenotype ID  Species B Phenotype ID  Ortholog Count A        Ortholog Count B        Overlap Count   Common Ortholog Count   hg_pval Species A Phenotype Name        Species B Phenotype Name             X Species Comparison
+        for phen_id, phen_dist_val, xcomp_name in zip(list(sig_phenologs_df["Species A Phenotype ID"]), 
+                                                    list(sig_phenologs_df["hg_pval"]),
+                                                    list(sig_phenologs_df["X Species Comparison"])):
+
+            if phen_id not in p2_phens:
+                p2_phens.update({phen_id:[]})
+            p2_phens[phen_id].append(ind)
+            ind += 1
+
+        # Now make mini dataframes for each "phenotype" identifier and sort by best "distance" 
+        # for whichever metric is chosen
+        zero_sig_phens = {}
+        for k in p2_phens:
+            p2_phens[k] = copy.copy(sig_phenologs_df.iloc[p2_phens[k]])
+            p2_phens[k] = p2_phens[k].sort_values(by="hg_pval")
+
+            # Ensure data is of proper type for calculations
+            p2_phens[k]["Overlap Count"] = p2_phens[k]["Overlap Count"].astype(float)
+            p2_phens[k]["Ortholog Count B"] = p2_phens[k]["Ortholog Count B"].astype(float)
+        
+        return p2_phens
+
+    
     def compute_ortholog_phenotype_distances(self, sig_phens_path: Optional[str] = None):
 
         #####################
@@ -1331,29 +1510,7 @@ class OrthologToPhenotypeCalculations(BaseModel):
                         guilty_orths_nb.update({sp_orth:1.})
                     guilty_orths_nb[sp_orth] *= ( 1. - ((overlap_val/ortho_a_val)*(1. - dist_val)) )
 
-                ### For gene centric method
-                ###phenolog_genes = species_phenotype2gene[(spb_name, phen_id)]
-                # Loop through genes associated with said phenolog/phenotype
-                # for pgene in phenolog_genes:
-                #     key = (spb_name, pgene)
-
-                #     if key not in map_to_base:
-                #         continue
-
-                #     base_genes = map_to_base[key]
-
-                #     # Tally how many species show up for this gene, and how many times it shows up
-                #     for bgene in base_genes:
-                #         if bgene not in base_mapped_genes:
-                #             base_mapped_genes.update({bgene:{"xspecies":Counter(), "occurence":0, "phenotypes":Counter()}})
-
-                #         base_mapped_genes[bgene]["xspecies"][xspe] += 1
-                #         base_mapped_genes[bgene]["occurence"] += 1
-                #         base_mapped_genes[bgene]["phenotypes"][p_name] += 1
-
-
                 knear += 1
-
                 if knear > self.kneighbs:
                     break
 
@@ -1368,10 +1525,6 @@ class OrthologToPhenotypeCalculations(BaseModel):
 
                 for gorth in guilty_orths:
                     
-                    
-                    ##if gorth not in o2p_dists: # Not a common ortholog between the two species so we can't make a statement
-                    ##    continue
-                    
                     # Fill in data as we need to (can think of this as row == gene/protein_family, and column == disease)
                     # So each row is a genes association strength across all diseases
                     metric_val = guilty_orths_nb[gorth]
@@ -1383,9 +1536,6 @@ class OrthologToPhenotypeCalculations(BaseModel):
             elif self.rank_metric == "hg":
                 hg_n = sum(guilty_orths.values()) ##Should be total number of genes we pulled out from our knearest neighbors
                 for gorth in guilty_orths:
-                    
-                    ##if gorth not in o2p_dists: # Not a common ortholog between the two species so we can't make a statement
-                    ##    continue
                     
                     hg_c = guilty_orths[gorth] # Number of times this ortholog was implicated in the current set of phenotypes
                     hg_N = hg_world_value # Total number of ortholog associations across all species
@@ -1434,4 +1584,462 @@ class OrthologToPhenotypeCalculations(BaseModel):
         
         # Write data to designated path/directory
         pickle.dump(o2p_dists, open(outfile_path, 'wb'))
+        return
+    
+    
+    def compute_ortholog_phenotype_distances_gene_centric(self, sig_phens_path: Optional[str] = None):
+
+        #####################
+        ### Preprocessing ###
+
+        allowed_dists = {"hg":'hyper_geometric', "nb":"naive_bayes"}
+        if self.rank_metric not in allowed_dists:
+            print("- ERROR, hg or nb are allowed for rank_metric argument not {}".format(self.rank_metric))
+            sys.exit()
+
+        species_data_dir = os.path.join(self.project_dir, "species_data")
+        orth_edges_file = os.path.join(species_data_dir, "ortholog_edges.tsv")
+        base_species_g2_filepath = os.path.join(species_data_dir, "{}_gene_to_{}.tsv".format(self.species_name, self.prediction_network))
+        
+        org_taxon_ids, species_dict = build_species_info(self.project_dir)
+        t_id = validate_species_arguments(species_dict, org_taxon_ids, self.taxon_id, self.prediction_network)
+        species_obj = species_dict[t_id]
+
+        # Load all species phenotype-->ortholog files
+        p2o_species = self.build_species_phenotype_to_orths_data("phenotype")
+
+        # Grabs ortholog counts across entire set of species, and total number of ortholog associations (hyper geometric world size)
+        orth_global_counts, zzz = self.get_ortholog_dataset_occurenc_values(species_obj, species_dict, org_taxon_ids)
+
+        # Map (species_name, gene_id) --> phenotype_ids, and (species_name, phenotype_id) --> gene_ids 
+        species_g2p, species_p2g = self.get_gene_phenotype_networks(species_dict, self.taxon_id) ###taxon_id)
+        map_to_base, species_gnames, mapped_base_genes = self.read_ortholog_edges_to_gene_maps(orth_edges_file, 
+                                                                                               base_taxon_id=str(self.taxon_id), 
+                                                                                               taxon_id_to_name=org_taxon_ids)
+        
+        base_taxon_g2p_occurence = self.compute_background_base_g2p(xspecies_g2p=species_g2p, base_taxon_gmap=map_to_base)
+        g2p_dists = {k:{} for k in mapped_base_genes}
+
+        # For each disease/phenotype, get background count of gene edges for base species, where the gene has an ortholog edge to
+        # another species within the graph (Used for naive bayes metric)
+        background_disease_gene_counts = {}
+        gene_to_df = pd.read_csv(base_species_g2_filepath, sep='\t')
+        for g,d in zip(list(gene_to_df["gene"]), list(gene_to_df[self.prediction_network])):
+            if g not in mapped_base_genes:
+                continue
+            if d not in background_disease_gene_counts:
+                background_disease_gene_counts.update({d:0.})
+            background_disease_gene_counts[d] += 1.
+
+        # Grab human gene to pantherid mapping
+        ##human_orth_df = pd.read_csv(base_g2orth_file, sep='\t')
+        ##human_orth_map = {k:v for k,v in zip(human_orth_df["gene"], human_orth_df["ortholog_id"])}
+
+        # Grab human disease name info
+        ##g2d = pd.read_csv(species_info[str(taxon_id)].gene_to_disease_path, sep='\t')
+        ##disease_name_map = {d_id:dname for d_id,dname in zip(g2d["disease"], g2d["disease_name"])}
+
+        # Map each disease to associated genes (and add in gene names where there exists no ortholog available in the graph )
+        ##disease2gene_map = {}
+        ##for g_id,g_name,d_id in zip(g2d["gene"], g2d["gene_name"], g2d["disease"]):
+        ##    if d_id not in disease2gene_map:
+        ##        disease2gene_map.update({d_id:{}})
+        ##    disease2gene_map[d_id].update({g_id:None})
+
+            # Our original gene name map is derived from human genes with at least one ortholog available
+            # Our gene --> disease map can have human genes without orthologs, so we want to bring them into the map
+        ##    if g_id not in species_gnames:
+        ##        species_gnames[g_id] = g_name
+
+        # Read in significant phenologs table (presumably pooled from cross species data, but can be anything)
+        # Can pass in phenolog file here to get all filepaths from base level config,
+        # or default is to use the filepath that is passed when initializing the object
+        if not sig_phens_path:
+            sig_phens_path = self.sig_phenologs_path
+
+        if sig_phens_path.endswith(".gz"):
+            sig_phenologs_df = pd.read_csv(sig_phens_path, sep='\t', compression="gzip")
+        else:
+            sig_phenologs_df = pd.read_csv(sig_phens_path, sep='\t')
+
+        # Build "k-nearest neighbor" data structure for each "phenotype" we want to assign gene rankings to
+        # First, map row indices to each phenotype
+        ind = 0
+        p2_phens = {}
+
+        xspecies_filtered = 0
+
+        # Total number of phenotypes a gene belongs to within the graph (across all species not including the base species of comparison)
+        # Note, this gene must also have an orthologous edge to the base species of comparison. 
+        hg_world_value = sum([len(v) for v in species_p2g.values()])
+
+        #Species A Phenotype ID  Species B Phenotype ID  Ortholog Count A        Ortholog Count B        Overlap Count   Common Ortholog Count   hg_pval Species A Phenotype Name        Species B Phenotype Name             X Species Comparison
+        for phen_id, phen_dist_val, xcomp_name in zip(list(sig_phenologs_df["Species A Phenotype ID"]), 
+                                                      list(sig_phenologs_df["hg_pval"]),
+                                                      list(sig_phenologs_df["X Species Comparison"])):
+
+            # Can filter out xyz species id here for comparisons of how each species affects performance
+            spaid, spbid = xcomp_name.split(",")
+            if self.xtaxon_ids:
+                if spbid not in self.xtaxon_ids:
+                    ind += 1 # Still need to update index even though we don't pull this data in
+                    xspecies_filtered += 1
+                    continue
+
+            if phen_id not in p2_phens:
+                p2_phens.update({phen_id:[]})
+            p2_phens[phen_id].append(ind)
+            ind += 1
+        
+        # Now make mini dataframes for each "phenotype" identifier and sort by best "distance" 
+        # for whichever metric is chosen
+        zero_sig_phens = {}
+        for k in p2_phens:
+            p2_phens[k] = copy.copy(sig_phenologs_df.iloc[p2_phens[k]])
+            p2_phens[k] = p2_phens[k].sort_values(by="hg_pval")
+
+            # Ensure data is of proper type for calculations
+            p2_phens[k]["Overlap Count"] = p2_phens[k]["Overlap Count"].astype(float)
+            p2_phens[k]["Ortholog Count B"] = p2_phens[k]["Ortholog Count B"].astype(float)
+
+            # Now compute from our subsetted data, the cumulitive probability from 
+            # naive bayes method, or hg method
+            knear = 1
+
+            guilty_orths = Counter()
+            guilty_orths_nb = {}
+
+            #guilty_genes = {}
+            guilty_genes = Counter()
+            guilty_genes_nb = {}
+            base_mapped_genes = {}
+
+            for dist_val, overlap_val, comm_val, ortho_a_val, ortho_b_val, phen_id, sp_comp, spbp_name in zip(p2_phens[k]["hg_pval"], 
+                                                                                                              p2_phens[k]["Overlap Count"], 
+                                                                                                              p2_phens[k]["Common Ortholog Count"],
+                                                                                                              p2_phens[k]["Ortholog Count A"],
+                                                                                                              p2_phens[k]["Ortholog Count B"],
+                                                                                                              p2_phens[k]["Species B Phenotype ID"],
+                                                                                                              p2_phens[k]["X Species Comparison"],
+                                                                                                              p2_phens[k]["Species B Phenotype Name"]):
+            
+
+                ### We need to sum the total number of ortholog-->phenotype associations present for each species
+                ### We need to count the total number of times each ortholog can possibly show up in each species
+
+                # Loop through genes associated with said phenolog/phenotype
+                #for pgene in phenolog_genes:
+
+                # Keep track of "implicated" genes/orthologs by leveraging lookup tables made earlier
+                spa_name, spb_name = sp_comp.split(",")
+                phenolog_genes = species_p2g[(spb_name, phen_id)]
+
+                # Loop through genes associated with said phenolog/phenotype
+                for pgene in phenolog_genes:
+                    key = (spb_name, pgene)
+
+                    if key not in map_to_base:
+                        continue
+
+                    base_genes = map_to_base[key]
+
+                    # Tally how many species show up for this gene, and how many times it shows up
+                    for bgene in base_genes:
+                        
+                        ##if bgene not in guilty_genes:
+                        ##    guilty_genes.update({bgene:{"xspecies":Counter(), "occurence":0, "phenotypes":Counter()}})
+
+                        ##guilty_genes[bgene]["xspecies"][spb_name] += 1
+                        ##guilty_genes[bgene]["occurence"] += 1
+                        ##guilty_genes[bgene]["phenotypes"][spbp_name] += 1
+
+                        guilty_genes[bgene] += 1
+                        
+                        # Probability via "naive bayes" method
+                        if bgene not in guilty_genes_nb:
+                            guilty_genes_nb.update({bgene:1.})
+
+                        # Means we don't have any orthologous edges (to the background disease)
+                        if k not in background_disease_gene_counts:
+                            continue
+
+                        # Calculation should be done based on background disease gene counts rather than protein family here.
+                        ###guilty_genes_nb[bgene] *= ( 1. - ((overlap_val/ortho_a_val)*(1. - dist_val)) )
+                        guilty_genes_nb[bgene] *= ( 1. - ((overlap_val/background_disease_gene_counts[k])*(1. - dist_val)) )
+                        
+                knear += 1
+                if knear > self.kneighbs:
+                    break
+
+            # Edge case for no significant orthologs associated with phenotype
+            if len(guilty_genes) == 0:
+                zero_sig_phens.update({k:''})
+                continue
+
+            # Note, the original publications subtract this value from 1... But we leave as is, so that
+            # down the road smaller values are considered a stronger association.
+            if self.rank_metric == "nb": # Naive bayes scheme
+
+                for ggene in guilty_genes:
+                    
+                    
+                    # Fill in data as we need to (can think of this as row == gene/protein_family, and column == disease)
+                    # So each row is a genes association strength across all diseases
+                    metric_val = guilty_genes_nb[ggene]
+                    if k not in g2p_dists[ggene]:
+                        g2p_dists[ggene].update({k:metric_val})
+                
+
+            # Custom metric (second round of hyper geometric tests)
+            elif self.rank_metric == "hg":
+                hg_n = sum(guilty_genes.values()) ##Should be total number of genes we pulled out from our knearest neighbors
+                for ggene in guilty_genes:
+                    
+                    hg_c = guilty_genes[ggene] # Number of times this ortholog was implicated in the current set of phenotypes
+                    hg_N = hg_world_value # Total number of ortholog associations across all species
+                    hg_m = base_taxon_g2p_occurence[ggene] # Total number of times this gene could have been pulled out across all species
+
+                    # Compute hypergeometric of seeing >= hg_c number of occurrences of this protein family group
+                    metric_val = float(hyper_geom(hg_c, hg_N, hg_m, hg_n))
+                    
+                    # Fill in data as we need to (can think of this as row == gene/protein_family, and column == disease)
+                    # So each row is a genes association strength across all diseases
+                    if k not in g2p_dists[ggene]:
+                        g2p_dists[ggene].update({k:metric_val})
+
+
+        # Write out data here (current is .pkl dictionary, to read in later, but might be nice to have
+        # more human readable form... leave xyz out strategy also produces a lot of data so need small file sizes)
+        sgpp = Path(sig_phens_path)
+        n1, n2 = sgpp.name.split("_pooled_phenologs_") # Splits our filename into two parts we can combine
+        
+        # We need to deal with our xtaxons ids here so we can delineate output data
+        if self.xtaxon_ids:
+            xtids_formatted = "_".join(list(self.xtaxon_ids.keys()))
+            outdir_name = "gene_to_{}_{}_{}kneighbs_{}_{}".format(self.prediction_network, 
+                                                                      xtids_formatted, 
+                                                                      self.kneighbs, 
+                                                                      self.rank_metric,
+                                                                      self.fdr)
+
+        else:
+            outdir_name = "gene_to_{}_{}kneighbs_{}_{}".format(self.prediction_network, 
+                                                                   self.kneighbs, 
+                                                                   self.rank_metric,
+                                                                   self.fdr)
+
+
+        # Write data to parent results directory (default mode)
+        if self.make_new_results_dir == False:
+            outfile_path = os.path.join(sgpp.parent, "{}_{}.pkl".format(n1, outdir_name))
+        
+        # Otherwise, make new directory within parent resutls directory
+        elif self.make_new_results_dir == True:
+            outdir_path = os.path.join(sgpp.parent, outdir_name)
+            outfile_path = os.path.join(outdir_path, "{}_{}.pkl".format(n1, outdir_name))
+            if not os.path.isdir(outdir_path):
+                os.makedirs(outdir_path, exist_ok=True)
+        
+        # Write data to designated path/directory
+        pickle.dump(g2p_dists, open(outfile_path, 'wb'))
+        return
+    
+
+    def write_disease_gene_rankings(self, 
+                                    output_dir: str, 
+                                    ranking_results_path: str, 
+                                    sig_phens_path: Optional[str] = None):
+
+        #####################
+        ### Preprocessing ###
+
+        allowed_dists = {"hg":'hyper_geometric', "nb":"naive_bayes"}
+        if self.rank_metric not in allowed_dists:
+            print("- ERROR, hg or nb are allowed for rank_metric argument not {}".format(self.rank_metric))
+            sys.exit()
+
+        species_data_dir = os.path.join(self.project_dir, "species_data")
+        orth_edges_file = os.path.join(species_data_dir, "ortholog_edges.tsv")
+        base_species_g2_filepath = os.path.join(species_data_dir, "{}_gene_to_{}.tsv".format(self.species_name, self.prediction_network))
+        
+        org_taxon_ids, species_dict = build_species_info(self.project_dir)
+        t_id = validate_species_arguments(species_dict, org_taxon_ids, self.taxon_id, self.prediction_network)
+        species_obj = species_dict[t_id]
+
+        # Load all species phenotype-->ortholog files
+        p2o_species = self.build_species_phenotype_to_orths_data("phenotype")
+
+        # Grabs ortholog counts across entire set of species, and total number of ortholog associations (hyper geometric world size)
+        orth_global_counts, zzz = self.get_ortholog_dataset_occurenc_values(species_obj, species_dict, org_taxon_ids)
+
+        # Map (species_name, gene_id) --> phenotype_ids, and (species_name, phenotype_id) --> gene_ids 
+        species_g2p, species_p2g = self.get_gene_phenotype_networks(species_dict, self.taxon_id) ###taxon_id)
+        map_to_base, species_gnames, mapped_base_genes = self.read_ortholog_edges_to_gene_maps(orth_edges_file, 
+                                                                                               base_taxon_id=str(self.taxon_id), 
+                                                                                               taxon_id_to_name=org_taxon_ids)
+        
+        base_taxon_g2p_occurence = self.compute_background_base_g2p(xspecies_g2p=species_g2p, base_taxon_gmap=map_to_base)
+
+        # Load our precomputed ranking results
+        with open(ranking_results_path, 'rb') as f:
+            g2p_dists = pickle.load(f)
+
+        # For each disease/phenotype, get background count of gene edges for base species, where the gene has an ortholog edge to
+        # another species within the graph (Used for naive bayes metric)
+        background_disease_gene_counts = {}
+        gene_to_df = pd.read_csv(base_species_g2_filepath, sep='\t')
+        for g,d in zip(list(gene_to_df["gene"]), list(gene_to_df[self.prediction_network])):
+            if g not in mapped_base_genes:
+                continue
+            if d not in background_disease_gene_counts:
+                background_disease_gene_counts.update({d:0.})
+            background_disease_gene_counts[d] += 1.
+
+        
+        # Grab human gene to pantherid mapping
+        human_orth_df = pd.read_csv(species_dict[str(t_id)].gene_to_ortholog_path, sep='\t')
+        human_orth_map = {k:v for k,v in zip(human_orth_df["gene"], human_orth_df["ortholog_id"])}
+
+        # Grab human disease name info
+        g2d = pd.read_csv(species_dict[str(t_id)].gene_to_disease_path, sep='\t')
+        disease_name_map = {d_id:dname for d_id,dname in zip(g2d["disease"], g2d["disease_name"])}
+
+        # Map each disease to associated genes (and add in gene names where there exists no ortholog available in the graph )
+        disease2gene_map = {}
+        for g_id,g_name,d_id in zip(g2d["gene"], g2d["gene_name"], g2d["disease"]):
+            if d_id not in disease2gene_map:
+                disease2gene_map.update({d_id:{}})
+            disease2gene_map[d_id].update({g_id:None})
+
+            # Our original gene name map is derived from human genes with at least one ortholog available
+            # Our gene --> disease map can have human genes without orthologs, so we want to bring them into the map
+            if g_id not in species_gnames:
+                species_gnames[g_id] = g_name
+
+        # Read in significant phenologs table (presumably pooled from cross species data, but can be anything)
+        # Can pass in phenolog file here to get all filepaths from base level config,
+        # or default is to use the filepath that is passed when initializing the object
+        # Then group phenologs by disease where {disease_id: dataFrame[phenologs_info]}
+        sig_phenologs_dfs = self.group_sig_phenologs_by_phen(self.sig_phenologs_path)
+
+        # Build "k-nearest neighbor" data structure for each "phenotype" we want to assign gene rankings to
+        # First, map row indices to each phenotype
+        ind = 0
+        p2_phens = {}
+
+        xspecies_filtered = 0
+
+        # Total number of phenotypes a gene belongs to within the graph (across all species not including the base species of comparison)
+        # Note, this gene must also have an orthologous edge to the base species of comparison. 
+        hg_world_value = sum([len(v) for v in species_p2g.values()])
+
+        # Global phenotype association count across all species
+        ##hg_N = sum([len(v) for v in species_phenotype2gene.values()])
+        count = 0
+        for k,v in sig_phenologs_dfs.items():
+            
+            # Phenotype and species names
+            phen_ids = list(v["Species B Phenotype ID"])
+            phen_names = list(v["Species B Phenotype Name"])
+            xspecies = [vv.split(",")[1] for vv in list(v["X Species Comparison"])]
+
+            # Now loop through each phenolog (phenotype) and pull out genes associated with it
+            base_mapped_genes = {}
+            phen_count = 0
+            for p_id, p_name, xspe in zip(phen_ids, phen_names, xspecies):
+                phen_count += 1
+                phenolog_genes = species_p2g[(xspe, p_id)]
+
+                # Loop through genes associated with said phenolog/phenotype
+                for pgene in phenolog_genes:
+                    key = (xspe, pgene)
+
+                    if key not in map_to_base:
+                        continue
+
+                    base_genes = map_to_base[key]
+
+                    # Tally how many species show up for this gene, and how many times it shows up
+                    for bgene in base_genes:
+                        if bgene not in base_mapped_genes:
+                            base_mapped_genes.update({bgene:{"xspecies":Counter(), "occurence":0, "phenotypes":Counter()}})
+
+                        base_mapped_genes[bgene]["xspecies"][xspe] += 1
+                        base_mapped_genes[bgene]["occurence"] += 1
+                        base_mapped_genes[bgene]["phenotypes"][p_name] += 1
+                
+                # Only bring in top k phenotypes 
+                if phen_count >= self.kneighbs:
+                    break
+                        
+
+            #print("- {} gene candidate ranking info | Significant phenolog count {}".format(k, len(v)))
+            #print("- Total genes {}".format(len(base_mapped_genes)))
+            
+            out_df = {"Gene":[], 
+                    "Gene_name":[], 
+                    "Association_exists":[], 
+                    "XSpecies_occurence":[], 
+                    "p-value":[], 
+                    "XSpecies_phenotypes":[],
+                    "Protein_family_id":[]}
+            
+            # "Draw size" parameter for hg test
+            # How many gene annotations we ultimately pull from the k-nearest phenologs 
+            # hg_n = sum([vvv["occurence"] for vvv in base_mapped_genes.values()])
+            for bgene, gdata in base_mapped_genes.items():
+                
+                # Load our pvalue from precomputed step
+                pval = g2p_dists[bgene][k]
+
+                # # Grab hyper geometric params and pval
+                # hg_m = taxon_g2p_occurence[bgene]
+                # hg_c = gdata["occurence"]
+                # pval = hyper_geom(hg_c, hg_N, hg_m, hg_n)
+
+                out_df["Gene"].append(bgene)
+                out_df["Gene_name"].append(species_gnames[bgene])
+
+                # Tells us weather this gene-->disease association has been found before or not
+                exists_already = "False"
+                if k in disease2gene_map:
+                    if bgene in disease2gene_map[k]:
+                        exists_already = "True"
+
+                out_df["Association_exists"].append(exists_already)            
+                out_df["XSpecies_occurence"].append(','.join(["{}:{}".format(kk,vv) for kk,vv in gdata["xspecies"].items()]))
+                out_df["p-value"].append(pval)
+                out_df["XSpecies_phenotypes"].append(';'.join(list(gdata["phenotypes"].keys())))
+                out_df["Protein_family_id"].append(human_orth_map[bgene])
+                #print("  - Gene={} | Species={} | p-value={}".format(bgene, gdata["xspecies"], pval))
+
+            # Add missing gene associations here at the end, with no pvalues
+            missing_genes = set(list(disease2gene_map[k].keys())) - set(list(base_mapped_genes.keys()))
+            for bgene in missing_genes:
+                out_df["Gene"].append(bgene)
+                out_df["Gene_name"].append(species_gnames[bgene])
+                out_df["Association_exists"].append("True")
+                out_df["XSpecies_occurence"].append(None)
+                out_df["p-value"].append(None)
+                out_df["XSpecies_phenotypes"].append(None)
+                orth_id = human_orth_map.get(bgene, None)
+                out_df["Protein_family_id"].append(orth_id)
+                
+            out_df = pd.DataFrame(out_df)
+            out_df_sorted = out_df.sort_values(by="p-value")
+            
+            # Write data
+            if output_dir != False:
+                dname_formatted = disease_name_map[k].replace(" ", "-").replace(",", "-").replace("/", "-")
+                outname = "{}_{}_gene_candidates.tsv".format(k, dname_formatted).replace(":", "-") # MONDO:0091-->MONDO-0091
+                outfile_path = os.path.join(output_dir, outname)
+                out_df_sorted.to_csv(outfile_path, sep='\t', index=False)
+
+            
+            # Progress statement
+            count += 1
+            if count % 1_000 == 0:
+                print('- Processed {}/{}'.format(count, len(sig_phenologs_dfs)))
+        
+        print("- Creation of disease candidate gene rankings complete!")
         return
