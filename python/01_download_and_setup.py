@@ -40,6 +40,8 @@ if __name__ == '__main__':
                                                       existing data or monarch-kg data if already exists within specified \
                                                       projece_dir')
         parser.add_argument("-p", "--project_dir", help="Directory to write files to", required=True, type=str)
+        parser.add_argument("-gv", "--graph_version", help="Version of the monarch knowledge graph to download (e.g., 'latest' or a specific date like '2025-06-19')", required=False, type=str, default="latest")
+        parser.add_argument("-pv", "--phenio_version", help="Version of the phenio relation graph to download. Must be same date or earleir date than monarch kg version (e.g., 'latest' or a specific date like '2025-06-19')", required=False, type=str, default="latest")
         return parser.parse_args()
 
     args = parse_input_command()
@@ -47,6 +49,14 @@ if __name__ == '__main__':
 
     ###############
     ### PROGRAM ###
+
+    # Ensure phenio relation graph and monarch kg versions are compatible
+    if (args.graph_version != "latest") and (args.phenio_version != "latest"):
+        if args.phenio_version > args.graph_version:
+            raise ValueError("- ERROR: Specified phenio version {} is more recent than specified monarch kg version {}. Please specify a phenio version that is the same date or earlier than the monarch kg version.".format(args.phenio_version, args.graph_version))
+    
+    elif ((args.phenio_version == "latest") or (args.graph_version == "latest")) and (args.phenio_version != args.graph_version):
+        raise ValueError("- ERROR: One of the specified versions for monarch kg or phenio relation graph is 'latest' while the other is a specific date. Provide two dates, or set both to 'latest'")
 
     # KG download nodes, edges paths, phenio
     kg_dir_path = os.path.join(args.project_dir, "monarch_kg")
@@ -73,7 +83,7 @@ if __name__ == '__main__':
 
     # Download and upack monarch-kg
     if not os.path.isfile(kg_edges_path):
-        URL = 'https://data.monarchinitiative.org/monarch-kg-dev/latest/monarch-kg.tar.gz'
+        URL = 'https://data.monarchinitiative.org/monarch-kg-dev/{}/monarch-kg.tar.gz'.format(args.graph_version)
         download_file_url(URL, kg_dir_path, extract_gz=True, overwrite=False)
         print("- Download and upacking of monarch kg succesfull...")
     else:
@@ -81,8 +91,12 @@ if __name__ == '__main__':
     
     # Download phenio relation graph (leave gzip format to save space as we can read through it as is)
     if not os.path.isfile(phenio_path):
-        URL = 'https://github.com/monarch-initiative/phenio/releases/latest/download/phenio-relation-graph.gz'
+        if args.phenio_version != "latest":
+            URL = 'https://github.com/monarch-initiative/phenio/releases/download/v{}/phenio-relation-graph.gz'.format(args.phenio_version)
+        else:
+            URL = 'https://github.com/monarch-initiative/phenio/releases/latest/download/phenio-relation-graph.gz'
         download_file_url(URL, kg_dir_path, extract_gz=False, overwrite=False)
         print("- Download of phenio relation graph succesfull...")
     else:
         print("- Skipping phenio relation graph download... File already exists at {}".format(phenio_path))
+        
