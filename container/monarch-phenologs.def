@@ -1,0 +1,59 @@
+Bootstrap: docker
+From: ubuntu:22.04
+
+%files
+    # Copy Python scripts into container
+    ../python /opt/monarch-phenologs/python
+    ../pyproject.toml /opt/monarch-phenologs/
+
+%post
+    set -e
+
+    apt-get update
+    apt-get install -y --no-install-recommends \
+        build-essential \
+        python3 \
+        python3-pip
+
+    pip install poetry==1.8.3
+
+    cd /opt/monarch-phenologs
+    poetry export -f requirements.txt --output requirements.txt --without-hashes
+    pip install -r requirements.txt
+
+    # Safe cleanup
+    apt-get clean
+    rm -rf /var/lib/apt/lists/*
+
+%environment
+    # Set Python path to include scripts
+    export PYTHONPATH=/opt/monarch-phenologs/python:$PYTHONPATH
+    export PATH=/opt/monarch-phenologs/python:$PATH
+    export LC_ALL=C.UTF-8
+    export LANG=C.UTF-8
+
+    # Prevent Python from writing bytecode
+    export PYTHONDONTWRITEBYTECODE=1
+
+    # Unbuffered output for better logging
+    export PYTHONUNBUFFERED=1
+
+%runscript
+    # Default: run Python with passed arguments
+    exec python "$@"
+
+%labels
+    Author aaron@tislab.org
+    Version v0.1.0
+    Description Monarch Phenologs Pipeline - Bioinformatics container for orthologous phenotype analysis
+
+%help
+    This container provides the monarch-phenologs bioinformatics pipeline.
+
+    Python scripts are located in: /opt/monarch-phenologs/python/
+
+    Example usage with Nextflow:
+        container = 'monarch-phenologs.sif'
+
+    Manual execution:
+        apptainer exec monarch-phenologs.sif python /opt/monarch-phenologs/python/04_compute_phenologs.py -p /data -c 8

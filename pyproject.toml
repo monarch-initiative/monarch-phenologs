@@ -2,7 +2,6 @@
 name = "monarch-phenologs"
 version = "0.1.0"
 description = ""
-package-mode = false
 authors = ["Aaron Odell <aaron@tislab.org>"]
 
 [tool.poetry.dependencies]
