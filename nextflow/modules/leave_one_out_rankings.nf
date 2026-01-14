@@ -5,7 +5,6 @@ process leave_one_out_ortholog_rank_calcs {
     publishDir "./", mode: 'copy'
 
     input:
-    path phenologs_env_dir
     path phenologs_data_dir
     val taxon_id
     val prd
@@ -18,13 +17,12 @@ process leave_one_out_ortholog_rank_calcs {
 
     script:
     """
-    source ${phenologs_env_dir}/.venv/bin/activate
-    python monarch-phenologs/python/phenologs_xvalidation_ortholog_to_phenotype_ranking.py -p ${phenologs_data_dir} \
-                                                                                           -c ${task.cpus} \
-                                                                                           -taxon_id ${taxon_id} \
-                                                                                           -prd ${prd} \
-                                                                                           -fdr ${fdr} \
-                                                                                           -kneighbs ${kneighbs} \
-                                                                                           -rank_metric ${rank_metric}
+    python /app/python/phenologs_xvalidation_ortholog_to_phenotype_ranking.py -p ${phenologs_data_dir} \
+                                                                               -c ${task.cpus} \
+                                                                               -taxon_id ${taxon_id} \
+                                                                               -prd ${prd} \
+                                                                               -fdr ${fdr} \
+                                                                               -kneighbs ${kneighbs} \
+                                                                               -rank_metric ${rank_metric}
     """
 }
