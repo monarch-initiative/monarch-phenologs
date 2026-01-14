@@ -1,10 +1,10 @@
 #!/usr/bin/env nextflow
 
-include { get_phenologs_data } from './modules/02_get_data.nf'
-include { compute_fdr_data } from './modules/03_compute_random_trials.nf'
-include { compute_real_phenolog_data } from './modules/04_compute_phenologs.nf'
-include { compute_fdr_info } from './modules/05_compute_fdr.nf'
-include { compute_ortholog_rank_calcs } from './modules/06_compute_ortholog_rankings.nf'
+include { get_phenologs_data } from './modules/01_get_data.nf'
+include { compute_fdr_data } from './modules/02_compute_random_trials.nf'
+include { compute_real_phenolog_data } from './modules/03_compute_phenologs.nf'
+include { compute_fdr_info } from './modules/04_compute_fdr.nf'
+include { compute_ortholog_rank_calcs } from './modules/05_compute_ortholog_rankings.nf'
 include { convert_to_sim_tables } from './modules/to_similarity_tables.nf'
 include { leave_one_out_calculations } from './modules/leave_one_out_calculations.nf'
 include { leave_one_out_ortholog_rank_calcs } from './modules/leave_one_out_rankings.nf'
