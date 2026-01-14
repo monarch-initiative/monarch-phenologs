@@ -11,6 +11,7 @@ process leave_one_out_ortholog_rank_calcs {
     val fdr
     val kneighbs
     val rank_metric
+    val rank_type
 
     output:
     path phenologs_data_dir, emit: project_path
@@ -23,6 +24,7 @@ process leave_one_out_ortholog_rank_calcs {
                                                                                -prd ${prd} \
                                                                                -fdr ${fdr} \
                                                                                -kneighbs ${kneighbs} \
-                                                                               -rank_metric ${rank_metric}
+                                                                               -rank_metric ${rank_metric} \
+                                                                               -rank_type ${rank_type}
     """
 }
