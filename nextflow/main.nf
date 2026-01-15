@@ -89,7 +89,11 @@ workflow {
     // Compute disease gene candidate rankings
     if (params.taxon_id == 9606 && params.prd == "disease") {
         disease_gene_candidate_ranking(convert_to_sim_tables.out.project_path,
-                                       fdr)
+                                       taxon_id,
+                                       prd,
+                                       fdr,
+                                       kneighbs,
+                                       rank_metric)
                                        }
 
 
