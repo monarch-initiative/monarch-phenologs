@@ -1,8 +1,7 @@
 #!/usr/bin/env nextflow
 
-process leave_one_out_ortholog_rank_calcs {
-    tag 'leave_one_out_ortholog_rank_calcs'
-    publishDir "./", mode: 'copy'
+process compute_ortholog_rank_calcs {
+    tag 'compute_ortholog_rank_calcs'
 
     input:
     path phenologs_data_dir
@@ -18,8 +17,7 @@ process leave_one_out_ortholog_rank_calcs {
 
     script:
     """
-    python /app/python/phenologs_xvalidation_ortholog_to_phenotype_ranking.py -p ${phenologs_data_dir} \
-                                                                               -c ${task.cpus} \
+    python /app/python/06_phenologs_compute_ortholog_to_phenotype_rankings.py -p ${phenologs_data_dir} \
                                                                                -taxon_id ${taxon_id} \
                                                                                -prd ${prd} \
                                                                                -fdr ${fdr} \
@@ -27,4 +25,5 @@ process leave_one_out_ortholog_rank_calcs {
                                                                                -rank_metric ${rank_metric} \
                                                                                -rank_type ${rank_type}
     """
+
 }
