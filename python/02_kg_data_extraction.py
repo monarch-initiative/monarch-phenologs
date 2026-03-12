@@ -1,5 +1,6 @@
 # General imports
 import os
+import re
 import argparse
 import gzip
 import pandas as pd
@@ -7,6 +8,24 @@ import numpy as np
 import networkx as nx
 import pickle
 from collections import Counter
+
+
+def extract_panther_id(has_evidence_value):
+    """
+    Extract PANTHER family ID from has_evidence field.
+    Handles both old format ("PANTHER.FAMILY:PTHR16216") and
+    new list format ("['PANTHER.FAMILY:PTHR16216']").
+
+    Returns the PANTHER ID (e.g., "PTHR16216") or empty string if not found.
+    """
+    if not has_evidence_value:
+        return ""
+
+    # Use regex to find PANTHER.FAMILY:PTHRXXXXX pattern
+    match = re.search(r'PANTHER\.FAMILY:(PTHR\d+)', str(has_evidence_value))
+    if match:
+        return match.group(1)
+    return ""
 
 
 # Functions to read phenio-relation-graph.gz file and build directed graphs for each ontology
@@ -279,7 +298,7 @@ def compute_taxon_info(input_graph, taxon_id: str, taxon_nodes: list, outpath_di
         # First, Grab panther protein family id (if possible)
         orths = [neib for neib in neighbs if input_graph.nodes[neib]["category"] == "biolink:Gene"]
         if len(orths) > 0:
-            orth_id = input_graph.edges[(node_id, orths[0])]["has_evidence"].replace("PANTHER.FAMILY:", "")
+            orth_id = extract_panther_id(input_graph.edges[(node_id, orths[0])]["has_evidence"])
         else:
             orth_id = ""
         
@@ -529,7 +548,7 @@ def generate_ortho_edges_file(input_graph, outfile):
         taxon_b = input_graph.nodes[n2]["in_taxon"]
         gene_a_name = input_graph.nodes[n1]["name"]
         gene_b_name = input_graph.nodes[n2]["name"]
-        panth_id = input_graph.edges[e]["has_evidence"].replace("PANTHER.FAMILY:", "")
+        panth_id = extract_panther_id(input_graph.edges[e]["has_evidence"])
 
         ortholog_edges["taxon_a"].append(taxon_a)
         ortholog_edges["gene_a"].append(n1)
