@@ -10,7 +10,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import multiprocessing as mp
 from collections import Counter
-from typing import Dict, Optional
+from typing import Dict, Optional, List
 
 # Custom imports
 from phenologs_utils import divide_workload
@@ -280,16 +280,47 @@ def get_trial_fdr_data(trial_data, n_trials, results_dir):
     return species_trial_info
     
 
-def plot_fdr_cumul_results(trial_info: Dict, fdr_default=.95, savefig1=False, savefig2=False, display_figs=False):
+def format_pval(p, sigfigs=2):
+    if p <= 0:
+        return r"$p = 0$"
+    
+    exp = int(np.floor(np.log10(abs(p))))
+    base = p / (10 ** exp)
+    decimals = max(sigfigs - 1, 0)
+    
+    if exp == 0:
+        return rf"$p = {p:.{decimals}f}$"
+    else:
+        return rf"$p = {base:.{decimals}f} \times 10^{{{exp}}}$"
+
+
+def plot_fdr_cumul_results(trial_info: Dict, 
+                           plot_order: List, 
+                           label_map: Dict, 
+                           taxon_map: Dict, 
+                           fdr_default=.95, 
+                           savefig1=False, 
+                           savefig2=False, 
+                           display_figs=False):
     
     # nrows x 2 columns formatted multiplot figure 
     nrows, ncols = int(math.ceil(len(trial_data)/2)), 2 
     fig = plt.figure()
     fig.set_size_inches(ncols*5, nrows*3) # Width x height
-    
     row_ind, col_ind = 0, 0
-    for k in trial_info:
+    k = None
+    for kk in plot_order:
 
+        # Figure out which key we have in our trial info data structure for this species comparison
+        for key in [kk, label_map[kk], taxon_map[kk]]:
+            k = ("Homo-sapiens", key)
+            if k in trial_info:
+                break
+        
+        if k == None:
+            error = "- Warning, no data found for {}. Exiting...".format(kk)
+            raise ValueError(error)
+        
         ax = plt.subplot2grid((nrows, ncols), (row_ind, col_ind))
         col_ind += 1
         if col_ind == ncols:
@@ -306,14 +337,15 @@ def plot_fdr_cumul_results(trial_info: Dict, fdr_default=.95, savefig1=False, sa
 
         # FDR data
         ymin,ymax = ax.get_ylim()
+        fmted_pval = format_pval(fdr_cutoffs[fdr_default])
         ax.plot([fdr_cutoffs[fdr_default], fdr_cutoffs[fdr_default]], 
                 [ymin, ymax], 
                 linestyle='--', 
                 color='red', 
                 alpha=.5, 
-                label="FDR {}{}p-val {}".format(round(1.-fdr_default, 4), 
-                                                                     '\n', 
-                                                                     "{:e}".format(fdr_cutoffs[fdr_default])))
+                label="FDR = {}{}{}".format(round(1.-fdr_default, 2), 
+                                          '\n', 
+                                          fmted_pval))
 
         ax.set_xlim(min(random_data.T[0]) / 2., 1.)
 
@@ -324,12 +356,13 @@ def plot_fdr_cumul_results(trial_info: Dict, fdr_default=.95, savefig1=False, sa
         ax.set_ylabel("Fraction of phenologs")
 
         ax.legend()
-        ax.set_title("{} vs. {}".format(k[0], k[1]))
+        ax.set_title("{} vs. {}".format(label_map[k[0]], label_map[k[1]]))
     
     # Save and display options
     plt.tight_layout()
     if savefig1 != False:
-        plt.savefig(savefig1) 
+        plt.savefig(savefig1)
+        plt.savefig(savefig1.replace(".pdf", ".png"), dpi=600)
     if display_figs != False:
         plt.show()
     else:
@@ -340,21 +373,35 @@ def plot_fdr_cumul_results(trial_info: Dict, fdr_default=.95, savefig1=False, sa
     fig = plt.figure()
     ax = plt.subplot2grid((1, 1), (0, 0))
 
-    for k in trial_info:
+    for kk in plot_order:
+
+        # Figure out which key we have in our trial info data structure for this species comparison
+        for key in [kk, label_map[kk], taxon_map[kk]]:
+            k = ("Homo-sapiens", key)
+            if k in trial_info:
+                break
+        
+        if k == None:
+            error = "- Warning, no data found for {}. Exiting...".format(kk)
+            raise ValueError(error)
+        
         cdata = trial_info[k]["fdr_cumul"]
         plot_data = np.asarray(sorted([[kk,v] for kk,v in cdata.items()], key=lambda x: x[0], reverse=True)).T
-        lab = " vs. ".join([k[0], k[1]])
+        ##lab = " vs. ".join([label_map[k[0]], label_map[k[1]]])
+        lab = label_map[k[1]]
         ax.plot(plot_data[1], plot_data[0], label=lab)
 
-    #ax.set_ylim(fdr_default, 1.)
+    ##ax.set_ylim(fdr_default, 1.)
     ax.set_xlabel("Number of phenologs above score threshold (log10)")
     ax.set_ylabel("1 - False Discovery Rate")
-    ax.legend(loc='upper left', bbox_to_anchor=(1, 1))
+    ##ax.legend(loc='upper left', bbox_to_anchor=(1, 1))
+    ax.legend(loc='center left', fontsize=7)##, bbox_to_anchor=(1, 1))
     ax.set_xscale("log")
     
     # Save and display options
     if savefig2 != False:
         plt.savefig(savefig2, bbox_inches='tight')
+        plt.savefig(savefig2.replace(".pdf", ".png"), bbox_inches='tight', dpi=600)
     if display_figs != False:
         plt.show()
     else:
@@ -380,7 +427,7 @@ def initiate_phenologs_fdr_fpaths(input_args):
         sys.exit()
     
     if not os.path.isdir(check_outdir):
-        print("- ERROR, Project phenologs_results directory doesn't seem to exist. Exiting...")
+        print("- ERROR, Project random_trials directory doesn't seem to exist. Exiting...")
         sys.exit()
     
     # Figure out which species ids / names we have and which ones are relevant
@@ -458,6 +505,26 @@ if __name__ == '__main__':
     ###############
     ### PROGRAM ###
 
+    species_label_map = {"NCBITaxon:9606": "Homo-sapiens",
+                         "NCBITaxon:10090": "Mus-musculus",
+                         "NCBITaxon:4896": "Schizosaccharomyces-pombe",
+                         "NCBITaxon:7955": "Danio-rerio",
+                         "NCBITaxon:6239": "Caenorhabditis-elegans",
+                         "NCBITaxon:10116": "Rattus-norvegicus",
+                         "NCBITaxon:8364": "Xenopus-tropicalis",
+                         "NCBITaxon:44689": "Dictyostelium-discoideum",
+                         "NCBITaxon:7227": "Drosophila-melanogaster"} ## Future proofing here as drosophila not yet added (assuming melanogster here)
+    species_taxon_map = {v: k for k, v in species_label_map.items()}
+    species_label_map.update({v:v for v in species_label_map.values()})
+    plot_order = ["Mus-musculus", 
+                  "Danio-rerio", 
+                  "Caenorhabditis-elegans", 
+                  "Schizosaccharomyces-pombe", 
+                  "Rattus-norvegicus",
+                  "Xenopus-tropicalis",
+                  "Dictyostelium-discoideum"]
+
+
     fpaths, rpaths, snames = initiate_phenologs_fdr_fpaths(args)
     for res_path, rand_path, sname in zip(fpaths, rpaths, snames):
         
@@ -483,9 +550,12 @@ if __name__ == '__main__':
     
         # Plot our results and save figures
         plot_fdr_cumul_results(trial_info, 
+                               plot_order=plot_order,
+                               taxon_map=species_taxon_map,
                                fdr_default=.95, 
                                savefig1=plot1_data_outpath, 
                                savefig2=plot2_data_outpath,
-                               display_figs=args.display_figs)
+                               display_figs=args.display_figs,
+                               label_map=species_label_map)
         
         print("- FDR table and figure(s) generated... Done!")
