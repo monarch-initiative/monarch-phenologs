@@ -130,3 +130,39 @@ dmypy.json
 /datasets/Sources/monarch-kg.tar
 /datasets/Sources/monarch-kg/
 /datasets/
+
+################################################################
+# Phenologs run data / experiment outputs -- NEVER commit these.
+# The pipeline writes multi-GB KG dumps, randomized trials and
+# results into the project dir passed via -p / params. Ignore the
+# default project dir and every subdirectory the pipeline creates,
+# at any depth, so a run under a differently-named -p is also safe.
+################################################################
+
+# Default project dir created by nextflow/modules/01_get_data.nf
+phenologs-from-kg/
+
+# Subdirectories created by python/01_download_and_setup.py
+monarch_kg/
+species_data/
+random_trials/
+phenologs_results/
+leave_one_out_xvalidation/
+
+# Bulk KG / ontology artifacts
+monarch-kg.tar.gz
+monarch-kg_*.tsv
+phenio-relation-graph.gz
+
+# Nextflow run state and reports
+work/
+.nextflow/
+.nextflow.log*
+report.html
+timeline.html
+trace.txt
+dag.dot
+dag.html
+
+# Apptainer/Singularity image
+*.sif
