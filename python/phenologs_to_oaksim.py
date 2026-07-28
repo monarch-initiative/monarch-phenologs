@@ -8,7 +8,10 @@ import pandas as pd
 import numpy as np
 
 # Custom imports
-from phenologs_utils import (build_species_info, validate_species_arguments)
+from phenologs_utils import (FDR_LEVELS,
+                             DEFAULT_FDR,
+                             build_species_info,
+                             validate_species_arguments)
 
 
 if __name__ == '__main__':
@@ -21,7 +24,8 @@ if __name__ == '__main__':
         parser.add_argument("-p","--project_dir", help="Top most project directory", required=False, type=str, default=None)
         parser.add_argument("-taxon_id", help='Specicies specific taxon id or "all" are allowed', required=True, type=str)
         parser.add_argument("-prd", "--prediction_network", help="phenotype or disease (which type of network to use for base species comparisons)", required=True, default="phenotype")
-        parser.add_argument("-fdr", help="One minus the false discovery rate.. .95 is default", required=True, type=float, default=.95)
+        parser.add_argument("-fdr", help="False discovery rate to pull pvalue cutoffs for. Default is the McGary et. al. 2010 level",
+                            required=False, type=float, default=DEFAULT_FDR, choices=FDR_LEVELS)
         return parser.parse_args()
 
     args = parse_input_command()
@@ -32,7 +36,7 @@ if __name__ == '__main__':
     t_id = validate_species_arguments(species_dict, org_taxon_ids, args.taxon_id, args.prediction_network)
     species_obj = species_dict[t_id]
 
-    ### File name should be formated something like this... Homo-sapiens_pooled_phenologs_fdr0.95.tsv
+    ### File name should be formated something like this... Homo-sapiens_pooled_phenologs_fdr0.05.tsv
     fname = "{}_pooled_phenologs_fdr{}.tsv".format(species_obj.species_name, args.fdr)
     fdir = os.path.join(args.project_dir, "phenologs_results", "{}_{}_results".format(species_obj.species_name.replace("-", "_"), 
                                                                                        args.prediction_network))

@@ -8,12 +8,15 @@ import math
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-import multiprocessing as mp
 from collections import Counter
-from typing import Dict, Optional, List
+from typing import Dict, List
 
 # Custom imports
-from phenologs_utils import divide_workload
+from phenologs_utils import (FDR_LEVELS,
+                             DEFAULT_FDR,
+                             TRIAL_PARAM_COLS,
+                             PHENOLOG_PARAM_COLS,
+                             bulk_compute_hyper_geom)
 
 
 
@@ -21,38 +24,35 @@ from phenologs_utils import divide_workload
 def gather_trial_data(input_dir):
     """
     Grabs all files within the input directory where
-    - "_vs_" is contained in the filename, 
+    - "_vs_" is contained in the filename,
     - the filename ends with ".tsv" or ".tsv.gz"
     - the last charcter of the filename before ".tsv" must pertain to a trial number (i.e. an integer)
 
     {(species_a, species_b):{trial_number:path/to/trial/results/file}} is the format we store all our our data
     """
-    
+
     # Gather all filepaths to trial data
-    trial_files = []
     trials_by_species = {}
-    trial_nums = {}
     for fname in os.listdir(input_dir):
-        
+
         if "_vs_" not in fname:
             continue
-        
+
         if not fname.endswith(".gz") and not fname.endswith(".tsv"):
             continue
-        
+
         # Ensure last piece of filename corresponds to a trial number
         fname_formatted = fname.replace(".gz", '')
         fname_formatted = fname_formatted.replace(".tsv", '')
         cols = fname_formatted.split("_")
-        
+
         # See if we have a trial number as the last bit of our filename
         try:
             trial_num = int(cols[-1])
-            trial_nums.update({trial_num:''})
         except:
             continue
-        
-        
+
+
         # Keep track of trial information by species-species comparison
         ddd = fname_formatted.split("_vs_")
         specA = ddd[0]
@@ -61,291 +61,307 @@ def gather_trial_data(input_dir):
 
         if trials_by_species.get(key, None) == None:
             trials_by_species.update({key:{}})
-        
+
         if trials_by_species[key].get(trial_num, None) == None:
             trials_by_species[key].update({trial_num:os.path.join(input_dir, fname)})
-    
+
     print("- Total filepaths gathered {}".format(format(sum([len(v) for v in trials_by_species.values()]), ',')))
     print("- Total pairwise species comparison types found {}".format(len(trials_by_species)))
     for k, v in trials_by_species.items():
         print("- {} -- Trials found {}".format(k, format(len(v), ',')))
-    
-    return trials_by_species, sorted(list(trial_nums.keys()))
+
+    return trials_by_species
 
 
-def collapse_cross_species_trials(trials, trials_by_species, comp_key):
+def collapse_cross_species_trials(trial_paths: Dict, common_ortholog_count: int):
     """
-    Keeps track of unique p-values found across all of our trials. 
-    10,000 Human phenotypes x 10,000 mouse phenotypes = 100,000,000 trial phenolog calculations
-    We do 1,000 trials so we would have 100 Billion data points. Instead, we collapse our data by
-    unique pvalues that are found and count the occurence of them across all trials.
-    By doing this, we end up with ~941,000 key, value pairs that we are able to work with much more
-    effecfively.
-    """
-    
-    # Compute a single FDR per trial across entire species-species pairwise comparison dataset
-    pvals = {}
-    for trial_num, trial_path in trials_by_species[comp_key].items():
-        
-        # Open file, and expand pvalue list based on "hg_pval" and "occurrence" columns
-        if ".gz" in trial_path: 
-            df = pd.read_csv(trial_path, sep='\t', compression="gzip")
-        else: 
-            df = pd.read_csv(trial_path, sep='\t')
-        
-        # Gather pvals for this species--species comparison
-        for pval, occ in zip(list(df["hg_pval"].astype(float)), list(df["occurrence"].astype(int))):
-            if pval not in pvals:
-                pvals.update({pval:0.})
-            pvals[pval] += occ
-        
-        ##print(trial_num)
+    Keeps track of how many times each (c,N,m,n) hypergeometric parameter set is found across all of
+    our trials. 10,000 Human phenotypes x 10,000 mouse phenotypes = 100,000,000 trial phenolog
+    calculations. We do 1,000 trials so we would have 100 Billion data points. Instead, we collapse
+    our data by unique parameter set and count the occurence of them across all trials. By doing this,
+    we end up with ~56,000 key, value pairs that we are able to work with much more effectively.
 
-    print("- Total unique pvalues found {}".format(format(len(pvals), ',')))
-    return pvals
-    
+    Parameter sets are the key here rather than the hg_pval column on purpose. Pandas reads floats
+    back with a parser that isn't correctly rounded, so a pvalue written by step 03 and the same
+    pvalue written by step 04 can come back differing in the last bit. That splits a single discrete
+    pvalue in two and leaves the random and the real distribution unable to be lined up against
+    each other. Recomputing from the integer parameters sidesteps the round trip entirely.
+    """
+
+    param_counts = Counter()
+    for trial_num, trial_path in sorted(trial_paths.items()):
+
+        df = pd.read_csv(trial_path, sep='\t') # Compression is inferred from the file extension
+
+        # N is a property of the species pair, so a trial file disagreeing with the results file is
+        # either from a different run, or predates the trial file parameter column labelling fix
+        trial_world = set(df[TRIAL_PARAM_COLS[1]].unique().tolist())
+        if trial_world != {common_ortholog_count}:
+            print("- ERROR, {} holds common ortholog count(s) {} where {} was expected.".format(os.path.basename(trial_path),
+                                                                                                trial_world,
+                                                                                                common_ortholog_count))
+            print("- Random trials written before the trial file column labelling fix must be regenerated (step 03). Exiting...")
+            sys.exit()
+
+        # Tally up parameter set occurrences across this trial
+        for params, occ in zip(map(tuple, df[TRIAL_PARAM_COLS].to_numpy().tolist()),
+                               df["occurrence"].to_numpy().tolist()):
+            param_counts[params] += occ
+
+    print("- Random trial comparisons {} collapsed to {} unique hg parameter sets".format(format(sum(param_counts.values()), ','),
+                                                                                         format(len(param_counts), ',')))
+    return param_counts
+
 
 def collapse_cross_species_phenologs(input_dir, comp_key):
     """
-    Keeps track of unique p-values found across all of our trials. 
-    10,000 Human phenotypes x 10,000 mouse phenotypes = 100,000,000 trial phenolog calculations
-    We do 1,000 trials so we would have 100 Billion data points. Instead, we collapse our data by
-    unique pvalues that are found and count the occurence of them across all trials.
-    By doing this, we end up with ~941,000 key, value pairs that we are able to work with much more
-    effecfively.
+    The same parameter set tally that collapse_cross_species_trials produces, for the one real
+    (non permuted) comparison. Also hands back the common ortholog count N, which the random trials
+    for this species pair are validated against.
     """
-    
-    #Header column values 
-    #Species A Phenotype ID  
-    #Species B Phenotype ID  
-    #Ortholog Count A        
-    #Ortholog Count B        
-    #Overlap Count   
-    #Common Ortholog Count   
-    #P-Value 
-    #Species A Phenotype Name        
-    #Species B Phenotype Name
-    
-    
-    # Read in data to memory 
+
+    # Read in data to memory
     phenologs_filepath = os.path.join(input_dir, "{}_vs_{}_all_phenologs.tsv".format(comp_key[0], comp_key[1]))
+    if not os.path.isfile(phenologs_filepath):
+        print("- ERROR, No real phenologs results found at {}. Exiting...".format(phenologs_filepath))
+        sys.exit()
+
     phen_df = pd.read_csv(phenologs_filepath, sep='\t')
-    
-    pvals = {}
-    for pval in list(phen_df["hg_pval"].astype(float)):
-        if pval not in pvals:
-            pvals.update({pval:0})
-        pvals[pval] += 1
-    
-    print("- Total unique pvalues found {}".format(format(len(pvals), ',')))
-    return pvals
+    world_counts = set(phen_df[PHENOLOG_PARAM_COLS[1]].unique().tolist())
+    if len(world_counts) != 1:
+        print("- ERROR, {} holds more than one common ortholog count {}. Exiting...".format(os.path.basename(phenologs_filepath),
+                                                                                           world_counts))
+        sys.exit()
+
+    # Grouped rather than tallied row by row, as this file runs to millions of comparisons
+    param_counts = {tuple(int(p) for p in params):int(occ)
+                    for params, occ in phen_df.groupby(PHENOLOG_PARAM_COLS).size().items()}
+
+    # Every phenolog has to end up in exactly one parameter set, otherwise D(t) is understated and
+    # every fdr computed from it is optimistic
+    if sum(param_counts.values()) != len(phen_df):
+        print("- ERROR, {} comparisons tallied from the {} rows of {}. Exiting...".format(format(sum(param_counts.values()), ','),
+                                                                                         format(len(phen_df), ','),
+                                                                                         os.path.basename(phenologs_filepath)))
+        sys.exit()
+
+    print("- Real phenolog comparisons {} collapsed to {} unique hg parameter sets".format(format(sum(param_counts.values()), ','),
+                                                                                          format(len(param_counts), ',')))
+    return param_counts, world_counts.pop()
 
 
-# For visualization and FDR calculations
-def collapsed_data_to_cumulitive(input_data: Dict):
-    
-    total = float(sum(list(input_data.values())))
-    sorted_data = np.asarray(sorted([[k,v] for k,v in input_data.items()], key=lambda x: x[0], reverse=True))
-    cumul = 0.
-    data_frac = []
-    data_counts = []
-    for d in sorted_data:
-        cumul += d[1]
-        data_frac.append(1. - (cumul/total))
-        data_counts.append(total-cumul)
-    
-    return sorted_data, np.asarray(data_frac), total
-
-
-def get_fdr_cuttoffs(sorted_pval_counts: list):
+def param_counts_to_pval_counts(param_counts: Dict, hg_pvals: Dict):
     """
-    Specific algorithm to compute the pvalues one should use to get xyz desired false discovery rate...
-    Input is a specific data structure where each element within the list is [pvalue, occurence]...
-    This is for a collapsed form of the data (to save memory and compute) where we can 'bin' the cumulitive
-    fraction of the data to any desired level of granularity without sacrificing runtime.
+    Rolls a {(c,N,m,n):occurrence} tally up into the {pvalue:occurrence} distribution that the fdr
+    calculation and the random vs real figure both work from. Different parameter sets routinely land
+    on the same pvalue, so this is a many to one collapse.
     """
-    
-    # Algorithm to take an array where each element is the number of times that a particular value occurred
-    
-    # Total number of comparisons made (collapsed by pvalue occurence)
-    tot = sum(np.asarray(sorted_pval_counts).T[1])
-    fdrs = [i for i in np.arange(.95, 1.00001, .00001)]
-    fdc = {fd:1. for fd in fdrs}
 
-    # Alg variables
-    cumul, frac = 0., 0.
-    fd, fdr_count = fdrs[0], len(fdrs)
-    
-    # Loop through sorted [[pvalue,occurence], ...] data and compute cumulative fraction of data and the
-    # corresponding pvalue at that fraction (i.e. what pvalue do we use to get a false discovery rate of xyz)
-    for v in sorted_pval_counts:
-        pval, occ = v
-        cumul += occ
-        frac = cumul/tot
+    pval_counts = Counter()
+    for params, occ in param_counts.items():
+        pval_counts[hg_pvals[params]] += occ
 
-        if frac >= fd:
-            fdc[fd] = pval
-
-            while True:
-
-                if fdr_count == 0:
-                    break
-
-                fd = fdrs.pop(0)
-                fdr_count -= 1
-                if frac >= fd:
-                    fdc[fd] = pval
-                else:
-                    break
-    
-    return fdc
+    return pval_counts
 
 
-def get_cumulitive_phenolog_counts(sorted_pval_counts: list, pval_cutoffs: Dict):
+# For visualization
+def collapsed_data_to_cumulitive(pval_counts: Dict):
     """
-    needs documenting
+    [[pvalue, occurrence], ...] ordered from least to most significant, alongside the fraction of the
+    distribution that is more significant than each pvalue (what the random vs real figure plots)
     """
-    
-    # Algorithm to take an array where each element is the number of times that a particular value occurred
-    
-    # Total number of comparisons made (collapsed by pvalue occurence)
-    tot = sum(np.asarray(sorted_pval_counts).T[1])
-    fdrs = sorted(list(pval_cutoffs.keys()))
-    fdc = {fd:1. for fd in fdrs}
 
-    # Alg variables
-    cumul, frac = 0., 0.
-    fd, fdr_count = fdrs[0], len(fdrs)
-    
-    # Loop through sorted [[pvalue,occurence], ...] data and compute cumulative fraction of data and the
-    # corresponding pvalue at that fraction (i.e. what pvalue do we use to get a false discovery rate of xyz)
-    for v in sorted_pval_counts:
-        pval, occ = v
-        cumul += occ
-        frac = cumul/tot
+    total = float(sum(pval_counts.values()))
+    sorted_data = np.asarray(sorted([[k,v] for k,v in pval_counts.items()], key=lambda x: x[0], reverse=True))
+    data_frac = 1. - (np.cumsum(sorted_data.T[1]) / total)
 
-        if pval <= pval_cutoffs[fd]:
-
-            fdc[fd] = tot - cumul
-
-            while True:
-
-                if fdr_count == 0:
-                    break
-
-                fd = fdrs.pop(0)
-                fdr_count -= 1
-                if pval <= pval_cutoffs[fd]:
-                    fdc[fd] = tot - cumul
-                else:
-                    break
-
-    return fdc
+    return sorted_data, data_frac, total
 
 
-def get_trial_fdr_data(trial_data, n_trials, results_dir):
-    
+def get_fdr_cuttoffs(random_pval_counts: Dict, real_pval_counts: Dict, n_trials: int, fdr_levels: List[float]):
+    """
+    False discovery rate as laid out in McGary et. al. 2010. For a candidate pvalue threshold t,
+        P(t)   = permuted comparisons at or below t, pooled over all n_trials trials
+        D(t)   = real comparisons at or below t (the phenologs we would be calling significant)
+        fdr(t) = (P(t) / n_trials) / D(t)
+
+    Only the pvalues the real data actually achieves are candidate thresholds, because a threshold
+    placed between two of them takes on false positives without adding a single discovery. fdr(t) is
+    not monotonic in t (both counts grow, and D grows in discrete jumps), so every candidate is
+    scored and the most permissive threshold still within each requested level is taken. That is the
+    threshold giving the most phenologs at that level.
+
+    Both distributions leave out the zero overlap comparisons, which is consistent and doesn't skew
+    the ratio. A zero overlap has a pvalue of 1.0, so it can never be a discovery nor a false
+    positive at any threshold we would consider.
+    """
+
+    if len(real_pval_counts) == 0 or len(random_pval_counts) == 0:
+        print("- ERROR, An empty real or random pvalue distribution can't be assigned an fdr. Exiting...")
+        sys.exit()
+
+    # Candidate thresholds least to most permissive, and the discovery count at each
+    candidates, real_counts = zip(*sorted(real_pval_counts.items()))
+    candidates, discoveries = np.asarray(candidates), np.cumsum(real_counts)
+
+    # Expected false positives per trial at each candidate threshold
+    random_pvals, random_counts = zip(*sorted(random_pval_counts.items()))
+    random_cumul = np.cumsum(random_counts)
+    inds = np.searchsorted(np.asarray(random_pvals), candidates, side='right')
+    false_positives = np.where(inds > 0, random_cumul[np.maximum(inds - 1, 0)], 0.) / float(n_trials)
+
+    fdr_curve = false_positives / discoveries
+
+    # Most permissive threshold that still holds for each requested level
+    fdr_cutoffs = {}
+    for level in fdr_levels:
+
+        # No threshold reaches this level. A 0.0 cutoff lets nothing through, which is the only safe
+        # reading of "unreachable" (the old code defaulted to 1.0, which passes everything)
+        passing = np.flatnonzero(fdr_curve <= level)
+        if len(passing) == 0:
+            fdr_cutoffs[level] = {"pvalue_cutoff":0.,
+                                  "phenolog_count":0,
+                                  "expected_false_positives":0.,
+                                  "realized_fdr":0.}
+            continue
+
+        # Candidates run least to most permissive, so the last one passing is the one yielding the
+        # most phenologs at this level
+        ind = passing[-1]
+        fdr_cutoffs[level] = {"pvalue_cutoff":float(candidates[ind]),
+                              "phenolog_count":int(discoveries[ind]),
+                              "expected_false_positives":float(false_positives[ind]),
+                              "realized_fdr":float(fdr_curve[ind])}
+
+    return fdr_cutoffs, {"pvalue":candidates,
+                         "phenolog_count":discoveries,
+                         "expected_false_positives":false_positives,
+                         "fdr":fdr_curve}
+
+
+def get_trial_fdr_data(trials_by_species: Dict, results_dir: str, fdr_levels: List[float]):
+
     species_trial_info = {}
-    for k in trial_data:
-        
-        # Collapse random trials, and results data to respective singular datastructures
-        # NOTE - This is the step that should be parallelized!
-        random_trial_pvals = collapse_cross_species_trials(trials=n_trials, trials_by_species=trial_data, comp_key=k)
-        
+    for k in trials_by_species:
+
+        print("- Collapsing {} vs. {}...".format(k[0], k[1]))
+
+        # Collapse real results and random trials to {(c,N,m,n):occurrence} tallies
+        # NOTE - Collapsing the random trials is the step that should be parallelized!
+        real_params, common_ortholog_count = collapse_cross_species_phenologs(results_dir, k)
+        random_params = collapse_cross_species_trials(trials_by_species[k], common_ortholog_count)
+
         # Everything from here down is fine single core...
-        random_bulk_info = collapsed_data_to_cumulitive(random_trial_pvals)
-        random_data, random_data_frac, random_total = random_bulk_info
+        # One hg calculation per unique parameter set across both distributions, so that a given
+        # discrete pvalue is the exact same float on the real and on the random side of the comparison
+        hg_pvals = bulk_compute_hyper_geom(set(real_params) | set(random_params))
 
-        # Collapse and upack real phenolog calculation data
-        # This could be parallelized... but probably not worth the effort
-        phenologs_pvals = collapse_cross_species_phenologs(input_dir=results_dir, comp_key=k)
-        phen_bulk_info = collapsed_data_to_cumulitive(phenologs_pvals)
-        phen_data, phen_data_frac, phen_total = phen_bulk_info
+        random_pval_counts = param_counts_to_pval_counts(random_params, hg_pvals)
+        real_pval_counts = param_counts_to_pval_counts(real_params, hg_pvals)
 
-        # Generate false discovery rate pvalue cutoffs based on random trial nonzero intersection pvalue distribution
-        fdr_cutoffs = get_fdr_cuttoffs(random_data)
+        random_bulk_info = collapsed_data_to_cumulitive(random_pval_counts)
+        phen_bulk_info = collapsed_data_to_cumulitive(real_pval_counts)
 
-        # Figure out cumulative counts of real data phenolog counts from pvalue thresholds
-        fdr_cumul = get_cumulitive_phenolog_counts(phen_data, pval_cutoffs=fdr_cutoffs)
+        # Generate false discovery rate pvalue cutoffs by weighing the real phenolog counts at each
+        # candidate threshold against the false positives the random trials produce there.
+        # Trial count is taken per species comparison, as it is the divisor turning the pooled
+        # permuted hits into an expected count of false positives for a single trial
+        n_trials = len(trials_by_species[k])
+        fdr_cutoffs, fdr_curve = get_fdr_cuttoffs(random_pval_counts, real_pval_counts, n_trials, fdr_levels)
 
-        # Add our data for second figure tallying how many phenologs above xyz fdr we get for each cross species comparison
-        lab = "{}{}{} at default fdr".format(k, '\n', phen_data.T[0])
-        
-        species_trial_info.update({k:{"fdr_cutoffs":fdr_cutoffs, 
-                                      "fdr_cumul":fdr_cumul,
-                                      "label":lab,
+        species_trial_info.update({k:{"fdr_cutoffs":fdr_cutoffs,
+                                      "fdr_curve":fdr_curve,
+                                      "n_trials":n_trials,
+                                      "common_ortholog_count":common_ortholog_count,
                                       "random_data":random_bulk_info,
                                       "real_data":phen_bulk_info}})
 
+        for level in fdr_levels:
+            cutoff = fdr_cutoffs[level]
+            print("- fdr {} -- pvalue <= {:.4g} yields {} phenologs ({:.1f} expected false positives)".format(level,
+                                                                                                              cutoff["pvalue_cutoff"],
+                                                                                                              format(cutoff["phenolog_count"], ','),
+                                                                                                              cutoff["expected_false_positives"]))
+
     return species_trial_info
-    
+
 
 def format_pval(p, sigfigs=2):
     if p <= 0:
         return r"$p = 0$"
-    
+
     exp = int(np.floor(np.log10(abs(p))))
     base = p / (10 ** exp)
     decimals = max(sigfigs - 1, 0)
-    
+
     if exp == 0:
         return rf"$p = {p:.{decimals}f}$"
     else:
         return rf"$p = {base:.{decimals}f} \times 10^{{{exp}}}$"
 
 
-def plot_fdr_cumul_results(trial_info: Dict, 
-                           plot_order: List, 
-                           label_map: Dict, 
-                           taxon_map: Dict, 
-                           fdr_default=.95, 
-                           savefig1=False, 
-                           savefig2=False, 
+def resolve_comparison_key(trial_info: Dict, species_name: str, label_map: Dict, taxon_map: Dict):
+    """
+    Depending on where a species name came from it can be a taxon id, a hyphenated name, or a label.
+    Returns the (species_a, species_b) key our data is actually stored under, or None if absent
+    """
+
+    aliases = set([species_name, label_map.get(species_name, None), taxon_map.get(species_name, None)])
+    for k in trial_info:
+        if k[1] in aliases:
+            return k
+
+    return None
+
+
+def plot_fdr_cumul_results(trial_info: Dict,
+                           plot_order: List,
+                           label_map: Dict,
+                           taxon_map: Dict,
+                           fdr_default=DEFAULT_FDR,
+                           savefig1=False,
+                           savefig2=False,
                            display_figs=False):
-    
-    # nrows x 2 columns formatted multiplot figure 
-    nrows, ncols = int(math.ceil(len(trial_data)/2)), 2 
+
+    # Resolve the requested plot order against the comparisons we have data for, then append anything
+    # present but unlisted so a newly added species can't be silently left out of the figures
+    plot_keys = []
+    for kk in plot_order:
+        k = resolve_comparison_key(trial_info, kk, label_map, taxon_map)
+        if k == None:
+            print("- Warning, no data found for {}. Skipping...".format(kk))
+        elif k not in plot_keys:
+            plot_keys.append(k)
+
+    plot_keys += sorted([k for k in trial_info if k not in plot_keys])
+
+    # nrows x 2 columns formatted multiplot figure
+    nrows, ncols = int(math.ceil(len(plot_keys)/2)), 2
     fig = plt.figure()
     fig.set_size_inches(ncols*5, nrows*3) # Width x height
-    row_ind, col_ind = 0, 0
-    k = None
-    for kk in plot_order:
+    for i, k in enumerate(plot_keys):
 
-        # Figure out which key we have in our trial info data structure for this species comparison
-        for key in [kk, label_map[kk], taxon_map[kk]]:
-            k = ("Homo-sapiens", key)
-            if k in trial_info:
-                break
-        
-        if k == None:
-            error = "- Warning, no data found for {}. Exiting...".format(kk)
-            raise ValueError(error)
-        
-        ax = plt.subplot2grid((nrows, ncols), (row_ind, col_ind))
-        col_ind += 1
-        if col_ind == ncols:
-            col_ind = 0
-            row_ind += 1
+        ax = plt.subplot2grid((nrows, ncols), (i // ncols, i % ncols))
 
         # Random, real, fdr data
         random_data, random_data_frac, random_total = trial_info[k]["random_data"]
         phen_data, phen_data_frac, phen_total = trial_info[k]["real_data"]
-        fdr_cutoffs = trial_info[k]["fdr_cutoffs"]
-        
+        pval_cutoff = trial_info[k]["fdr_cutoffs"][fdr_default]["pvalue_cutoff"]
+
         ax.plot(random_data.T[0], random_data_frac, label="Random")
         ax.plot(phen_data.T[0], phen_data_frac, label="Real")
 
-        # FDR data
-        ymin,ymax = ax.get_ylim()
-        fmted_pval = format_pval(fdr_cutoffs[fdr_default])
-        ax.plot([fdr_cutoffs[fdr_default], fdr_cutoffs[fdr_default]], 
-                [ymin, ymax], 
-                linestyle='--', 
-                color='red', 
-                alpha=.5, 
-                label="FDR = {}{}{}".format(round(1.-fdr_default, 2), 
-                                          '\n', 
-                                          fmted_pval))
+        # FDR data. A cutoff of 0.0 means no threshold reaches this fdr level, so there is no line to draw
+        if pval_cutoff > 0.:
+            ax.axvline(pval_cutoff,
+                       linestyle='--',
+                       color='red',
+                       alpha=.5,
+                       label="FDR = {}{}{}".format(fdr_default, '\n', format_pval(pval_cutoff)))
+        else:
+            ax.plot([], [], linestyle='--', color='red', alpha=.5,
+                    label="FDR = {}{}not reached".format(fdr_default, '\n'))
 
         ax.set_xlim(min(random_data.T[0]) / 2., 1.)
 
@@ -356,8 +372,8 @@ def plot_fdr_cumul_results(trial_info: Dict,
         ax.set_ylabel("Fraction of phenologs")
 
         ax.legend()
-        ax.set_title("{} vs. {}".format(label_map[k[0]], label_map[k[1]]))
-    
+        ax.set_title("{} vs. {}".format(label_map.get(k[0], k[0]), label_map.get(k[1], k[1])))
+
     # Save and display options
     plt.tight_layout()
     if savefig1 != False:
@@ -367,37 +383,24 @@ def plot_fdr_cumul_results(trial_info: Dict,
         plt.show()
     else:
         plt.close()
-    
+
     ############################################################################
-    ### Plot to show distribution of significant phenolog across all species ###
+    ### Plot the false discovery rate against phenolog yield for all species ###
     fig = plt.figure()
     ax = plt.subplot2grid((1, 1), (0, 0))
 
-    for kk in plot_order:
+    for k in plot_keys:
+        fdr_curve = trial_info[k]["fdr_curve"]
+        ax.plot(fdr_curve["phenolog_count"], fdr_curve["fdr"], label=label_map.get(k[1], k[1]))
 
-        # Figure out which key we have in our trial info data structure for this species comparison
-        for key in [kk, label_map[kk], taxon_map[kk]]:
-            k = ("Homo-sapiens", key)
-            if k in trial_info:
-                break
-        
-        if k == None:
-            error = "- Warning, no data found for {}. Exiting...".format(kk)
-            raise ValueError(error)
-        
-        cdata = trial_info[k]["fdr_cumul"]
-        plot_data = np.asarray(sorted([[kk,v] for kk,v in cdata.items()], key=lambda x: x[0], reverse=True)).T
-        ##lab = " vs. ".join([label_map[k[0]], label_map[k[1]]])
-        lab = label_map[k[1]]
-        ax.plot(plot_data[1], plot_data[0], label=lab)
+    ax.axhline(fdr_default, linestyle='--', color='red', alpha=.5, label="FDR = {}".format(fdr_default))
 
-    ##ax.set_ylim(fdr_default, 1.)
-    ax.set_xlabel("Number of phenologs above score threshold (log10)")
-    ax.set_ylabel("1 - False Discovery Rate")
-    ##ax.legend(loc='upper left', bbox_to_anchor=(1, 1))
-    ax.legend(loc='center left', fontsize=7)##, bbox_to_anchor=(1, 1))
+    ax.set_xlabel("Number of phenologs at or below pvalue threshold")
+    ax.set_ylabel("False discovery rate")
+    ax.legend(loc='lower right', fontsize=7)
     ax.set_xscale("log")
-    
+    ax.set_yscale("log")
+
     # Save and display options
     if savefig2 != False:
         plt.savefig(savefig2, bbox_inches='tight')
@@ -412,7 +415,7 @@ def plot_fdr_cumul_results(trial_info: Dict,
 def initiate_phenologs_fdr_fpaths(input_args):
     """
     - Attempts to ensure filepaths required for all computations are resolved before hand, so that
-      calculations don't fail part way through. 
+      calculations don't fail part way through.
     - Creates pairwise comparison configuration data structures from
       input arguments. Either all comparisons or a select set from a comma seperated list of taxon ids
     - Input species is compared against all other species within the monarch kg
@@ -425,11 +428,11 @@ def initiate_phenologs_fdr_fpaths(input_args):
     if not os.path.isfile(check_file):
         print("- ERROR, Project species information table doesn't seem to exist. Exiting...")
         sys.exit()
-    
+
     if not os.path.isdir(check_outdir):
         print("- ERROR, Project random_trials directory doesn't seem to exist. Exiting...")
         sys.exit()
-    
+
     # Figure out which species ids / names we have and which ones are relevant
     species_df = pd.read_csv(check_file, sep='\t')
     species_df = species_df[species_df["Genes with >= 1 phenotype edge"] > 0] # Only want species whith non zero phenotype information
@@ -437,11 +440,11 @@ def initiate_phenologs_fdr_fpaths(input_args):
     # Pull out taxon_id information (twice as two separate variables)
     ids_to_name = {sp_id:"-".join(sp_name.split(" ")) for sp_id, sp_name in zip(list(species_df["Taxon ID"]), list(species_df["Taxon label"]))}
     org_taxon_ids = copy.copy(ids_to_name)
-    
+
     # Format, and add additional keys to make more friendly to input arguments
     ids_to_name = {sp_id:"-".join(sp_name.split(" ")) for sp_id, sp_name in zip(list(species_df["Taxon ID"]), list(species_df["Taxon label"]))}
     ids_to_name.update({sp_id.split(":")[1]:v for sp_id,v in ids_to_name.items()}) # Add keys without NCBITaxon: prefix
-    
+
     # Figure out which species id(s) we are tasked with comparing to one another
     valid_species_ids = set(ids_to_name.keys())
     if input_args.taxon_id == "all":
@@ -451,18 +454,17 @@ def initiate_phenologs_fdr_fpaths(input_args):
     else:
         print('- ERROR, all or relevant taxon id must be supplied for taxon_id argument. Exiting...')
         sys.exit()
-    
-    
+
+
     # Now we need to filter our comparison species list by relevant / available prediction networks
     # "phenotype" or "disease" networks are available for use
-    comp_species = list(org_taxon_ids.keys())
     res_paths, rand_paths, sp_names = [], [], []
 
     for sp_id in t_ids:
         nformatted = ids_to_name[sp_id].replace("-", "_")
         rand_name = "{}_{}_trials".format(nformatted, input_args.prediction_network)
         rand_dir = os.path.join(input_args.project_dir, "random_trials", rand_name)
-        
+
         res_name = "{}_{}_results".format(nformatted, input_args.prediction_network)
         res_dir = os.path.join(input_args.project_dir, "phenologs_results", res_name)
 
@@ -471,13 +473,13 @@ def initiate_phenologs_fdr_fpaths(input_args):
             rand_paths.append(rand_dir)
             sp_names.append(ids_to_name[sp_id])
         else:
-            print("- Warning, random_trials and or phenologs_results appear to be missing for {}".format(args.taxon_id))
-    
+            print("- Warning, random_trials and or phenologs_results appear to be missing for {}".format(input_args.taxon_id))
+
     if len(res_paths) == 0:
-        print('- ERROR, No relevant data found for taxon_id {} of type {}. Exiting...'.format(args.taxon_id,
-                                                                                              args.prediction_network))
+        print('- ERROR, No relevant data found for taxon_id {} of type {}. Exiting...'.format(input_args.taxon_id,
+                                                                                              input_args.prediction_network))
         sys.exit()
-    
+
     return res_paths, rand_paths, sp_names
 
 
@@ -501,7 +503,7 @@ if __name__ == '__main__':
 
     args = parse_input_command()
     ############################
-    
+
     ###############
     ### PROGRAM ###
 
@@ -516,10 +518,10 @@ if __name__ == '__main__':
                          "NCBITaxon:7227": "Drosophila-melanogaster"} ## Future proofing here as drosophila not yet added (assuming melanogster here)
     species_taxon_map = {v: k for k, v in species_label_map.items()}
     species_label_map.update({v:v for v in species_label_map.values()})
-    plot_order = ["Mus-musculus", 
-                  "Danio-rerio", 
-                  "Caenorhabditis-elegans", 
-                  "Schizosaccharomyces-pombe", 
+    plot_order = ["Mus-musculus",
+                  "Danio-rerio",
+                  "Caenorhabditis-elegans",
+                  "Schizosaccharomyces-pombe",
                   "Rattus-norvegicus",
                   "Xenopus-tropicalis",
                   "Dictyostelium-discoideum"]
@@ -527,35 +529,40 @@ if __name__ == '__main__':
 
     fpaths, rpaths, snames = initiate_phenologs_fdr_fpaths(args)
     for res_path, rand_path, sname in zip(fpaths, rpaths, snames):
-        
+
         # Gather random trial data and compute fdr cuttoff values from hg pvalues
-        trial_data, n_trials = gather_trial_data(rand_path)
-        trial_info = get_trial_fdr_data(trial_data, n_trials, res_path)
-        
+        trial_data = gather_trial_data(rand_path)
+        trial_info = get_trial_fdr_data(trial_data, res_path, FDR_LEVELS)
+
         # Generate our outfile paths for data and plots
         fdr_table_outpath = os.path.join(res_path, "{}_fdr_table.tsv".format(sname))
         plot_data_outpath = os.path.join(res_path, "{}_fdr_plot_data.pkl".format(sname))
         plot1_data_outpath = os.path.join(res_path, "{}_xspecies_random_vs_real.pdf".format(sname))
         plot2_data_outpath = os.path.join(res_path, "{}_xspecies_phenolog_counts.pdf".format(sname))
-        
-        # Generate and write fdr table
-        fdr_table = np.asarray([[",".join(k),kk,v] for k in trial_info.keys() for kk,v in trial_info[k]["fdr_cutoffs"].items()]).T
 
-        pd.DataFrame({"species_comparison":fdr_table[0],
-                      "fdr":fdr_table[1], 
-                      "pvalue_cutoff":fdr_table[2]}).to_csv(fdr_table_outpath, sep='\t', index=False)
-        
+        # Generate and write fdr table
+        fdr_table = [{"species_comparison":",".join(k),
+                      "fdr":level,
+                      "pvalue_cutoff":cutoff["pvalue_cutoff"],
+                      "phenolog_count":cutoff["phenolog_count"],
+                      "expected_false_positives":cutoff["expected_false_positives"],
+                      "realized_fdr":cutoff["realized_fdr"],
+                      "n_random_trials":trial_info[k]["n_trials"]}
+                     for k in trial_info for level, cutoff in sorted(trial_info[k]["fdr_cutoffs"].items())]
+
+        pd.DataFrame(fdr_table).to_csv(fdr_table_outpath, sep='\t', index=False)
+
         # Write out data used for making plots
         pickle.dump(trial_info, open(plot_data_outpath, 'wb'))
-    
+
         # Plot our results and save figures
-        plot_fdr_cumul_results(trial_info, 
+        plot_fdr_cumul_results(trial_info,
                                plot_order=plot_order,
                                taxon_map=species_taxon_map,
-                               fdr_default=.95, 
-                               savefig1=plot1_data_outpath, 
+                               fdr_default=DEFAULT_FDR,
+                               savefig1=plot1_data_outpath,
                                savefig2=plot2_data_outpath,
                                display_figs=args.display_figs,
                                label_map=species_label_map)
-        
+
         print("- FDR table and figure(s) generated... Done!")

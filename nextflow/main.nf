@@ -22,7 +22,11 @@ params.taxon_id = 9606
 params.prd = "disease" // "phenotype" or "disease"
 
 // Phenologs ortholog to phenotype ranking params
-params.fdr = .95
+// fdr is a true false discovery rate (.05 == 5% of significant phenologs expected to be false), and
+// must be one of the levels _fdr_table.tsv is generated for. This is the only place the default is
+// restated outside python -- it mirrors DEFAULT_FDR, and the allowed values are FDR_LEVELS, both of
+// which live in phenologs_utils.py
+params.fdr = .05
 params.kneighbs = 10
 params.rank_metric = 'nb'
 params.rank_type = 'protein_family'  // "protein_family" or "gene"

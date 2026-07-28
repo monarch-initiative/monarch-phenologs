@@ -6,7 +6,9 @@ import copy
 import pandas as pd
 
 # Custom imports
-from phenologs_utils import (load_fdr_table_to_lookup,
+from phenologs_utils import (FDR_LEVELS,
+                             DEFAULT_FDR,
+                             load_fdr_table_to_lookup,
                              pool_phenologs_data,
                              initiate_ortholog_to_phenotype_ranking_calculation_config,
                              OrthologToPhenotypeCalculations)
@@ -32,7 +34,8 @@ if __name__ == '__main__':
         parser.add_argument("-p","--project_dir", help="Top most project directory", required=False, type=str, default=None)
         parser.add_argument("-taxon_id", help='Specicies specific taxon id or "all" are allowed', required=True, type=str)
         parser.add_argument("-prd", "--prediction_network", help="phenotype or disease (which type of network to use for base species comparisons)", required=True, default="phenotype")
-        parser.add_argument("-fdr", help="One minus the false discovery rate.. .95 is default", required=True, type=float, default=.95)
+        parser.add_argument("-fdr", help="False discovery rate to pull pvalue cutoffs for. Default is the McGary et. al. 2010 level",
+                            required=False, type=float, default=DEFAULT_FDR, choices=FDR_LEVELS)
         parser.add_argument("-kneighbs", help="k-nearest phenologs to use when combing across multiple phenologs", required=True, type=int, default=10)
         parser.add_argument("-rank_metric", help="Which metric to use for combining knearest neighbor... default is naive_bayes (nb), (hg is hyper geometric)", required=False, choices=['nb', 'hg'], default='nb')
         parser.add_argument("-rank_type", help="Which type of analyis to perform, gene ranking or protein family ranking", required=False, choices=["protein_family", "gene"], default='protein_family')

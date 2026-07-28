@@ -10,7 +10,9 @@ import multiprocessing as mp
 from pathlib import Path
 
 # Custom imports
-from phenologs_utils import (divide_workload,
+from phenologs_utils import (FDR_LEVELS,
+                             DEFAULT_FDR,
+                             divide_workload,
                              load_fdr_table_to_lookup,
                              pool_phenologs_data,
                              initiate_phenologs_species_comparison_configs,
@@ -153,7 +155,8 @@ if __name__ == '__main__':
         parser.add_argument("-c", "--cpu_cores", help="Number of cpu cores to use. HPC or long runtime is likely required", required=False, type=int, default=1)
         parser.add_argument("-taxon_id", help='Specicies specific taxon id or "all" are allowed', required=True, type=str)
         parser.add_argument("-prd", "--prediction_network", help="phenotype or disease (which type of network to use for base species comparisons)", required=True, default="phenotype")
-        parser.add_argument("-fdr", help="One minus the false discovery rate.. .95 is default", required=True, type=float, default=.95)
+        parser.add_argument("-fdr", help="False discovery rate to pull pvalue cutoffs for. Default is the McGary et. al. 2010 level",
+                            required=False, type=float, default=DEFAULT_FDR, choices=FDR_LEVELS)
         return parser.parse_args()
 
     args = parse_input_command()
