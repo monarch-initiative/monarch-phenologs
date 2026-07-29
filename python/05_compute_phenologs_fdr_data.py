@@ -14,9 +14,11 @@ from typing import Dict, List
 # Custom imports
 from phenologs_utils import (FDR_LEVELS,
                              DEFAULT_FDR,
+                             SPECIES_PLOT_ORDER,
                              TRIAL_PARAM_COLS,
                              PHENOLOG_PARAM_COLS,
-                             bulk_compute_hyper_geom)
+                             bulk_compute_hyper_geom,
+                             get_species_name)
 
 
 
@@ -101,7 +103,7 @@ def collapse_cross_species_trials(trial_paths: Dict, common_ortholog_count: int)
                                                                                                 trial_world,
                                                                                                 common_ortholog_count))
             print("- Random trials written before the trial file column labelling fix must be regenerated (step 03). Exiting...")
-            sys.exit()
+            sys.exit(1)
 
         # Tally up parameter set occurrences across this trial
         for params, occ in zip(map(tuple, df[TRIAL_PARAM_COLS].to_numpy().tolist()),
@@ -124,14 +126,14 @@ def collapse_cross_species_phenologs(input_dir, comp_key):
     phenologs_filepath = os.path.join(input_dir, "{}_vs_{}_all_phenologs.tsv".format(comp_key[0], comp_key[1]))
     if not os.path.isfile(phenologs_filepath):
         print("- ERROR, No real phenologs results found at {}. Exiting...".format(phenologs_filepath))
-        sys.exit()
+        sys.exit(1)
 
     phen_df = pd.read_csv(phenologs_filepath, sep='\t')
     world_counts = set(phen_df[PHENOLOG_PARAM_COLS[1]].unique().tolist())
     if len(world_counts) != 1:
         print("- ERROR, {} holds more than one common ortholog count {}. Exiting...".format(os.path.basename(phenologs_filepath),
                                                                                            world_counts))
-        sys.exit()
+        sys.exit(1)
 
     # Grouped rather than tallied row by row, as this file runs to millions of comparisons
     param_counts = {tuple(int(p) for p in params):int(occ)
@@ -143,7 +145,7 @@ def collapse_cross_species_phenologs(input_dir, comp_key):
         print("- ERROR, {} comparisons tallied from the {} rows of {}. Exiting...".format(format(sum(param_counts.values()), ','),
                                                                                          format(len(phen_df), ','),
                                                                                          os.path.basename(phenologs_filepath)))
-        sys.exit()
+        sys.exit(1)
 
     print("- Real phenolog comparisons {} collapsed to {} unique hg parameter sets".format(format(sum(param_counts.values()), ','),
                                                                                           format(len(param_counts), ',')))
@@ -198,7 +200,7 @@ def get_fdr_cuttoffs(random_pval_counts: Dict, real_pval_counts: Dict, n_trials:
 
     if len(real_pval_counts) == 0 or len(random_pval_counts) == 0:
         print("- ERROR, An empty real or random pvalue distribution can't be assigned an fdr. Exiting...")
-        sys.exit()
+        sys.exit(1)
 
     # Candidate thresholds least to most permissive, and the discovery count at each
     candidates, real_counts = zip(*sorted(real_pval_counts.items()))
@@ -301,40 +303,18 @@ def format_pval(p, sigfigs=2):
         return rf"$p = {base:.{decimals}f} \times 10^{{{exp}}}$"
 
 
-def resolve_comparison_key(trial_info: Dict, species_name: str, label_map: Dict, taxon_map: Dict):
-    """
-    Depending on where a species name came from it can be a taxon id, a hyphenated name, or a label.
-    Returns the (species_a, species_b) key our data is actually stored under, or None if absent
-    """
-
-    aliases = set([species_name, label_map.get(species_name, None), taxon_map.get(species_name, None)])
-    for k in trial_info:
-        if k[1] in aliases:
-            return k
-
-    return None
-
-
 def plot_fdr_cumul_results(trial_info: Dict,
                            plot_order: List,
-                           label_map: Dict,
-                           taxon_map: Dict,
                            fdr_default=DEFAULT_FDR,
                            savefig1=False,
                            savefig2=False,
                            display_figs=False):
 
-    # Resolve the requested plot order against the comparisons we have data for, then append anything
-    # present but unlisted so a newly added species can't be silently left out of the figures
-    plot_keys = []
-    for kk in plot_order:
-        k = resolve_comparison_key(trial_info, kk, label_map, taxon_map)
-        if k == None:
-            print("- Warning, no data found for {}. Skipping...".format(kk))
-        elif k not in plot_keys:
-            plot_keys.append(k)
-
-    plot_keys += sorted([k for k in trial_info if k not in plot_keys])
+    # Lay comparisons out in plot_order, then append anything present but unlisted so that a newly
+    # added species can't be silently left out of the figures
+    ordered_names = [get_species_name(tx_id) for tx_id in plot_order]
+    plot_keys = [k for name in ordered_names for k in sorted(trial_info) if k[1] == name]
+    plot_keys += [k for k in sorted(trial_info) if k not in plot_keys]
 
     # nrows x 2 columns formatted multiplot figure
     nrows, ncols = int(math.ceil(len(plot_keys)/2)), 2
@@ -372,7 +352,7 @@ def plot_fdr_cumul_results(trial_info: Dict,
         ax.set_ylabel("Fraction of phenologs")
 
         ax.legend()
-        ax.set_title("{} vs. {}".format(label_map.get(k[0], k[0]), label_map.get(k[1], k[1])))
+        ax.set_title("{} vs. {}".format(k[0], k[1]))
 
     # Save and display options
     plt.tight_layout()
@@ -391,7 +371,7 @@ def plot_fdr_cumul_results(trial_info: Dict,
 
     for k in plot_keys:
         fdr_curve = trial_info[k]["fdr_curve"]
-        ax.plot(fdr_curve["phenolog_count"], fdr_curve["fdr"], label=label_map.get(k[1], k[1]))
+        ax.plot(fdr_curve["phenolog_count"], fdr_curve["fdr"], label=k[1])
 
     ax.axhline(fdr_default, linestyle='--', color='red', alpha=.5, label="FDR = {}".format(fdr_default))
 
@@ -427,22 +407,21 @@ def initiate_phenologs_fdr_fpaths(input_args):
 
     if not os.path.isfile(check_file):
         print("- ERROR, Project species information table doesn't seem to exist. Exiting...")
-        sys.exit()
+        sys.exit(1)
 
     if not os.path.isdir(check_outdir):
         print("- ERROR, Project random_trials directory doesn't seem to exist. Exiting...")
-        sys.exit()
+        sys.exit(1)
 
     # Figure out which species ids / names we have and which ones are relevant
     species_df = pd.read_csv(check_file, sep='\t')
     species_df = species_df[species_df["Genes with >= 1 phenotype edge"] > 0] # Only want species whith non zero phenotype information
 
-    # Pull out taxon_id information (twice as two separate variables)
-    ids_to_name = {sp_id:"-".join(sp_name.split(" ")) for sp_id, sp_name in zip(list(species_df["Taxon ID"]), list(species_df["Taxon label"]))}
+    # Which species this run has data for, named from SPECIES_NAMES rather than from the table
+    ids_to_name = {sp_id:get_species_name(sp_id) for sp_id in species_df["Taxon ID"]}
     org_taxon_ids = copy.copy(ids_to_name)
 
     # Format, and add additional keys to make more friendly to input arguments
-    ids_to_name = {sp_id:"-".join(sp_name.split(" ")) for sp_id, sp_name in zip(list(species_df["Taxon ID"]), list(species_df["Taxon label"]))}
     ids_to_name.update({sp_id.split(":")[1]:v for sp_id,v in ids_to_name.items()}) # Add keys without NCBITaxon: prefix
 
     # Figure out which species id(s) we are tasked with comparing to one another
@@ -453,7 +432,7 @@ def initiate_phenologs_fdr_fpaths(input_args):
         t_ids = [input_args.taxon_id]
     else:
         print('- ERROR, all or relevant taxon id must be supplied for taxon_id argument. Exiting...')
-        sys.exit()
+        sys.exit(1)
 
 
     # Now we need to filter our comparison species list by relevant / available prediction networks
@@ -478,7 +457,7 @@ def initiate_phenologs_fdr_fpaths(input_args):
     if len(res_paths) == 0:
         print('- ERROR, No relevant data found for taxon_id {} of type {}. Exiting...'.format(input_args.taxon_id,
                                                                                               input_args.prediction_network))
-        sys.exit()
+        sys.exit(1)
 
     return res_paths, rand_paths, sp_names
 
@@ -506,26 +485,6 @@ if __name__ == '__main__':
 
     ###############
     ### PROGRAM ###
-
-    species_label_map = {"NCBITaxon:9606": "Homo-sapiens",
-                         "NCBITaxon:10090": "Mus-musculus",
-                         "NCBITaxon:4896": "Schizosaccharomyces-pombe",
-                         "NCBITaxon:7955": "Danio-rerio",
-                         "NCBITaxon:6239": "Caenorhabditis-elegans",
-                         "NCBITaxon:10116": "Rattus-norvegicus",
-                         "NCBITaxon:8364": "Xenopus-tropicalis",
-                         "NCBITaxon:44689": "Dictyostelium-discoideum",
-                         "NCBITaxon:7227": "Drosophila-melanogaster"} ## Future proofing here as drosophila not yet added (assuming melanogster here)
-    species_taxon_map = {v: k for k, v in species_label_map.items()}
-    species_label_map.update({v:v for v in species_label_map.values()})
-    plot_order = ["Mus-musculus",
-                  "Danio-rerio",
-                  "Caenorhabditis-elegans",
-                  "Schizosaccharomyces-pombe",
-                  "Rattus-norvegicus",
-                  "Xenopus-tropicalis",
-                  "Dictyostelium-discoideum"]
-
 
     fpaths, rpaths, snames = initiate_phenologs_fdr_fpaths(args)
     for res_path, rand_path, sname in zip(fpaths, rpaths, snames):
@@ -557,12 +516,10 @@ if __name__ == '__main__':
 
         # Plot our results and save figures
         plot_fdr_cumul_results(trial_info,
-                               plot_order=plot_order,
-                               taxon_map=species_taxon_map,
+                               plot_order=SPECIES_PLOT_ORDER,
                                fdr_default=DEFAULT_FDR,
                                savefig1=plot1_data_outpath,
                                savefig2=plot2_data_outpath,
-                               display_figs=args.display_figs,
-                               label_map=species_label_map)
+                               display_figs=args.display_figs)
 
         print("- FDR table and figure(s) generated... Done!")

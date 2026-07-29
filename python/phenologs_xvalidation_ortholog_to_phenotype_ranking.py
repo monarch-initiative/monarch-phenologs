@@ -64,7 +64,7 @@ if __name__ == '__main__':
     # Make sure our relevant validation phenologs results directory has been made
     if not os.path.isdir(xvalid_dir):
         print("- Error, No leave one out phenologs reults found at {}... Exiting".format(xvalid_dir))
-        sys.exit()
+        sys.exit(1)
 
     # Grab our relevant results filepaths
     rel_suffx1 = "_pooled_phenologs_fdr{}.tsv.gz".format(args.fdr)
@@ -74,7 +74,7 @@ if __name__ == '__main__':
     # Make sure we have files to process
     if len(res_paths) == 0:
         print("- Error, No pooled_phenologs reults found at {}... Exiting".format(xvalid_dir))
-        sys.exit()
+        sys.exit(1)
 
     # Copy and batch base config
     div_process_objs = []

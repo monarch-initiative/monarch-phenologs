@@ -22,6 +22,49 @@ FDR_LEVELS = [.1, .05, .01, .001, .0001]
 DEFAULT_FDR = .05
 
 
+# The one name each species goes by, used for filenames, data keys, and figure labels alike.
+# Names are fixed here rather than read from the graph because a monarch kg release once stopped
+# exposing taxon labels, and the extraction fell back to numeric taxon ids for the species affected.
+# That left a run half named and broke every downstream lookup expecting the readable form
+SPECIES_NAMES = {"NCBITaxon:9606": "Homo-sapiens",
+                 "NCBITaxon:10090": "Mus-musculus",
+                 "NCBITaxon:10116": "Rattus-norvegicus",
+                 "NCBITaxon:7955": "Danio-rerio",
+                 "NCBITaxon:6239": "Caenorhabditis-elegans",
+                 "NCBITaxon:4896": "Schizosaccharomyces-pombe",
+                 "NCBITaxon:8364": "Xenopus-tropicalis",
+                 "NCBITaxon:44689": "Dictyostelium-discoideum",
+                 "NCBITaxon:7227": "Drosophila-melanogaster"}
+
+# Order species are laid out in multi panel figures. Any species a run has no data for is skipped
+SPECIES_PLOT_ORDER = ["NCBITaxon:10090",
+                      "NCBITaxon:7955",
+                      "NCBITaxon:6239",
+                      "NCBITaxon:4896",
+                      "NCBITaxon:10116",
+                      "NCBITaxon:8364",
+                      "NCBITaxon:44689",
+                      "NCBITaxon:7227"]
+
+
+def get_species_name(taxon_id):
+    """
+    Taxon id (with or without the NCBITaxon: prefix) --> the name this species is known by everywhere.
+    A taxon that made it far enough to be named but isn't registered is an error rather than something
+    to guess at, so that naming can never be applied to some species of a run and not others.
+    """
+
+    key = str(taxon_id)
+    if not key.startswith("NCBITaxon:"):
+        key = "NCBITaxon:{}".format(key)
+
+    if key not in SPECIES_NAMES:
+        print("- ERROR, No name registered for taxon {}. Add it to SPECIES_NAMES in phenologs_utils.py. Exiting...".format(key))
+        sys.exit(1)
+
+    return SPECIES_NAMES[key]
+
+
 ###################################################################################################
 ### Basic species information building blocks, and file path validation for downstream analysis ###
 class Species:
@@ -52,7 +95,7 @@ class Species:
                 setattr(self, "{}_path".format(fext.split(".")[0]), fpath)
             elif "disease" not in fext:
                 print("- ERROR, Species {} is missing file: {}".format(self.species_name, fext))
-                sys.exit()
+                sys.exit(1)
         
         # Pull in common orthologs paths
         for fname in os.listdir(os.path.join(self.project_dir, "species_data")):
@@ -69,8 +112,8 @@ def build_species_info(project_dir):
     species_df = pd.read_csv(species_info_file, sep='\t')
     species_df = species_df[species_df["Genes with >= 1 phenotype edge"] > 0] # Only want species whith non zero phenotype information
     
-    # Pull out taxon_id information (twice as two separate variables)
-    ids_to_name = {sp_id:"-".join(sp_name.split(" ")) for sp_id, sp_name in zip(list(species_df["Taxon ID"]), list(species_df["Taxon label"]))}
+    # Which species this run has data for, named from SPECIES_NAMES rather than from the table
+    ids_to_name = {sp_id:get_species_name(sp_id) for sp_id in species_df["Taxon ID"]}
     org_taxon_ids = copy.copy(ids_to_name)
 
     # Generate a dictionary with multiple keys pointing to the same species object
@@ -79,11 +122,10 @@ def build_species_info(project_dir):
         t_id = n.split(":")[1] # Without NCBITaxon: prefix
         species_obj = Species(t_id , ids_to_name[n], project_dir)
         species_obj.initiate_filepaths()
-        species.update({n:species_obj})
-        species.update({ids_to_name[n]:species_obj})
-        species.update({n:species_obj})    # Add keys with NCBITaxon: prefix
-        species.update({t_id:species_obj}) # Add keys without NCBITaxon: prefix
-    
+        species.update({n:species_obj})               # Taxon id with NCBITaxon: prefix
+        species.update({t_id:species_obj})            # Taxon id without prefix
+        species.update({ids_to_name[n]:species_obj})  # Species name
+
     return org_taxon_ids, species
 
 
@@ -142,7 +184,7 @@ def initiate_random_species_comparison_configs(input_args):
         if (not os.path.isfile(apath)) or (not os.path.isfile(bpath)) or (not os.path.isfile(cpath)):
             print("- ERROR, Species {} vs {} is missing common orthologs and or phenotype files...".format(a_name,
                                                                                                             b_name))
-            sys.exit()
+            sys.exit(1)
         
         # We want to output our random trial data to species specific directories.
         # Makes downstream analysis easier to deal with
@@ -205,7 +247,7 @@ def initiate_phenologs_species_comparison_configs(input_args):
            (not os.path.isfile(ag2p_path)) or \
            (not os.path.isfile(bg2p_path)):
            print("- ERROR, Species {} vs {} is missing common orthologs and or phenotype files...".format(a_name, b_name))
-           sys.exit()
+           sys.exit(1)
         
         # We want to output our results data to species specific directories.
         # Makes downstream analysis easier to deal with
@@ -264,7 +306,7 @@ def initiate_ortholog_to_phenotype_ranking_calculation_config(input_args):
     # Check if necessary fdr table exists and gather remaining filepaths necessary
     if not os.path.isdir(res_dir) or not os.path.isfile(fdr_path):
         print('- ERROR, relevant taxon id results not found for {}... Exiting'.format(sp_name))
-        sys.exit()
+        sys.exit(1)
 
     # Our species specific table filepaths from initial steps of pipeline
     p2o_path = getattr(species_obj, "{}_to_ortholog_path".format(input_args.prediction_network))
@@ -498,7 +540,7 @@ def pool_phenologs_data(results_dir, fdr_lookup_table, sig_outpath, fdr_level:fl
     phenologs_paths = [os.path.join(results_dir, fname) for fname in os.listdir(results_dir) if fname.endswith("_all_phenologs.tsv")]
     if len(phenologs_paths) == 0:
         print("- Error, No files ending with _all_phenologs.tsv found in {}... Exiting".format(results_dir))
-        sys.exit()
+        sys.exit(1)
 
 
     # Loop through all x species phenologs files and pool together the data that passes pvalue criteria
@@ -513,7 +555,7 @@ def pool_phenologs_data(results_dir, fdr_lookup_table, sig_outpath, fdr_level:fl
         fdr_key = fdr_lookup_key(spa, spb, fdr_level)
         if fdr_key not in fdr_lookup_table:
             print("- ERROR, Non existant fdr lookup value {}... Try one of {}. Exiting".format(fdr_level, FDR_LEVELS))
-            sys.exit()
+            sys.exit(1)
         pval_max = fdr_lookup_table[fdr_key]
 
         # Load phenologs data and filter for significant phenologs only
@@ -1434,7 +1476,7 @@ class OrthologToPhenotypeCalculations(BaseModel):
         allowed_dists = {"hg":'hyper_geometric', "nb":"naive_bayes"}
         if self.rank_metric not in allowed_dists:
             print("- ERROR, hg or nb are allowed for rank_metric argument not {}".format(self.rank_metric))
-            sys.exit()
+            sys.exit(1)
 
 
         # Load all species phenotype-->ortholog files
@@ -1624,7 +1666,7 @@ class OrthologToPhenotypeCalculations(BaseModel):
         allowed_dists = {"hg":'hyper_geometric', "nb":"naive_bayes"}
         if self.rank_metric not in allowed_dists:
             print("- ERROR, hg or nb are allowed for rank_metric argument not {}".format(self.rank_metric))
-            sys.exit()
+            sys.exit(1)
 
         species_data_dir = os.path.join(self.project_dir, "species_data")
         orth_edges_file = os.path.join(species_data_dir, "ortholog_edges.tsv")
@@ -1885,7 +1927,7 @@ class OrthologToPhenotypeCalculations(BaseModel):
         allowed_dists = {"hg":'hyper_geometric', "nb":"naive_bayes"}
         if self.rank_metric not in allowed_dists:
             print("- ERROR, hg or nb are allowed for rank_metric argument not {}".format(self.rank_metric))
-            sys.exit()
+            sys.exit(1)
 
         species_data_dir = os.path.join(self.project_dir, "species_data")
         orth_edges_file = os.path.join(species_data_dir, "ortholog_edges.tsv")

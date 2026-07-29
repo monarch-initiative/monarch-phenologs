@@ -46,7 +46,7 @@ if __name__ == '__main__':
     outdir = os.path.join(fdir, "similarity_tables_fdr{}".format(args.fdr))
     if not os.path.isfile(fpath):
         print("- ERROR, {} not found. Exiting...".format(fpath))
-        sys.exit()
+        sys.exit(1)
     os.makedirs(outdir, exist_ok=True)
 
     # Read relevant pooled datafile into memory

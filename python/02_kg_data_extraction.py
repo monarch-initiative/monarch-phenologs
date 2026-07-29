@@ -9,6 +9,9 @@ import networkx as nx
 import pickle
 from collections import Counter
 
+# Custom imports
+from phenologs_utils import get_species_name
+
 
 def extract_panther_id(has_evidence_value):
     """
@@ -280,15 +283,11 @@ def compute_taxon_info(input_graph, taxon_id: str, taxon_nodes: list, outpath_di
     d2o = {} # disease-->ortholog_id
     gtype = "biolink:Gene"
     
-    # Grab taxon name / label / gene prefix
+    # Grab taxon id / gene prefix
     tx_id = input_graph.nodes[taxon_nodes[0]]["in_taxon"]
-    tx_name = input_graph.nodes[taxon_nodes[0]]["in_taxon_label"]
     tx_gprefix = taxon_nodes[0].split(":")[0] # Gene namespace prefix
     tx_pprefix = "" # Phenotype ontology namespace prefix (Needs to be generated from a phenotype neighbor node)
-    
-    if tx_name == "": # Deal with empty name
-        tx_name = tx_id
-    
+
     # Gather up relevant information pertaining to this taxa
     for node_id in taxon_nodes:
         
@@ -378,11 +377,13 @@ def compute_taxon_info(input_graph, taxon_id: str, taxon_nodes: list, outpath_di
     
     # Don't do anything if no phenotype data is present
     if (len(gene_to_phens_lines) == 0) or (len(g2o) == 0):
-       print("- Skipping taxon id/name {} {}... Missing phenotype or orthology data".format(tx_id, tx_name))
+       print("- Skipping taxon id {}... Missing phenotype or orthology data".format(tx_id))
        return {}
 
+    # Only taxa that got this far produce output, so this is where an unregistered species is caught
+    tx_formatted = get_species_name(tx_id)
+
     # Generate outputfile paths
-    tx_formatted = "-".join(tx_name.split())
     outpath_g2p = os.path.join(outpath_dir, "{}_gene_to_phenotype.tsv".format(tx_formatted))
     outpath_g2d = os.path.join(outpath_dir, "{}_gene_to_disease.tsv".format(tx_formatted))
     outpath_g2o = os.path.join(outpath_dir, "{}_gene_to_ortholog.tsv".format(tx_formatted))
@@ -424,7 +425,7 @@ def compute_taxon_info(input_graph, taxon_id: str, taxon_nodes: list, outpath_di
     
     # Tally up stats we just computed
     output_stats = {"Taxon ID":tx_id,
-                    "Taxon label":tx_name,
+                    "Taxon label":tx_formatted,
                     "Taxon gene prefix":tx_gprefix,
                     "Taxon gene count":len(taxon_nodes),
                     
