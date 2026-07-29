@@ -294,8 +294,10 @@ def compute_taxon_info(input_graph, taxon_id: str, taxon_nodes: list, outpath_di
         # Pull up neighbor nodes
         neighbs = list(input_graph.neighbors(node_id))
         
-        # First, Grab panther protein family id (if possible)
-        orths = [neib for neib in neighbs if input_graph.nodes[neib]["category"] == "biolink:Gene"]
+        # First, Grab panther protein family id (if possible). Selected on the edge type rather than
+        # the neighboring node type, so what valid_edges brings into the graph can't change this
+        orths = [neib for neib in neighbs
+                 if input_graph.edges[(node_id, neib)]["category"] == "biolink:GeneToGeneHomologyAssociation"]
         if len(orths) > 0:
             orth_id = extract_panther_id(input_graph.edges[(node_id, orths[0])]["has_evidence"])
         else:
