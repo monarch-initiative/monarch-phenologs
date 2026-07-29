@@ -5,7 +5,6 @@ include { compute_fdr_data } from './modules/02_compute_random_trials.nf'
 include { compute_real_phenolog_data } from './modules/03_compute_phenologs.nf'
 include { compute_fdr_info } from './modules/04_compute_fdr.nf'
 include { compute_ortholog_rank_calcs } from './modules/05_compute_ortholog_rankings.nf'
-include { convert_to_sim_tables } from './modules/to_similarity_tables.nf'
 include { leave_one_out_calculations } from './modules/leave_one_out_calculations.nf'
 include { leave_one_out_ortholog_rank_calcs } from './modules/leave_one_out_rankings.nf'
 include { merge_outputs } from './modules/merge_outputs.nf'
@@ -22,7 +21,11 @@ params.taxon_id = 9606
 params.prd = "disease" // "phenotype" or "disease"
 
 // Phenologs ortholog to phenotype ranking params
-params.fdr = .95
+// fdr is a true false discovery rate (.05 == 5% of significant phenologs expected to be false), and
+// must be one of the levels _fdr_table.tsv is generated for. This is the only place the default is
+// restated outside python -- it mirrors DEFAULT_FDR, and the allowed values are FDR_LEVELS, both of
+// which live in phenologs_utils.py
+params.fdr = .05
 params.kneighbs = 10
 params.rank_metric = 'nb'
 params.rank_type = 'protein_family'  // "protein_family" or "gene"
@@ -80,15 +83,9 @@ workflow {
                                 rank_metric,
                                 rank_type)
 
-    // Covert to similarity tables for alternate downstream processing
-    convert_to_sim_tables(compute_ortholog_rank_calcs.out.project_path,
-                          taxon_id,
-                          prd,
-                          fdr)
-
     // Compute disease gene candidate rankings
     if (params.taxon_id == 9606 && params.prd == "disease") {
-        disease_gene_candidate_ranking(convert_to_sim_tables.out.project_path,
+        disease_gene_candidate_ranking(compute_ortholog_rank_calcs.out.project_path,
                                        taxon_id,
                                        prd,
                                        fdr,

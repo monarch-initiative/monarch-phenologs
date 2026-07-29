@@ -9,7 +9,9 @@ import multiprocessing as mp
 from pathlib import Path
 
 # Custom imports
-from phenologs_utils import (OrthologToPhenotypeCalculations,
+from phenologs_utils import (FDR_LEVELS,
+                             DEFAULT_FDR,
+                             OrthologToPhenotypeCalculations,
                              initiate_ortholog_to_phenotype_ranking_calculation_config)
 
 
@@ -34,7 +36,8 @@ if __name__ == '__main__':
         parser.add_argument("-c", "--cpu_cores", help="Number of cpu cores to use. HPC or long runtime is likely required", required=False, type=int, default=1)
         parser.add_argument("-taxon_id", help='Specicies specific taxon id or "all" are allowed', required=True, type=str)
         parser.add_argument("-prd", "--prediction_network", help="phenotype or disease (which type of network to use for base species comparisons)", required=True, default="phenotype")
-        parser.add_argument("-fdr", help="One minus the false discovery rate.. .95 is default", required=True, type=float, default=.95)
+        parser.add_argument("-fdr", help="False discovery rate to pull pvalue cutoffs for. Default is the McGary et. al. 2010 level",
+                            required=False, type=float, default=DEFAULT_FDR, choices=FDR_LEVELS)
         parser.add_argument("-kneighbs", help="k-nearest phenologs to use when combing across multiple phenologs", required=True, type=int, default=10)
         parser.add_argument("-rank_metric", help="Which metric to use for combining knearest neighbor... default is naive_bayes", required=False, choices=['nb', 'hg'], default='nb')
         parser.add_argument("-rank_type", help="Which type of analyis to perform, gene ranking or protein family ranking", required=False, choices=["protein_family", "gene"], default='protein_family')
@@ -61,7 +64,7 @@ if __name__ == '__main__':
     # Make sure our relevant validation phenologs results directory has been made
     if not os.path.isdir(xvalid_dir):
         print("- Error, No leave one out phenologs reults found at {}... Exiting".format(xvalid_dir))
-        sys.exit()
+        sys.exit(1)
 
     # Grab our relevant results filepaths
     rel_suffx1 = "_pooled_phenologs_fdr{}.tsv.gz".format(args.fdr)
@@ -71,7 +74,7 @@ if __name__ == '__main__':
     # Make sure we have files to process
     if len(res_paths) == 0:
         print("- Error, No pooled_phenologs reults found at {}... Exiting".format(xvalid_dir))
-        sys.exit()
+        sys.exit(1)
 
     # Copy and batch base config
     div_process_objs = []

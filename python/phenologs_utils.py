@@ -15,6 +15,54 @@ from pydantic import BaseModel
 from typing import Dict, List, Optional
 
 
+# False discovery rates that _fdr_table.tsv is generated for, and the one used by default downstream.
+# These are true false discovery rates (.05 == 5% of significant phenologs expected to be false).
+# Levels above ~.2 aren't useful, as the whole real distribution clears them for most species pairs
+FDR_LEVELS = [.1, .05, .01, .001, .0001]
+DEFAULT_FDR = .05
+
+
+# The one name each species goes by, used for filenames, data keys, and figure labels alike.
+# Names are fixed here rather than read from the graph because a monarch kg release once stopped
+# exposing taxon labels, and the extraction fell back to numeric taxon ids for the species affected.
+# That left a run half named and broke every downstream lookup expecting the readable form
+SPECIES_NAMES = {"NCBITaxon:9606": "Homo-sapiens",
+                 "NCBITaxon:10090": "Mus-musculus",
+                 "NCBITaxon:10116": "Rattus-norvegicus",
+                 "NCBITaxon:7955": "Danio-rerio",
+                 "NCBITaxon:6239": "Caenorhabditis-elegans",
+                 "NCBITaxon:4896": "Schizosaccharomyces-pombe",
+                 "NCBITaxon:8364": "Xenopus-tropicalis",
+                 "NCBITaxon:44689": "Dictyostelium-discoideum"}
+
+# Order species are laid out in multi panel figures. Any species a run has no data for is skipped
+SPECIES_PLOT_ORDER = ["NCBITaxon:10090",
+                      "NCBITaxon:7955",
+                      "NCBITaxon:6239",
+                      "NCBITaxon:4896",
+                      "NCBITaxon:10116",
+                      "NCBITaxon:8364",
+                      "NCBITaxon:44689"]
+
+
+def get_species_name(taxon_id):
+    """
+    Taxon id (with or without the NCBITaxon: prefix) --> the name this species is known by everywhere.
+    A taxon that made it far enough to be named but isn't registered is an error rather than something
+    to guess at, so that naming can never be applied to some species of a run and not others.
+    """
+
+    key = str(taxon_id)
+    if not key.startswith("NCBITaxon:"):
+        key = "NCBITaxon:{}".format(key)
+
+    if key not in SPECIES_NAMES:
+        print("- ERROR, No name registered for taxon {}. Add it to SPECIES_NAMES in phenologs_utils.py. Exiting...".format(key))
+        sys.exit(1)
+
+    return SPECIES_NAMES[key]
+
+
 ###################################################################################################
 ### Basic species information building blocks, and file path validation for downstream analysis ###
 class Species:
@@ -45,7 +93,7 @@ class Species:
                 setattr(self, "{}_path".format(fext.split(".")[0]), fpath)
             elif "disease" not in fext:
                 print("- ERROR, Species {} is missing file: {}".format(self.species_name, fext))
-                sys.exit()
+                sys.exit(1)
         
         # Pull in common orthologs paths
         for fname in os.listdir(os.path.join(self.project_dir, "species_data")):
@@ -62,8 +110,8 @@ def build_species_info(project_dir):
     species_df = pd.read_csv(species_info_file, sep='\t')
     species_df = species_df[species_df["Genes with >= 1 phenotype edge"] > 0] # Only want species whith non zero phenotype information
     
-    # Pull out taxon_id information (twice as two separate variables)
-    ids_to_name = {sp_id:"-".join(sp_name.split(" ")) for sp_id, sp_name in zip(list(species_df["Taxon ID"]), list(species_df["Taxon label"]))}
+    # Which species this run has data for, named from SPECIES_NAMES rather than from the table
+    ids_to_name = {sp_id:get_species_name(sp_id) for sp_id in species_df["Taxon ID"]}
     org_taxon_ids = copy.copy(ids_to_name)
 
     # Generate a dictionary with multiple keys pointing to the same species object
@@ -72,11 +120,10 @@ def build_species_info(project_dir):
         t_id = n.split(":")[1] # Without NCBITaxon: prefix
         species_obj = Species(t_id , ids_to_name[n], project_dir)
         species_obj.initiate_filepaths()
-        species.update({n:species_obj})
-        species.update({ids_to_name[n]:species_obj})
-        species.update({n:species_obj})    # Add keys with NCBITaxon: prefix
-        species.update({t_id:species_obj}) # Add keys without NCBITaxon: prefix
-    
+        species.update({n:species_obj})               # Taxon id with NCBITaxon: prefix
+        species.update({t_id:species_obj})            # Taxon id without prefix
+        species.update({ids_to_name[n]:species_obj})  # Species name
+
     return org_taxon_ids, species
 
 
@@ -135,7 +182,7 @@ def initiate_random_species_comparison_configs(input_args):
         if (not os.path.isfile(apath)) or (not os.path.isfile(bpath)) or (not os.path.isfile(cpath)):
             print("- ERROR, Species {} vs {} is missing common orthologs and or phenotype files...".format(a_name,
                                                                                                             b_name))
-            sys.exit()
+            sys.exit(1)
         
         # We want to output our random trial data to species specific directories.
         # Makes downstream analysis easier to deal with
@@ -198,7 +245,7 @@ def initiate_phenologs_species_comparison_configs(input_args):
            (not os.path.isfile(ag2p_path)) or \
            (not os.path.isfile(bg2p_path)):
            print("- ERROR, Species {} vs {} is missing common orthologs and or phenotype files...".format(a_name, b_name))
-           sys.exit()
+           sys.exit(1)
         
         # We want to output our results data to species specific directories.
         # Makes downstream analysis easier to deal with
@@ -257,7 +304,7 @@ def initiate_ortholog_to_phenotype_ranking_calculation_config(input_args):
     # Check if necessary fdr table exists and gather remaining filepaths necessary
     if not os.path.isdir(res_dir) or not os.path.isfile(fdr_path):
         print('- ERROR, relevant taxon id results not found for {}... Exiting'.format(sp_name))
-        sys.exit()
+        sys.exit(1)
 
     # Our species specific table filepaths from initial steps of pipeline
     p2o_path = getattr(species_obj, "{}_to_ortholog_path".format(input_args.prediction_network))
@@ -408,11 +455,28 @@ def hyper_geom(c, N, m, n):
 # Computes bulk hypergeometric tests from an input list of parameter sets [(c,N,m,n), ...]
 def bulk_compute_hyper_geom(params):
     """
-    params argument should be in the following format 
+    params argument should be in the following format
     params = [(c,N,m,n), (c,N,m,n), ...] List of tuples where each is a set of hg parameters to compute
     """
 
     return {pr:hyper_geom(*pr) for pr in params} # Expand hg argments using the "*" character
+
+
+# Columns holding the c,N,m,n hg parameters in the two file types the pipeline writes.
+# Ordering matters, and must stay in the c,N,m,n order that hyper_geom expects
+TRIAL_PARAM_COLS = ["overlap_count", "common_ortholog_count", "b_ortholog_count", "a_ortholog_count"]
+PHENOLOG_PARAM_COLS = ["Overlap Count", "Common Ortholog Count", "Ortholog Count B", "Ortholog Count A"]
+
+
+def hyper_geom_from_params(df, param_cols=PHENOLOG_PARAM_COLS):
+    """
+    Recomputes the pvalue column of an already written results / trial dataframe straight from its
+    integer parameter columns. Agrees bitwise with the per row hyper_geom calls that wrote the file,
+    which the stored float column does not (pandas parses floats with a non round tripping parser).
+    """
+
+    c, N, m, n = [df[col].to_numpy() for col in param_cols]
+    return scipy.stats.hypergeom.sf(np.maximum(c - 1, 0), N, m, n)
 
 
 # Expands the hyper geometric parameter sets into arrays for pearson correlation instead via scipy
@@ -429,94 +493,101 @@ def bulk_compute_pearson_from_hg_params(hg_params):
     return pr_pvals, pr_coeffs
 
 
-# For post initial phenologs comparison calculations (last portions of the analysis pipeline) 
+# For post initial phenologs comparison calculations (last portions of the analysis pipeline)
+def fdr_lookup_key(species_a, species_b, fdr_level):
+    """
+    Single place where fdr lookup keys are built so that the table and its consumers agree.
+    Rounding is needed because .0001 style levels don't survive a float round trip exactly, and must
+    be finer than the smallest level in FDR_LEVELS or distinct levels would collide onto one key.
+    """
+
+    return (species_a, species_b, round(float(fdr_level), 6))
+
+
 def load_fdr_table_to_lookup(fdr_path):
     """
     Loads fdr .tsv file to {(species a, species b, fdr):pvalue, ...} lookup datastructure
     """
 
-    # Load fdr table for this species set of data and generate pvalue lookuptable from the computed fdr values
-    fdr_df = pd.read_csv(fdr_path, sep='\t')
+    # Load fdr table for this species set of data and generate pvalue lookuptable from the computed fdr values.
+    # round_trip is needed on the read, as pandas' default float parser isn't correctly rounded and
+    # comes back a bit or two under the cutoff. The cutoff is an achieved pvalue that a whole block of
+    # phenologs sits exactly on, so drifting under it silently drops every one of them
+    fdr_df = pd.read_csv(fdr_path, sep='\t', float_precision="round_trip")
     fdr_lookup = {}
-    for cname,pval,fdrval in zip(list(fdr_df["species_comparison"]), 
-                                 list(fdr_df["pvalue_cutoff"]), 
+    for cname,pval,fdrval in zip(list(fdr_df["species_comparison"]),
+                                 list(fdr_df["pvalue_cutoff"]),
                                  list(fdr_df["fdr"])):
 
         spa,spb = cname.split(',')
-        key = (spa, spb, round(float(fdrval), 4))
-        fdr_lookup.update({key:float(pval)})
+        fdr_lookup.update({fdr_lookup_key(spa, spb, fdrval):float(pval)})
 
     return fdr_lookup
 
 
-# Takes _all_phenologs.tsv results files from within the results_dir, 
-# pools and filters by relevant pvalue cutoff for input fdr_levle (.95 is default (i.e. 5%))
-def pool_phenologs_data(results_dir, fdr_lookup_table, sig_outpath, fdr_level:.95, compress:bool=False):
+# Takes _all_phenologs.tsv results files from within the results_dir,
+# pools and filters by relevant pvalue cutoff for input fdr_level (.05 is default (i.e. 5%))
+def pool_phenologs_data(results_dir, fdr_lookup_table, sig_outpath, fdr_level:float=DEFAULT_FDR, compress:bool=False):
     """
-    Important note... The fdr lookup table is used to determin which value we need to use for each 
-    _all_phenologs.tsv file that is present 
+    Important note... The fdr lookup table is used to determin which value we need to use for each
+    _all_phenologs.tsv file that is present
     (i.e. which fdr-pvalue cutoff we need to use for each SpeciesA-SpeciesB comparison)
     """
-        
+
     # Assemble relevant phenologs results filepaths
     phenologs_paths = [os.path.join(results_dir, fname) for fname in os.listdir(results_dir) if fname.endswith("_all_phenologs.tsv")]
     if len(phenologs_paths) == 0:
         print("- Error, No files ending with _all_phenologs.tsv found in {}... Exiting".format(results_dir))
-        sys.exit()
-    
-    
+        sys.exit(1)
+
+
     # Loop through all x species phenologs files and pool together the data that passes pvalue criteria
     sig_phenologs_df = {}
     df_init_var = 0
     for rpath in phenologs_paths:
-        
-        
+
+
         # Generate fdr-pvalue to filter data by from fdr table file by filename scheme formatting
         # Filename should look something like this speci-es-A_vs_sp-ciesB_all_phenologs.tsv)
         spa, spb = rpath.split('/')[-1].replace("_all_phenologs.tsv", "").split("_vs_")
-        fdr_key = (spa, spb, fdr_level)
+        fdr_key = fdr_lookup_key(spa, spb, fdr_level)
         if fdr_key not in fdr_lookup_table:
-            print("- ERROR, Non existant fdr lookup value... Try .95, .99, .999, .9999, etc... Exiting")
-            sys.exit()
+            print("- ERROR, Non existant fdr lookup value {}... Try one of {}. Exiting".format(fdr_level, FDR_LEVELS))
+            sys.exit(1)
         pval_max = fdr_lookup_table[fdr_key]
-        
+
         # Load phenologs data and filter for significant phenologs only
         phenologs_df = pd.read_csv(rpath, sep='\t')
-        org_phenolog_count = len(list(phenologs_df["hg_pval"]))
-        
-        phenologs_df["hg_pval"] = phenologs_df["hg_pval"].astype(float)
-        phenologs_df = phenologs_df[phenologs_df["hg_pval"] < pval_max]
-        filtered_phenolog_count = len(list(phenologs_df["hg_pval"]))
-        
+        org_phenolog_count = len(phenologs_df)
+
+        # Recompute pvalues from the integer hg parameters rather than trusting the stored column.
+        # The cutoff came from the same calculation, and a discrete pvalue can hold a large share of
+        # the distribution, so a last bit disagreement from the float round trip pandas does on read
+        # would take a whole block of phenologs with it.
+        phenologs_df["hg_pval"] = hyper_geom_from_params(phenologs_df)
+        phenologs_df = phenologs_df[phenologs_df["hg_pval"] <= pval_max]
+        filtered_phenolog_count = len(phenologs_df)
+
         # Create / add new column to dataframe that descibes the cross species comparison that was made
         xspecies_name = ','.join([spa,spb])
         phenologs_df["X Species Comparison"] = [xspecies_name for i in range(0, filtered_phenolog_count)]
-        
+
         # Initiate our pooled datastructure if this is the first result file we are processing
         if df_init_var == 0:
             sig_phenologs_df = phenologs_df
             df_init_var += 1
-        
+
         # Otherwise, add our filtered phenologs to the larger pool
         else:
             sig_phenologs_df = pd.concat([sig_phenologs_df, copy.copy(phenologs_df)])
-        
-
-        # Write individual species comparison significant phenologs files
-        phenologs_df = phenologs_df.sort_values(by="hg_pval")
-        # Default is no gzip
-        if compress == False:
-            phenologs_df.to_csv(sig_outpath, sep='\t', index=False)
-        else:
-            phenologs_df.to_csv(sig_outpath, sep='\t', index=False, compression='gzip')
 
 
         print("- Loaded {}/{} phenolgs from {} x {} passing with pvalue <= {}".format(format(filtered_phenolog_count, ','),
                                                                                       format(org_phenolog_count, ','),
-                                                                                      spa, 
-                                                                                      spb, 
+                                                                                      spa,
+                                                                                      spb,
                                                                                       pval_max))
-        
+
     # Write pooled results to file ###
     sig_phenologs_df = sig_phenologs_df.sort_values(by="hg_pval")
 
@@ -532,86 +603,6 @@ def pool_phenologs_data(results_dir, fdr_lookup_table, sig_outpath, fdr_level:.9
     print("- Data written to {}".format(sig_outpath))
 
     return sig_phenologs_df
-
-
-# For converting / creating similarity tables between species ontologies (in phenolog space)
-def convert_phenologs_to_similarity_tables(infile_path, out_dir, gzip=True):
-    """
-    Takes as input the filepath the species_pooled_phenologs_fdr*.tsv file and converts it to similarity tables for each species present.
-    Each cross species comparison is written to out_dir as it's own separate file.
-    """
-
-    df = pd.read_csv(infile_path, sep='\t')
-    comps = set(list(df["X Species Comparison"]))
-    
-    # Can add 1. - pvalue column here...
-    df["hg_pval"] = df["hg_pval"].astype(float)
-
-    # Pull relevant columns, and add new column for phenologs similarity
-    # Make output directory if doesn't exist
-    if not os.path.isdir(out_dir):
-        os.makedirs(out_dir, exist_ok=True)
-        print("- Output directory made at {} ...".format(out_dir))
-    
-    # Can add 1. - pvalue column here...
-    df["hg_pval"] = df["hg_pval"].astype(float)
-
-    # Converting to similarity score via (1.0 - pvalue) has high precision requirments, and therefore an alternative method is
-    # used. We take the log10 transform of our value and subtract it from 1.0. So a pvalue of 1.33e-133 --> 133.
-    # We can then divide these data points by the maximum value to get everything normalized between 0.0 and 1.0 
-    logsims = [1.0 - math.log(v, 10) for v in list(df["hg_pval"])]
-    max_global_simscore = max(logsims)
-
-    for c in comps:
-
-        # Note, we format outfile path based on species name rather than ontology prefixes, 
-        # because different species can use the same ontology to describe phenotypes
-        spa, spb = c.split(",")
-        out_name = "{}_vs_{}_sig_phenologs.tsv".format(spa, spb)
-        outfile_path = os.path.join(args.out_dir, out_name)
-
-        # Should already be sorted by pvalue... Same or other options can be applied here though 
-        out_df = copy.copy(df[df["X Species Comparison"] == c])
-        logsims = [1.0 - math.log(v, 10) for v in list(out_df["hg_pval"])]
-
-        spx_max = max(logsims )
-        spx_normed_global = np.asarray(logsims) / max_global_simscore
-        spx_normed_spx = np.asarray(logsims) / spx_max
-
-        # Create new df and add our two new similarity columns to our data
-        default_na_col = [None for i in range(out_df.shape[0])]
-
-        oak_df = {"subject_id":list(out_df["Species A Phenotype ID"]),
-                  "subject_label":list(out_df["Species A Phenotype Name"]),
-                  "subject_source":default_na_col,
-                  "object_id":list(out_df["Species B Phenotype ID"]),
-                  "object_label":list(out_df["Species B Phenotype Name"]),
-                  "object_source":default_na_col,
-                  "ancestor_id":default_na_col,
-                  "ancestor_label":default_na_col,
-                  "ancestor_source":default_na_col,
-                  "object_information_content":default_na_col,
-                  "subject_information_content":default_na_col,
-                  "ancestor_information_content":default_na_col,
-                  "jaccard_similarity":default_na_col,
-                  "cosine_similarity":default_na_col,
-                  "dice_similarity":default_na_col,
-                  "phenodigm_score":default_na_col,
-                  "phenolog_sim_allspecies":spx_normed_global,
-                  "phenolog_sim_xspecific":spx_normed_spx}
-
-        # Write data compressed
-        if gzip == True:
-            outfile_path = "{}.gz".format(outfile_path)
-            pd.DataFrame(oak_df).to_csv(outfile_path, sep='\t', index=False, compression="gzip")
-        
-        # Write data normal
-        else:
-            pd.DataFrame(oak_df).to_csv(outfile_path, sep='\t', index=False)
-
-        print("- Data written for {} --> {}".format(c, outfile_path))
-    
-    print("- Done!")
 
 
 ############################################################################
@@ -636,7 +627,7 @@ class SpeciesComparison(BaseModel):
     fdr_path: Optional[str] = None
     prediction_network_type: Optional[str] = None # phenotype or disease
     leave_out_validate_set: Optional[set] = set() # Panther ortholog ids... For example set(["PTHR11482", ...])
-    leave_out_validate_fdr: Optional[float] = .95 # FDR lookup value to use to lookup pvalue cutoff we need to use
+    leave_out_validate_fdr: Optional[float] = DEFAULT_FDR # FDR lookup value to use to lookup pvalue cutoff we need to use
     
     
     def load_species_ortholog_information(self):
@@ -884,15 +875,13 @@ class RandomSpeciesComparison(SpeciesComparison):
             param_data = np.asarray(list(trial_data.keys())).T
             occurrence = list(trial_data.values())
             
-            # Write data using pandas
-            pd.DataFrame({"a_ortholog_count":param_data[0],
-                          "b_ortholog_count":param_data[1],
-                          "overlap_count":param_data[2],
-                          "common_ortholog_count":param_data[3],
-                          "hg_pval":pvals1,
-                          ###"pearson_pval":pvals2,
-                          ###"pearson_coeff":coeffs,
-                          "occurrence":occurrence}).to_csv(outfile_path, sep='\t', index=False, compression='gzip')
+            # Write data using pandas (parameter columns are labelled in the c,N,m,n order they were built in)
+            trial_df = pd.DataFrame(dict(zip(TRIAL_PARAM_COLS, param_data)))
+            trial_df["hg_pval"] = pvals1
+            ###trial_df["pearson_pval"] = pvals2
+            ###trial_df["pearson_coeff"] = coeffs
+            trial_df["occurrence"] = occurrence
+            trial_df.to_csv(outfile_path, sep='\t', index=False, compression='gzip')
 
             print("- Data written to file for trial {}...".format(trial_num))
         
@@ -1101,7 +1090,7 @@ class OrthologToPhenotypeCalculations(BaseModel):
     taxon_id:str
     
     fdr_path:str
-    fdr:float=.95
+    fdr:float=DEFAULT_FDR
     kneighbs:int=10
     rank_metric:str
         
@@ -1405,7 +1394,7 @@ class OrthologToPhenotypeCalculations(BaseModel):
         allowed_dists = {"hg":'hyper_geometric', "nb":"naive_bayes"}
         if self.rank_metric not in allowed_dists:
             print("- ERROR, hg or nb are allowed for rank_metric argument not {}".format(self.rank_metric))
-            sys.exit()
+            sys.exit(1)
 
 
         # Load all species phenotype-->ortholog files
@@ -1595,7 +1584,7 @@ class OrthologToPhenotypeCalculations(BaseModel):
         allowed_dists = {"hg":'hyper_geometric', "nb":"naive_bayes"}
         if self.rank_metric not in allowed_dists:
             print("- ERROR, hg or nb are allowed for rank_metric argument not {}".format(self.rank_metric))
-            sys.exit()
+            sys.exit(1)
 
         species_data_dir = os.path.join(self.project_dir, "species_data")
         orth_edges_file = os.path.join(species_data_dir, "ortholog_edges.tsv")
@@ -1856,7 +1845,7 @@ class OrthologToPhenotypeCalculations(BaseModel):
         allowed_dists = {"hg":'hyper_geometric', "nb":"naive_bayes"}
         if self.rank_metric not in allowed_dists:
             print("- ERROR, hg or nb are allowed for rank_metric argument not {}".format(self.rank_metric))
-            sys.exit()
+            sys.exit(1)
 
         species_data_dir = os.path.join(self.project_dir, "species_data")
         orth_edges_file = os.path.join(species_data_dir, "ortholog_edges.tsv")

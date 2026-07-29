@@ -10,7 +10,10 @@ import multiprocessing as mp
 from pathlib import Path
 
 # Custom imports
-from phenologs_utils import (divide_workload,
+from phenologs_utils import (FDR_LEVELS,
+                             DEFAULT_FDR,
+                             divide_workload,
+                             get_species_name,
                              load_fdr_table_to_lookup,
                              pool_phenologs_data,
                              initiate_phenologs_species_comparison_configs,
@@ -29,22 +32,21 @@ def initiate_species_specific_filepaths(input_args):
 
     if not os.path.isfile(check_file):
         print("- ERROR, Project species information table doesn't seem to exist. Exiting...")
-        sys.exit()
+        sys.exit(1)
     
     if not os.path.isdir(check_outdir):
         print("- ERROR, Project phenologs_results directory doesn't seem to exist. Exiting...")
-        sys.exit()
+        sys.exit(1)
     
     # Figure out which species ids / names we have and which ones are relevant
     species_df = pd.read_csv(check_file, sep='\t')
     species_df = species_df[species_df["Genes with >= 1 phenotype edge"] > 0] # Only want species whith non zero phenotype information
 
-    # Pull out taxon_id information (twice as two separate variables)
-    ids_to_name = {sp_id:"-".join(sp_name.split(" ")) for sp_id, sp_name in zip(list(species_df["Taxon ID"]), list(species_df["Taxon label"]))}
+    # Which species this run has data for, named from SPECIES_NAMES rather than from the table
+    ids_to_name = {sp_id:get_species_name(sp_id) for sp_id in species_df["Taxon ID"]}
     org_taxon_ids = copy.copy(ids_to_name)
-    
+
     # Format, and add additional keys to make more friendly to input arguments
-    ids_to_name = {sp_id:"-".join(sp_name.split(" ")) for sp_id, sp_name in zip(list(species_df["Taxon ID"]), list(species_df["Taxon label"]))}
     ids_to_name.update({sp_id.split(":")[1]:v for sp_id,v in ids_to_name.items()}) # Add keys without NCBITaxon: prefix
     
     # Figure out which species id(s) we are tasked with comparing to one another
@@ -53,7 +55,7 @@ def initiate_species_specific_filepaths(input_args):
         sp_id = input_args.taxon_id
     else:
         print('- ERROR, relevant taxon id must be supplied for taxon_id argument. Exiting...')
-        sys.exit()
+        sys.exit(1)
     
     # Now we need to filter our comparison species list by relevant / available prediction networks
     # "phenotype" or "disease" networks are available for use
@@ -153,7 +155,8 @@ if __name__ == '__main__':
         parser.add_argument("-c", "--cpu_cores", help="Number of cpu cores to use. HPC or long runtime is likely required", required=False, type=int, default=1)
         parser.add_argument("-taxon_id", help='Specicies specific taxon id or "all" are allowed', required=True, type=str)
         parser.add_argument("-prd", "--prediction_network", help="phenotype or disease (which type of network to use for base species comparisons)", required=True, default="phenotype")
-        parser.add_argument("-fdr", help="One minus the false discovery rate.. .95 is default", required=True, type=float, default=.95)
+        parser.add_argument("-fdr", help="False discovery rate to pull pvalue cutoffs for. Default is the McGary et. al. 2010 level",
+                            required=False, type=float, default=DEFAULT_FDR, choices=FDR_LEVELS)
         return parser.parse_args()
 
     args = parse_input_command()
