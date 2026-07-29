@@ -33,8 +33,7 @@ SPECIES_NAMES = {"NCBITaxon:9606": "Homo-sapiens",
                  "NCBITaxon:6239": "Caenorhabditis-elegans",
                  "NCBITaxon:4896": "Schizosaccharomyces-pombe",
                  "NCBITaxon:8364": "Xenopus-tropicalis",
-                 "NCBITaxon:44689": "Dictyostelium-discoideum",
-                 "NCBITaxon:7227": "Drosophila-melanogaster"}
+                 "NCBITaxon:44689": "Dictyostelium-discoideum"}
 
 # Order species are laid out in multi panel figures. Any species a run has no data for is skipped
 SPECIES_PLOT_ORDER = ["NCBITaxon:10090",
@@ -43,8 +42,7 @@ SPECIES_PLOT_ORDER = ["NCBITaxon:10090",
                       "NCBITaxon:4896",
                       "NCBITaxon:10116",
                       "NCBITaxon:8364",
-                      "NCBITaxon:44689",
-                      "NCBITaxon:7227"]
+                      "NCBITaxon:44689"]
 
 
 def get_species_name(taxon_id):
