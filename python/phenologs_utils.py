@@ -507,7 +507,8 @@ def pool_phenologs_data(results_dir, fdr_lookup_table, sig_outpath, fdr_level:fl
                                                                                       pval_max))
 
     # Write pooled results to file ###
-    sig_phenologs_df = sig_phenologs_df.sort_values(by="hg_pval")
+    # Ties are broken by the ids, so the file (and every top-k cut taken from it) is the same run to run
+    sig_phenologs_df = sig_phenologs_df.sort_values(by=["hg_pval", "Species A Phenotype ID", "X Species Comparison", "Species B Phenotype ID"], kind="mergesort")
 
     # Default is no gzip
     if compress == False:
@@ -990,7 +991,7 @@ class PhenologsSpeciesComparison(SpeciesComparison):
 
         fname = all_phenologs_filename(self.species_a, self.species_b)
         outpath_name = os.path.join(self.output_directory, fname)
-        comparison_data.sort_values("hg_pval").to_csv(outpath_name, sep='\t', index=False)
+        comparison_data.sort_values(["hg_pval", "Species A Phenotype ID", "Species B Phenotype ID"], kind="mergesort").to_csv(outpath_name, sep='\t', index=False)
         
 
 
@@ -1278,7 +1279,7 @@ class OrthologToPhenotypeCalculations(BaseModel):
         zero_sig_phens = {}
         for k in p2_phens:
             p2_phens[k] = copy.copy(sig_phenologs_df.iloc[p2_phens[k]])
-            p2_phens[k] = p2_phens[k].sort_values(by="hg_pval")
+            p2_phens[k] = p2_phens[k].sort_values(by=["hg_pval", "X Species Comparison", "Species B Phenotype ID"], kind="mergesort")
 
             # Ensure data is of proper type for calculations
             p2_phens[k]["Overlap Count"] = p2_phens[k]["Overlap Count"].astype(float)
@@ -1372,7 +1373,7 @@ class OrthologToPhenotypeCalculations(BaseModel):
         zero_sig_phens = {}
         for k in p2_phens:
             p2_phens[k] = copy.copy(sig_phenologs_df.iloc[p2_phens[k]])
-            p2_phens[k] = p2_phens[k].sort_values(by="hg_pval")
+            p2_phens[k] = p2_phens[k].sort_values(by=["hg_pval", "X Species Comparison", "Species B Phenotype ID"], kind="mergesort")
 
             # Ensure data is of proper type for calculations
             p2_phens[k]["Overlap Count"] = p2_phens[k]["Overlap Count"].astype(float)
@@ -1601,7 +1602,7 @@ class OrthologToPhenotypeCalculations(BaseModel):
         zero_sig_phens = {}
         for k in p2_phens:
             p2_phens[k] = copy.copy(sig_phenologs_df.iloc[p2_phens[k]])
-            p2_phens[k] = p2_phens[k].sort_values(by="hg_pval")
+            p2_phens[k] = p2_phens[k].sort_values(by=["hg_pval", "X Species Comparison", "Species B Phenotype ID"], kind="mergesort")
 
             # Ensure data is of proper type for calculations
             p2_phens[k]["Overlap Count"] = p2_phens[k]["Overlap Count"].astype(float)
@@ -1931,7 +1932,7 @@ class OrthologToPhenotypeCalculations(BaseModel):
                 out_df["Protein_family_id"].append(orth_id)
                 
             out_df = pd.DataFrame(out_df)
-            out_df_sorted = out_df.sort_values(by="p-value")
+            out_df_sorted = out_df.sort_values(by=["p-value", "Gene"], kind="mergesort")
             
             # Write data
             if output_dir != False:
