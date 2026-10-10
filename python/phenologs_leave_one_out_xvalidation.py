@@ -13,11 +13,11 @@ from pathlib import Path
 from phenologs_utils import (FDR_LEVELS,
                              DEFAULT_FDR,
                              divide_workload,
-                             get_species_name,
                              load_fdr_table_to_lookup,
                              pool_phenologs_data,
                              initiate_phenologs_species_comparison_configs,
                              PhenologsSpeciesComparison)
+from species import SpeciesManifest, results_dir_name
 
 
 def initiate_species_specific_filepaths(input_args):
@@ -26,80 +26,45 @@ def initiate_species_specific_filepaths(input_args):
     """
 
     # Ensures part1 & part2 of pipeline have been completed
-    species_data_dir = os.path.join(input_args.project_dir, "species_data")
-    check_file = os.path.join(species_data_dir, "species_information_table.tsv")
     check_outdir = os.path.join(input_args.project_dir, "phenologs_results")
-
-    if not os.path.isfile(check_file):
-        print("- ERROR, Project species information table doesn't seem to exist. Exiting...")
-        sys.exit(1)
-    
     if not os.path.isdir(check_outdir):
         print("- ERROR, Project phenologs_results directory doesn't seem to exist. Exiting...")
         sys.exit(1)
-    
-    # Figure out which species ids / names we have and which ones are relevant
-    species_df = pd.read_csv(check_file, sep='\t')
-    species_df = species_df[species_df["Genes with >= 1 phenotype edge"] > 0] # Only want species whith non zero phenotype information
 
-    # Which species this run has data for, named from SPECIES_NAMES rather than from the table
-    ids_to_name = {sp_id:get_species_name(sp_id) for sp_id in species_df["Taxon ID"]}
-    org_taxon_ids = copy.copy(ids_to_name)
-
-    # Format, and add additional keys to make more friendly to input arguments
-    ids_to_name.update({sp_id.split(":")[1]:v for sp_id,v in ids_to_name.items()}) # Add keys without NCBITaxon: prefix
-    
-    # Figure out which species id(s) we are tasked with comparing to one another
-    valid_species_ids = set(ids_to_name.keys())
-    if input_args.taxon_id in valid_species_ids:
-        sp_id = input_args.taxon_id
-    else:
-        print('- ERROR, relevant taxon id must be supplied for taxon_id argument. Exiting...')
-        sys.exit(1)
-    
-    # Now we need to filter our comparison species list by relevant / available prediction networks
-    # "phenotype" or "disease" networks are available for use
-        
-    # Format filenames and paths for fdr table
-    sp_name = ids_to_name[sp_id]
-    nformatted = ids_to_name[sp_id].replace("-", "_")
-    res_name = "{}_{}_results".format(nformatted, input_args.prediction_network)
-    res_dir = os.path.join(input_args.project_dir, "phenologs_results", res_name)
+    # The base species of this run, from the manifest
+    sp = SpeciesManifest(input_args.project_dir).get(input_args.taxon_id)
+    sp_name = sp.token
+    res_dir = os.path.join(input_args.project_dir, "phenologs_results", results_dir_name(sp_name, input_args.prediction_network))
     fdr_path = os.path.join(res_dir, "{}_fdr_table.tsv".format(sp_name))
-    
-    
+
     # Check if necessary fdr table exists and gather remaining filepaths necessary
-    if os.path.isdir(res_dir) and os.path.isfile(fdr_path):
+    if not os.path.isdir(res_dir) or not os.path.isfile(fdr_path):
+        print('- ERROR, relevant taxon id results not found for {}... Exiting'.format(sp_name))
+        sys.exit(1)
 
-        # Our species specific table filepaths from initial steps of pipeline
-        p2o_path = os.path.join(species_data_dir, "{}_{}_to_ortholog.pkl".format(sp_name, input_args.prediction_network))
-        g2o_path = os.path.join(species_data_dir, "{}_gene_to_ortholog.tsv".format(sp_name))
-        g2p_path = os.path.join(species_data_dir, "{}_gene_to_{}.tsv".format(sp_name, input_args.prediction_network))
-        
-        # Pooled phenolog file name (significance cutoff included in name)
-        sig_phenologs_outname = "{}_pooled_phenologs_fdr{}.tsv".format(sp_name, input_args.fdr)
-        sig_phenologs_outpath = os.path.join(res_dir, sig_phenologs_outname)
-        
-        
-        # Generate dictionary to hold our filepaths for easy processing downstream
-        sp_file_info = {"project_dir":input_args.project_dir,
-                        "results_dir":res_dir,
-                        "taxon_id":input_args.taxon_id,
-                        "prediction_network":input_args.prediction_network,
-                        "fdr_path":fdr_path,
-                        "fdr":input_args.fdr,
-                        "sig_phenologs_path":sig_phenologs_outpath,
-                        "phen_to_orth_path":p2o_path,
-                        "gene_to_orth_path":g2o_path,
-                        "gene_to_phen_path":g2p_path,
-                        "species_name":sp_name} # Note, phen_path can be disease or phenoptype (but phen is the general programmtic name)
-        
+    # Our species specific table filepaths from initial steps of pipeline
+    p2o_path = getattr(sp, "{}_to_ortholog_path".format(input_args.prediction_network))
+    g2o_path = getattr(sp, "gene_to_ortholog_path")
+    g2p_path = getattr(sp, "gene_to_{}_path".format(input_args.prediction_network))
+
+    # Pooled phenolog file name (significance cutoff included in name)
+    sig_phenologs_outname = "{}_pooled_phenologs_fdr{}.tsv".format(sp_name, input_args.fdr)
+    sig_phenologs_outpath = os.path.join(res_dir, sig_phenologs_outname)
+
+    # Generate dictionary to hold our filepaths for easy processing downstream
+    sp_file_info = {"project_dir":input_args.project_dir,
+                    "results_dir":res_dir,
+                    "taxon_id":input_args.taxon_id,
+                    "prediction_network":input_args.prediction_network,
+                    "fdr_path":fdr_path,
+                    "fdr":input_args.fdr,
+                    "sig_phenologs_path":sig_phenologs_outpath,
+                    "phen_to_orth_path":p2o_path,
+                    "gene_to_orth_path":g2o_path,
+                    "gene_to_phen_path":g2p_path,
+                    "species_name":sp_name} # Note, phen_path can be disease or phenoptype (but phen is the general programmtic name)
+
     return sp_file_info
-
-
-    
-        
-        # Generate dictionary to hold our filepaths for easy processing downstream
 
 
 def batch_compute_leave_one_out(batch_configs, fdr_lookup_table):
@@ -157,6 +122,7 @@ if __name__ == '__main__':
         parser.add_argument("-prd", "--prediction_network", help="phenotype or disease (which type of network to use for base species comparisons)", required=True, default="phenotype")
         parser.add_argument("-fdr", help="False discovery rate to pull pvalue cutoffs for. Default is the McGary et. al. 2010 level",
                             required=False, type=float, default=DEFAULT_FDR, choices=FDR_LEVELS)
+        parser.add_argument("-max_orthologs", help="Only leave out the first N orthologs (for testing). Default is all of them", required=False, type=int, default=None)
         return parser.parse_args()
 
     args = parse_input_command()
@@ -192,6 +158,11 @@ if __name__ == '__main__':
     # This is ideal, because it means we do not have to perform a leave one out validation on these orthologs.
     relative_orthologs = {oid:'' for orth_set in p2o.values() for oid in orth_set if (oid in global_orths) and (len(orth_set) >= 2)}
     print("- {} orthologs found with >= 1 phenotype assocation and found within global common ortholog set".format(format(len(relative_orthologs), ',')))
+
+    # Testing limiter
+    if args.max_orthologs:
+        relative_orthologs = dict(list(sorted(relative_orthologs.items()))[:args.max_orthologs])
+        print("- Limiting leave one out to the first {} orthologs".format(len(relative_orthologs)))
 
     # Make base level xvalidate "results" directory 
     species_name = base_configs[0]["species_a"]
