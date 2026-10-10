@@ -1277,19 +1277,17 @@ class OrthologToPhenotypeCalculations(BaseModel):
             tx_a = taxon_id_to_name[tx_a]
             tx_b = taxon_id_to_name[tx_b]
             
-            # Update our gene_id --> gene_names
-            if g_a not in species_gene_names:
-                species_gene_names.update({g_a:g_an})
-            elif g_an != species_gene_names[g_a]:
-                raise ValueError("- Different name found for gene id {}-->{}, {}".format(g_a, 
-                                                                                        species_gene_names[g_a],
-                                                                                        g_an))
-            if g_b not in species_gene_names:
-                species_gene_names.update({g_b:g_bn})
-            elif g_bn != species_gene_names[g_b]:
-                raise ValueError("- Different name found for gene id {}-->{}, {}".format(g_b, 
-                                                                                        species_gene_names[g_b],
-                                                                                        g_bn))
+            # Update our gene_id --> gene_names. Names are cosmetic labels (rankings
+            # use gene IDs), and older graphs carry missing (nan) names, which the
+            # original strict check crashed on (note nan != nan). Coerce missing to
+            # "" and keep the first non-empty name; never crash. No effect on clean
+            # data (first non-empty name wins, exactly as before).
+            g_an = "" if pd.isna(g_an) else g_an
+            g_bn = "" if pd.isna(g_bn) else g_bn
+            if g_a not in species_gene_names or not species_gene_names[g_a]:
+                species_gene_names[g_a] = g_an
+            if g_b not in species_gene_names or not species_gene_names[g_b]:
+                species_gene_names[g_b] = g_bn
             
             # Only deal with edges that include a base_taxon gene node
             if (base_taxon_name != tx_a) and (base_taxon_name != tx_b):

@@ -99,16 +99,26 @@ def merge_ontology_nodes_to_exclusion_terms(ontology_graphs, ontology_terms):
         parent_term = ontology_terms[onto_name][0]
         include = ontology_terms[onto_name][1]
         
+        # Guard: an ontology absent from this KG/phenio version yields an empty
+        # graph missing parent_term (e.g. DDPHENO/Dictyostelium in pre-2025 graphs).
+        # nx.descendants would KeyError; there are no such nodes to exclude anyway,
+        # so fall back to just the parent term. (No effect when the ontology IS present.)
         # Means all terms under parent term (and parent term) need to be avoided in the future when building graph.
         # So we grab all descendants of this node
         if include == "Filter":
-            select_nodes = set(nx.descendants(onto_graph, parent_term)) | set([parent_term])
-        
-        # Means we need to include these nodes in the future. 
+            if parent_term in onto_graph:
+                select_nodes = set(nx.descendants(onto_graph, parent_term)) | set([parent_term])
+            else:
+                select_nodes = set([parent_term])
+
+        # Means we need to include these nodes in the future.
         # So we need to grab all other nodes in the ontology so that we know to avoid them in the future.
         elif include == "Include":
-            select_nodes = set(onto_graph.nodes()) - set(nx.descendants(onto_graph, parent_term))
-            select_nodes = select_nodes | set([parent_term])
+            if parent_term in onto_graph:
+                select_nodes = set(onto_graph.nodes()) - set(nx.descendants(onto_graph, parent_term))
+                select_nodes = select_nodes | set([parent_term])
+            else:
+                select_nodes = set([parent_term])
         
         else:
             raise ValueError("- ERROR, only 'Filter' or 'Include' allowed... {} found".format(include))
@@ -167,7 +177,10 @@ def initiate_graph_with_nodes(nodes_filepath,
         # and keep track of repeate nodes
         node_id = cc[col_inds[node_colname]]
         node_cat = cc[col_inds[node_cat_colname]]
-        node_type = cc[col_inds[node_type_colname]]
+        # 'type' column is absent in pre-2025 KG schemas; node_type is unused
+        # downstream (the only consumer, a protein-coding filter, is commented out),
+        # so default it when missing rather than KeyError.
+        node_type = cc[col_inds[node_type_colname]] if node_type_colname in col_inds else ""
         
         # Filter for relevant node types
         if node_cat not in valid_node_types:
