@@ -11,21 +11,13 @@ import pickle
 from collections import Counter
 
 # Custom imports
-from species import (SPECIES_REGISTRY,
-                     TAXON_COL, TOKEN_COL, BINOMIAL_COL, COMMON_COL, SOURCE_COL,
-                     INCLUDED_COL, REASON_COL, PREFIXES_COL, FLAGS_COL,
-                     resolve_species,
-                     validate_token,
-                     plot_order,
-                     species_filename,
-                     common_orthologs_filename,
-                     species_table_path)
+from phenologs_utils import SPECIES_NAMES, get_species_name, species_plot_order
 
 
-# Every phenotype ontology prefix the registry knows about. Used only to notice phenotype terms the
-# graph has filed under some other biolink category (a release once retyped DDPHENO as NamedThing,
-# which silently dropped Dictyostelium) so that gets reported instead of passing unseen
-KNOWN_PHENOTYPE_PREFIXES = set(p for entry in SPECIES_REGISTRY for p in entry["phenotype_prefixes"])
+# Phenotype ontology prefixes expected to be typed biolink:PhenotypicFeature. Only used to notice phenotype
+# terms a release has filed under some other category (DDPHENO was once retyped NamedThing, which silently
+# dropped Dictyostelium) so that gets reported instead of passing unseen
+PHENOTYPE_PREFIXES = {"HP", "MP", "ZP", "WBPhenotype", "FYPO", "XPO", "DDPHENO", "FBcv", "APO"}
 
 
 def extract_panther_id(has_evidence_value):
@@ -194,7 +186,7 @@ def initiate_graph_with_nodes(nodes_filepath,
         # Filter for relevant node types
         if node_cat not in valid_node_types:
             prefix = node_id.split(":")[0]
-            if prefix in KNOWN_PHENOTYPE_PREFIXES:
+            if prefix in PHENOTYPE_PREFIXES:
                 retyped_phenotypes[(prefix, node_cat)] += 1
             continue
 
@@ -235,7 +227,7 @@ def initiate_graph_with_nodes(nodes_filepath,
     for (prefix, cat), count in sorted(retyped_phenotypes.items()):
         print("- Warning, {} {} terms are typed {} in this release and were not brought in".format(format(count, ','), prefix, cat))
 
-    return graph, taxon_to_name, retyped_phenotypes
+    return graph, taxon_to_name
 
 
 # Step 2)
@@ -298,11 +290,11 @@ def fill_in_graph_with_edges(edges_filepath, graph):
 
 
 # Step 3 repeat call function
-def compute_taxon_info(input_graph, taxon_id: str, taxon_nodes: list, outpath_dir: str, taxon_names: dict, minimums: dict):
+def compute_taxon_info(input_graph, taxon_id: str, taxon_nodes: list, outpath_dir: str, taxon_names: dict, min_genes: int):
     """
     Tallies one taxon's gene-->phenotype, gene-->disease and gene-->ortholog information, decides whether
     the taxon carries enough of it to take part in a run, and writes the species tables only when it does.
-    Every taxon hands back a manifest row either way, so an excluded species is on the record with its reason.
+    Every taxon hands back a species table row either way, so an excluded species is on the record with why.
     """
     
     # Select for gene-->disease or gene-->phenotype edges for specific taxon
@@ -325,11 +317,8 @@ def compute_taxon_info(input_graph, taxon_id: str, taxon_nodes: list, outpath_di
     tx_pprefixes = Counter() # Phenotype ontology namespace prefix(es) seen on this taxon's phenotype neighbors
     empty_gene_names = 0
 
-    # Name the taxon. Registry first, then the graph's NCBITaxon node name, then the in_taxon_label
-    # on the gene node, then the id itself. Which one won is recorded on the manifest row
-    graph_label = taxon_names.get(tx_id) or input_graph.nodes[taxon_nodes[0]].get("in_taxon_label", "")
-    identity = resolve_species(tx_id, graph_label)
-    tx_formatted = validate_token(identity["token"])
+    # Name the taxon. SPECIES_NAMES first, otherwise the graph's own label for it (noted on the species table)
+    tx_formatted = get_species_name(tx_id, taxon_names.get(tx_id, ""))
 
     # Gather up relevant information pertaining to this taxa
     for node_id in taxon_nodes:
@@ -416,22 +405,18 @@ def compute_taxon_info(input_graph, taxon_id: str, taxon_nodes: list, outpath_di
             else:
                 continue
 
-    # Tally up stats we just computed
-    phenotyped_genes = len([1 for v in g2p.values() if len(v) > 0])
-    output_stats = {TAXON_COL:tx_id,
-                    TOKEN_COL:tx_formatted,
-                    BINOMIAL_COL:identity["binomial"],
-                    COMMON_COL:identity["common"],
-                    SOURCE_COL:identity["name_source"],
-                    INCLUDED_COL:True,
-                    REASON_COL:"",
-                    FLAGS_COL:"",
+    # Tally up stats we just computed. Genes with both a phenotype and an ortholog are what a comparison
+    # is actually made from, so that count decides whether this taxon takes part
+    usable_genes = len([g for g in g2o if len(g2p[g]) > 0])
+    output_stats = {"Taxon ID":tx_id,
+                    "Taxon label":tx_formatted,
+                    "Included":usable_genes >= max(min_genes, 1),
+                    "Notes":"",
                     "Taxon gene prefix":tx_gprefix,
                     "Taxon gene count":len(taxon_nodes),
-                    
-                    "Phenotype prefix":(tx_pprefixes.most_common(1)[0][0] if tx_pprefixes else ""),
-                    PREFIXES_COL:";".join(sorted(tx_pprefixes)),
-                    "Genes with >= 1 phenotype edge":phenotyped_genes,
+
+                    "Phenotype prefix":(tx_pprefixes.most_common(1)[0][0] if len(tx_pprefixes) > 0 else ""),
+                    "Genes with >= 1 phenotype edge":len([1 for v in g2p.values() if len(v) > 0]),
                     "Genes with >= 1 disease edge":len([1 for v in g2d.values() if len(v) > 0]),
                     "Total gene2phenotype edges":g2p_edge_count,
                     "Total gene2disease edges":g2d_edge_count,
@@ -439,52 +424,35 @@ def compute_taxon_info(input_graph, taxon_id: str, taxon_nodes: list, outpath_di
                     "Unique diseases":len(d2o),
                     "Ortholog mapping count":g2g_edge_count,
                     "Genes with >= 1 ortholog edge":len(g2o),
-                    "Unique ortholog ids (orthogroups)":len({v:'' for v in g2o.values()}),
-                    "Genes with empty name":empty_gene_names}
+                    "Genes with >= 1 phenotype and ortholog edge":usable_genes,
+                    "Unique ortholog ids (orthogroups)":len({v:'' for v in g2o.values()})}
 
-    # Anything worth a second look about this taxon, short of excluding it
-    flags = []
-    if identity["name_source"] != "registry":
-        flags.append("name from {}".format(identity["name_source"]))
-    expected_prefixes = set(identity["phenotype_prefixes"])
-    if expected_prefixes and tx_pprefixes and set(tx_pprefixes) != expected_prefixes:
-        flags.append("phenotype prefixes {} (expected {})".format(";".join(sorted(tx_pprefixes)), ";".join(sorted(expected_prefixes))))
+    # Anything worth knowing about this taxon, kg quality control included
+    notes = []
+    if tx_id not in SPECIES_NAMES:
+        notes.append("not in SPECIES_NAMES, named from the graph")
     if len(tx_pprefixes) > 1:
-        flags.append("multiple phenotype prefixes")
+        notes.append("phenotype prefixes {}".format(";".join(sorted(tx_pprefixes))))
     if empty_gene_names > 0:
-        flags.append("{} genes with empty name".format(empty_gene_names))
+        notes.append("{} genes with empty name".format(empty_gene_names))
+    if usable_genes == 0:
+        notes.append("no genes with both phenotype and ortholog edges")
+    elif usable_genes < min_genes:
+        notes.append("{} genes with phenotype and ortholog edges < {}".format(usable_genes, min_genes))
+    output_stats["Notes"] = "; ".join(notes)
 
-    # Does this taxon carry enough to take part? No phenotypes or no orthology means there is nothing
-    # to compare, and too little of either means the comparison is numerically meaningless (the 2024
-    # graph carried pombe with 16 phenotyped genes and 11 ortholog edges, and it ran with N=7)
-    reasons = []
-    if g2p_edge_count == 0:
-        reasons.append("no phenotype edges")
-    if len(g2o) == 0:
-        reasons.append("no orthology edges")
-    if phenotyped_genes < minimums["phenotyped_genes"]:
-        reasons.append("{} genes with phenotype edges < {}".format(phenotyped_genes, minimums["phenotyped_genes"]))
-    if len(g2o) < minimums["ortholog_genes"]:
-        reasons.append("{} genes with ortholog edges < {}".format(len(g2o), minimums["ortholog_genes"]))
-    if len(p2o) < minimums["phenotypes"]:
-        reasons.append("{} phenotypes < {}".format(len(p2o), minimums["phenotypes"]))
-
-    output_stats[FLAGS_COL] = ";".join(flags)
-    if len(reasons) > 0:
-        output_stats[INCLUDED_COL] = False
-        output_stats[REASON_COL] = "; ".join(reasons)
-        print("- Excluding {} ({})... {}".format(tx_id, tx_formatted, output_stats[REASON_COL]))
+    if not output_stats["Included"]:
+        print("- Excluding {} ({})... {}".format(tx_id, tx_formatted, output_stats["Notes"]))
         return output_stats
-
-    for flag in flags:
-        print("- Note, {} ({}): {}".format(tx_id, tx_formatted, flag))
+    elif len(notes) > 0:
+        print("- Note, {} ({}): {}".format(tx_id, tx_formatted, output_stats["Notes"]))
 
     # Generate outputfile paths
-    outpath_g2p = os.path.join(outpath_dir, species_filename(tx_formatted, "gene_to_phenotype.tsv"))
-    outpath_g2d = os.path.join(outpath_dir, species_filename(tx_formatted, "gene_to_disease.tsv"))
-    outpath_g2o = os.path.join(outpath_dir, species_filename(tx_formatted, "gene_to_ortholog.tsv"))
-    outpath_p2o = os.path.join(outpath_dir, species_filename(tx_formatted, "phenotype_to_ortholog.pkl"))
-    outpath_d2o = os.path.join(outpath_dir, species_filename(tx_formatted, "disease_to_ortholog.pkl"))
+    outpath_g2p = os.path.join(outpath_dir, "{}_gene_to_phenotype.tsv".format(tx_formatted))
+    outpath_g2d = os.path.join(outpath_dir, "{}_gene_to_disease.tsv".format(tx_formatted))
+    outpath_g2o = os.path.join(outpath_dir, "{}_gene_to_ortholog.tsv".format(tx_formatted))
+    outpath_p2o = os.path.join(outpath_dir, "{}_phenotype_to_ortholog.pkl".format(tx_formatted))
+    outpath_d2o = os.path.join(outpath_dir, "{}_disease_to_ortholog.pkl".format(tx_formatted))
     
     # Write gene-->phenotype file
     gene_to_phens_lines = np.asarray(gene_to_phens_lines).T
@@ -523,9 +491,9 @@ def compute_taxon_info(input_graph, taxon_id: str, taxon_nodes: list, outpath_di
 
 
 # Step 3)
-def compute_association_tables(input_graph, outpath_dir: str, taxon_names: dict, minimums: dict):
+def compute_association_tables(input_graph, outpath_dir: str, taxon_names: dict, min_genes: int):
     """
-    One manifest row per taxon the graph carries gene nodes for, in registry order, included or not
+    One species table row per taxon the graph carries gene nodes for, in SPECIES_NAMES order, included or not
     """
     
     # Subset out gene nodes. Apart from taxon and genotype nodes, 
@@ -542,23 +510,15 @@ def compute_association_tables(input_graph, outpath_dir: str, taxon_names: dict,
     rows = []
     for tx_id, tx_gene_nodes in taxon_gene_nodes.items():
         print("- Processing taxon {}".format(tx_id))
-        rows.append(compute_taxon_info(input_graph, tx_id, tx_gene_nodes, outpath_dir, taxon_names, minimums))
+        rows.append(compute_taxon_info(input_graph, tx_id, tx_gene_nodes, outpath_dir, taxon_names, min_genes))
 
-    # Two taxa resolving to the same token would overwrite each other's tables. Can't happen from the
-    # registry, but can from a graph label, so it is checked here where every token is in hand
-    tokens = Counter(r[TOKEN_COL] for r in rows)
-    clashes = [t for t, c in tokens.items() if c > 1]
-    if len(clashes) > 0:
-        print("- ERROR, more than one taxon resolved to the same species token: {}. Exiting...".format(", ".join(clashes)))
-        sys.exit(1)
-
-    ordered = plot_order([r[TOKEN_COL] for r in rows])
-    rows = sorted(rows, key=lambda r: ordered.index(r[TOKEN_COL]))
+    ordered = species_plot_order([r["Taxon label"] for r in rows])
+    rows = sorted(rows, key=lambda r: ordered.index(r["Taxon label"]))
     return pd.DataFrame(rows)
 
 
 # Step 4)
-def generate_common_orthologs_files(tables_dir, species_tokens):
+def generate_common_orthologs_files(tables_dir, species_names):
     """
     All input/output files will be read in from and written to the input argument tables_dir.
     
@@ -576,8 +536,8 @@ def generate_common_orthologs_files(tables_dir, species_tokens):
     
     # Read ortholog files into memory
     tx_orths = {}
-    for tx in species_tokens:
-        fpath = os.path.join(tables_dir, species_filename(tx, "gene_to_ortholog.tsv"))
+    for tx in species_names:
+        fpath = os.path.join(tables_dir, "{}_gene_to_ortholog.tsv".format(tx))
         orth_ids = set(list(pd.read_csv(fpath, sep='\t')["ortholog_id"]))
         tx_orths.update({tx:orth_ids})
     
@@ -594,7 +554,7 @@ def generate_common_orthologs_files(tables_dir, species_tokens):
             comm_orths = list(tx_orths[tx1] & tx_orths[tx2])
             comm_orth_count = len(comm_orths)
             
-            outpath = os.path.join(tables_dir, common_orthologs_filename(tx1, tx2))
+            outpath = os.path.join(tables_dir, "common_orthologs_{}_vs_{}.tsv".format(tx1, tx2))
             pd.DataFrame({"ortholog_id":comm_orths}).to_csv(outpath, sep='\t', index=False)
             
             # Tally common ortholog counts between species a and species b
@@ -657,15 +617,12 @@ if __name__ == '__main__':
                                                       set of common orthologs (between any two species) is \
                                                       written for each species pairwise comparison. \
                                                       And a table detailing the number of common orthologs shared between any two species is also \
-                                                      written. Species within the monarch-kg that do not have any phenotype edges or \
-                                                      do not have any orthologous mappings are excluded, as are species falling below the \
-                                                      minimum counts. Every species is listed in species_information_table.tsv either way, \
-                                                      with why it was excluded.')
+                                                      written. Species within the monarch-kg with fewer than -min_genes genes carrying both a \
+                                                      phenotype and an ortholog are excluded. Every species is listed in \
+                                                      species_information_table.tsv either way, with why it was excluded.')
 
         parser.add_argument("-p", "--project_dir", help="Phenologs top level project directory", required=True, type=str)
-        parser.add_argument("-min_phenotyped_genes", help="Minimum genes with >= 1 phenotype edge for a species to take part. 0 disables", required=False, type=int, default=100)
-        parser.add_argument("-min_ortholog_genes", help="Minimum genes with >= 1 ortholog edge for a species to take part. 0 disables", required=False, type=int, default=100)
-        parser.add_argument("-min_phenotypes", help="Minimum distinct phenotypes with >= 1 ortholog for a species to take part. 0 disables", required=False, type=int, default=10)
+        parser.add_argument("-min_genes", help="Minimum genes with both a phenotype and an ortholog for a species to take part. 0 keeps anything with at least one", required=False, type=int, default=100)
         return parser.parse_args()
 
     args = parse_input_command()
@@ -681,11 +638,6 @@ if __name__ == '__main__':
                            'MP':['MP:0002873', 'Filter'],             ### Normal phenotype (we do NOT want these terms)
                            'DDPHENO':['DDPHENO:0000142', 'Filter']}   ### Wild type (we do NOT want these terms)
 
-    # Minimum ingredient counts for a species to take part in the run
-    minimums = {"phenotyped_genes":args.min_phenotyped_genes,
-                "ortholog_genes":args.min_ortholog_genes,
-                "phenotypes":args.min_phenotypes}
-
     # Input files
     nodes_file = os.path.join(args.project_dir, "monarch_kg", "monarch-kg_nodes.tsv")
     edges_file = os.path.join(args.project_dir, "monarch_kg", "monarch-kg_edges.tsv")
@@ -694,7 +646,7 @@ if __name__ == '__main__':
     # Output files / info
     species_data_dir = os.path.join(args.project_dir, "species_data")
     os.makedirs(species_data_dir, exist_ok=True)
-    species_info_table_file = species_table_path(args.project_dir)
+    species_info_table_file = os.path.join(species_data_dir, "species_information_table.tsv")
     ortholog_edges_file = os.path.join(species_data_dir, "ortholog_edges.tsv")
 
     # Read through phenio-relation-graph to pull in relevant ontologies so we can filter out nodes downstream
@@ -702,21 +654,21 @@ if __name__ == '__main__':
     nodes_to_exclude = merge_ontology_nodes_to_exclusion_terms(phenio_onto_graphs, onto_parent_classes)
 
     # Run data extraction pipeline (create nx graph by selecting for specific node and edge types)
-    graph, taxon_names, retyped_phenotypes = initiate_graph_with_nodes(nodes_filepath=nodes_file, 
-                                                                       node_colname="id", 
-                                                                       node_cat_colname="category", 
-                                                                       node_type_colname="type",
-                                                                       filter_nodes=nodes_to_exclude)
+    graph, taxon_names = initiate_graph_with_nodes(nodes_filepath=nodes_file, 
+                                                   node_colname="id", 
+                                                   node_cat_colname="category", 
+                                                   node_type_colname="type",
+                                                   filter_nodes=nodes_to_exclude)
 
     graph = fill_in_graph_with_edges(edges_file, graph)
-    taxon_table = compute_association_tables(graph, species_data_dir, taxon_names, minimums)
+    taxon_table = compute_association_tables(graph, species_data_dir, taxon_names, args.min_genes)
 
-    # Write the manifest. Every step from here on reads this to learn which species the run has
+    # Write the species table. Every step from here on reads it to learn which species the run has
     taxon_table.to_csv(species_info_table_file, sep='\t', index=False)
-    included = taxon_table[taxon_table[INCLUDED_COL] == True]
-    print("- {} of {} taxa included: {}".format(len(included), len(taxon_table), ", ".join(included[TOKEN_COL])))
+    included = taxon_table[taxon_table["Included"] == True]
+    print("- {} of {} taxa included: {}".format(len(included), len(taxon_table), ", ".join(included["Taxon label"])))
 
-    generate_common_orthologs_files(tables_dir=species_data_dir, species_tokens=list(included[TOKEN_COL]))
+    generate_common_orthologs_files(tables_dir=species_data_dir, species_names=list(included["Taxon label"]))
 
     # Write orthologs edges file
     generate_ortho_edges_file(graph, outfile=ortholog_edges_file)

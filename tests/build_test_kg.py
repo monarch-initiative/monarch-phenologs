@@ -22,9 +22,6 @@ from collections import defaultdict, Counter
 
 import pandas as pd
 
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "python"))
-from species import SPECIES_REGISTRY, taxon_key
-
 csv.field_size_limit(sys.maxsize)
 
 # Edge categories the extractor consumes, plus the ones we write so the slice is self contained
@@ -80,7 +77,7 @@ def select_genes(gene_taxon, gene_family, gene_phens, gene_diseases, n_families,
     least min_per_species phenotype annotated genes in the slice (or the graph runs out)
     """
 
-    human = taxon_key(9606)
+    human = "NCBITaxon:9606"
     fam_species = defaultdict(lambda: defaultdict(list))   # family -> taxon -> [genes with phenotypes]
     fam_human_disease = set()
     for gene, fam in gene_family.items():

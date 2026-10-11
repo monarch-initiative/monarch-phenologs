@@ -12,7 +12,6 @@ from phenologs_utils import (FDR_LEVELS,
                              pool_phenologs_data,
                              initiate_ortholog_to_phenotype_ranking_calculation_config,
                              OrthologToPhenotypeCalculations)
-from species import results_dir_name, candidates_dir_name
 
 
 if __name__ == '__main__':
@@ -50,11 +49,17 @@ if __name__ == '__main__':
     # Format our base output directory here
     base_outdir = os.path.join(sp_config["project_dir"], 
                               "phenologs_results", 
-                              results_dir_name(sp_config["species_name"], args.prediction_network))
+                              "{}_{}_results".format(sp_config["species_name"].replace("-", "_"),
+                                                     args.prediction_network))
 
      # Format our input filenames here
     sig_phenologs_resname = "{}_pooled_phenologs_fdr{}.tsv".format(sp_config["species_name"],args.fdr)
-    outdir_name = candidates_dir_name(sp_config["species_name"], args.rank_type, args.prediction_network, args.fdr, args.kneighbs, args.rank_metric)
+    outdir_name = "{}_{}_to_{}_candidates_fdr{}_{}kneighbs_{}".format(sp_config["species_name"].replace("-", "_"),
+                                                                      args.rank_type,
+                                                                      args.prediction_network,
+                                                                      args.fdr,
+                                                                      args.kneighbs,
+                                                                      args.rank_metric)
     
     g2p_resname = "{}_{}_to_{}_{}kneighbs_{}_{}.pkl".format(sp_config["species_name"],
                                                      args.rank_type,

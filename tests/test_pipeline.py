@@ -15,11 +15,10 @@ import pytest
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.abspath(os.path.join(HERE, ".."))
-sys.path.insert(0, os.path.join(REPO, "python"))
+CODE = os.path.join(REPO, "python")
+sys.path.insert(0, CODE)
 
-from species import (SpeciesManifest, INCLUDED_COL, REASON_COL, FLAGS_COL, SOURCE_COL, TOKEN_COL, TAXON_COL,
-                     results_dir_name, candidates_dir_name, parse_occurrence_string, split_xspecies_key,
-                     parse_trial_filename, parse_all_phenologs_filename)
+from phenologs_utils import build_species_info
 
 CURRENT = os.path.join(REPO, "test_data", "kg_2026-03-06")
 LEGACY = os.path.join(REPO, "test_data", "kg_2024-03-07")
@@ -59,102 +58,97 @@ def stage_slice(slice_dir, project):
     shutil.copy(os.path.join(slice_dir, "monarch_kg", "phenio-relation-graph.gz"), kg)
 
 
+def extract(project, *extra):
+    """ Step 02 alone, on an already staged project """
+
+    subprocess.run([sys.executable, "02_kg_data_extraction.py", "-p", project] + list(extra), cwd=CODE, check=True, capture_output=True)
+
+
 def read_tsv(path):
     with open(path, newline="") as fh:
         return list(csv.DictReader(fh, delimiter="\t"))
 
 
+def species_table(project):
+    """ {species name: row} """
+
+    return {r["Taxon label"]:r for r in read_tsv(os.path.join(project, "species_data", "species_information_table.tsv"))}
+
+
 # ---- the current graph -------------------------------------------------------------------------
 
-def test_manifest_lists_every_taxon_with_a_verdict(current_run):
+def test_species_table_decides_who_takes_part(current_run):
     project, _ = current_run
-    rows = read_tsv(os.path.join(project, "species_data", "species_information_table.tsv"))
-    assert {INCLUDED_COL, REASON_COL, FLAGS_COL, SOURCE_COL} <= set(rows[0])
-    included = [r for r in rows if r[INCLUDED_COL] == "True"]
-    excluded = [r for r in rows if r[INCLUDED_COL] == "False"]
-    assert "Homo-sapiens" in {r[TOKEN_COL] for r in included}
-    assert all(r[REASON_COL] for r in excluded)
-    assert all(not r[REASON_COL] for r in included)
-    # Every registered species is named from the registry, never from the graph
-    assert all(r[SOURCE_COL] == "registry" for r in rows if r[TOKEN_COL] in ("Homo-sapiens", "Mus-musculus"))
+    rows = species_table(project)
+    assert rows["Homo-sapiens"]["Included"] == "True"
+    assert all(r["Notes"] for r in rows.values() if r["Included"] == "False")
+
+    # Every later step reads the same table and sees only the included species, by id, number or name
+    org_taxon_ids, species = build_species_info(project)
+    assert set(org_taxon_ids.values()) == {name for name, r in rows.items() if r["Included"] == "True"}
+    assert species["9606"] is species["NCBITaxon:9606"] is species["Homo-sapiens"]
+    assert species["9606"].gene_to_disease_path
+    assert len(species["9606"].common_orthologs_paths) == len(org_taxon_ids) - 1
 
 
-def test_manifest_loader_sees_only_included_species(current_run):
+def test_outputs_land_where_the_next_step_looks(current_run):
     project, _ = current_run
-    manifest = SpeciesManifest(project)
-    rows = read_tsv(os.path.join(project, "species_data", "species_information_table.tsv"))
-    excluded = [r[TOKEN_COL] for r in rows if r[INCLUDED_COL] == "False"]
-    assert all(t not in manifest for t in excluded)
-    human = manifest.get("9606")
-    assert manifest.get("NCBITaxon:9606") is human and manifest.get("Homo-sapiens") is human and manifest.get("Homo sapiens") is human
-    assert human.gene_to_disease_path and len(human.common_orthologs_paths) == len(manifest) - 1
+    names = set(build_species_info(project)[0].values())
+    res = os.path.join(project, "phenologs_results", "Homo_sapiens_disease_results")
 
-
-def test_outputs_follow_the_naming_conventions(current_run):
-    project, _ = current_run
-    manifest = SpeciesManifest(project)
-    res = os.path.join(project, "phenologs_results", results_dir_name("Homo-sapiens", "disease"))
     assert os.path.isfile(os.path.join(res, "Homo-sapiens_pooled_phenologs_fdr0.05.tsv"))
-    for fname in os.listdir(res):
-        if fname.endswith("_all_phenologs.tsv"):
-            a, b = parse_all_phenologs_filename(fname)
-            assert a == "Homo-sapiens" and b in manifest
-    trials = os.path.join(project, "random_trials", "Homo_sapiens_disease_trials")
-    parsed = [parse_trial_filename(f) for f in os.listdir(trials)]
-    assert all(p and p[0] == "Homo-sapiens" and p[1] in manifest for p in parsed)
+    pairs = [f.replace("_all_phenologs.tsv", "").split("_vs_") for f in os.listdir(res) if f.endswith("_all_phenologs.tsv")]
+    assert pairs and all(a == "Homo-sapiens" and b in names for a, b in pairs)
+
+    trials = os.listdir(os.path.join(project, "random_trials", "Homo_sapiens_disease_trials"))
+    assert trials and all(f.startswith("Homo-sapiens_vs_") and f.endswith(".tsv.gz") for f in trials)
+
     for row in read_tsv(os.path.join(res, "Homo-sapiens_fdr_table.tsv")):
-        a, b = split_xspecies_key(row["species_comparison"])
-        assert a == "Homo-sapiens" and b in manifest
+        a, b = row["species_comparison"].split(",")
+        assert a == "Homo-sapiens" and b in names
+
+    # Species ablation (protein family ranking restricted to mouse) writes a species suffixed matrix
+    assert os.path.isfile(os.path.join(res, "Homo-sapiens_ortholog_to_disease_Mus-musculus_5kneighbs_hg_0.05.pkl"))
 
 
-def test_candidate_files_carry_parseable_species_occurrences(current_run):
+def test_candidate_files_name_the_species_behind_each_gene(current_run):
     project, _ = current_run
-    cdir = os.path.join(project, "phenologs_results", results_dir_name("Homo-sapiens", "disease"),
-                        candidates_dir_name("Homo-sapiens", "gene", "disease", 0.05, 5, "hg"))
+    names = set(build_species_info(project)[0].values())
+    cdir = os.path.join(project, "phenologs_results", "Homo_sapiens_disease_results",
+                        "Homo_sapiens_gene_to_disease_candidates_fdr0.05_5kneighbs_hg")
     files = os.listdir(cdir)
     assert len(files) > 0
-    manifest = SpeciesManifest(project)
     seen = set()
     for fname in files[:50]:
         for row in read_tsv(os.path.join(cdir, fname)):
-            for token in parse_occurrence_string(row["XSpecies_occurence"]):
-                assert token in manifest
-                seen.add(token)
+            for item in filter(None, row["XSpecies_occurence"].split(",")):
+                species, count = item.split(":")
+                assert species in names and int(count) > 0
+                seen.add(species)
     assert "Mus-musculus" in seen
-
-
-def test_species_ablation_writes_a_species_suffixed_matrix(current_run):
-    project, _ = current_run
-    res = os.path.join(project, "phenologs_results", results_dir_name("Homo-sapiens", "disease"))
-    assert os.path.isfile(os.path.join(res, "Homo-sapiens_ortholog_to_disease_Mus-musculus_5kneighbs_hg_0.05.pkl"))
 
 
 # ---- the 2024 graph: no type column, empty gene names, no DDPHENO, a nearly empty pombe ---------
 
 def test_legacy_graph_runs_and_gates_the_thin_species(legacy_run):
     project, log = legacy_run
-    rows = {r[TOKEN_COL]:r for r in read_tsv(os.path.join(project, "species_data", "species_information_table.tsv"))}
+    rows = species_table(project)
     assert "Dictyostelium-discoideum" not in rows          # absent from the graph entirely
     pombe = rows["Schizosaccharomyces-pombe"]
-    assert pombe[INCLUDED_COL] == "False" and "<" in pombe[REASON_COL]
-    assert "genes with empty name" in pombe[FLAGS_COL]
+    assert pombe["Included"] == "False" and "< 100" in pombe["Notes"]
+    assert "genes with empty name" in pombe["Notes"]
     assert "Warning, DDPHENO parent term" in log
-    assert "Schizosaccharomyces-pombe" not in SpeciesManifest(project)
+    assert "Schizosaccharomyces-pombe" not in build_species_info(project)[0].values()
 
 
 def test_gate_can_be_switched_off(tmp_path):
     project = str(tmp_path / "nogate")
-    env = dict(os.environ, PY=sys.executable)
-    # Only extraction is needed to see the verdicts. The slice goes in first so 01 skips its downloads
     stage_slice(LEGACY, project)
-    subprocess.run([sys.executable, os.path.join(REPO, "python", "01_download_and_setup.py"), "-p", project, "-gv", "2000-01-01", "-pv", "2000-01-01"], check=True, capture_output=True)
-    subprocess.run([sys.executable, "02_kg_data_extraction.py", "-p", project, "-min_phenotyped_genes", "0", "-min_ortholog_genes", "0", "-min_phenotypes", "0"],
-                   cwd=os.path.join(REPO, "python"), check=True, capture_output=True)
-    rows = {r[TOKEN_COL]:r for r in read_tsv(os.path.join(project, "species_data", "species_information_table.tsv"))}
-    assert rows["Schizosaccharomyces-pombe"][INCLUDED_COL] == "True"
+    extract(project, "-min_genes", "0")
+    assert species_table(project)["Schizosaccharomyces-pombe"]["Included"] == "True"
 
 
-# ---- a taxon the registry does not know --------------------------------------------------------
+# ---- a taxon SPECIES_NAMES does not know -------------------------------------------------------
 
 def test_unregistered_taxon_is_named_from_the_graph(tmp_path):
     """
@@ -196,10 +190,10 @@ def test_unregistered_taxon_is_named_from_the_graph(tmp_path):
                 row["id"] = row["id"] + "-felis"
                 out.write("\t".join(row[c] for c in cols) + "\n")
 
-    subprocess.run([sys.executable, "02_kg_data_extraction.py", "-p", project], cwd=os.path.join(REPO, "python"), check=True, capture_output=True)
-    rows = {r[TAXON_COL]:r for r in read_tsv(os.path.join(project, "species_data", "species_information_table.tsv"))}
+    extract(project)
+    rows = {r["Taxon ID"]:r for r in species_table(project).values()}
     felis = rows["NCBITaxon:99999"]
-    assert felis[TOKEN_COL] == "Felis-catus" and felis[SOURCE_COL] == "graph" and "name from graph" in felis[FLAGS_COL]
-    assert felis[INCLUDED_COL] == "True"
+    assert felis["Taxon label"] == "Felis-catus" and felis["Included"] == "True"
+    assert "not in SPECIES_NAMES" in felis["Notes"]
     assert os.path.isfile(os.path.join(project, "species_data", "Felis-catus_gene_to_phenotype.tsv"))
-    assert SpeciesManifest(project).get("Felis catus").token == "Felis-catus"
+    assert "Felis-catus" in build_species_info(project)[1]

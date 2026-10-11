@@ -16,8 +16,9 @@ from phenologs_utils import (FDR_LEVELS,
                              load_fdr_table_to_lookup,
                              pool_phenologs_data,
                              initiate_phenologs_species_comparison_configs,
-                             PhenologsSpeciesComparison)
-from species import SpeciesManifest, results_dir_name
+                             PhenologsSpeciesComparison,
+                             build_species_info,
+                             validate_species_arguments)
 
 
 def initiate_species_specific_filepaths(input_args):
@@ -31,10 +32,12 @@ def initiate_species_specific_filepaths(input_args):
         print("- ERROR, Project phenologs_results directory doesn't seem to exist. Exiting...")
         sys.exit(1)
 
-    # The base species of this run, from the manifest
-    sp = SpeciesManifest(input_args.project_dir).get(input_args.taxon_id)
-    sp_name = sp.token
-    res_dir = os.path.join(input_args.project_dir, "phenologs_results", results_dir_name(sp_name, input_args.prediction_network))
+    # The base species of this run and its species_data files
+    org_taxon_ids, species_dict = build_species_info(input_args.project_dir)
+    t_id = validate_species_arguments(species_dict, org_taxon_ids, input_args.taxon_id, input_args.prediction_network)
+    sp = species_dict[t_id]
+    sp_name = sp.species_name
+    res_dir = os.path.join(input_args.project_dir, "phenologs_results", "{}_{}_results".format(sp_name.replace("-", "_"), input_args.prediction_network))
     fdr_path = os.path.join(res_dir, "{}_fdr_table.tsv".format(sp_name))
 
     # Check if necessary fdr table exists and gather remaining filepaths necessary
