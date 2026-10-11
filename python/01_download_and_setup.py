@@ -1,9 +1,10 @@
 # General imports
 import os
+import gzip
+import shutil
 import argparse
 import requests
 import tarfile
-import pickle
 
 
 def download_file_url(url: str, outdir: str, extract_gz: bool = False, overwrite: bool = False):
@@ -17,18 +18,23 @@ def download_file_url(url: str, outdir: str, extract_gz: bool = False, overwrite
 
     if overwrite != True:
         if os.path.isfile(filename):
-            print("- Warning, file {} already exists... Set overwrite to True to download and replace")
-            return
+            print("- Warning, file {} already exists... Set overwrite to True to download and replace".format(filename))
+            return filename
 
-    with open(filename, "wb") as f:
-        r = requests.get(url)
-        f.write(r.content)
+    # Streamed to disk. A bad status is an error, rather than an html error page saved under the filename
+    with requests.get(url, stream=True) as r:
+        r.raise_for_status()
+        with open(filename, "wb") as f:
+            for chunk in r.iter_content(chunk_size=1024*1024):
+                f.write(chunk)
     
-    # Extract gzip
+    # Extract tarball
     if extract_gz != False:
         file = tarfile.open(filename)
-        file.extractall(kg_dir_path)
+        file.extractall(outdir)
         file.close()
+
+    return filename
 
 
 if __name__ == '__main__':
@@ -89,13 +95,24 @@ if __name__ == '__main__':
     else:
         print("- Skipping monarch kg download... An edges file already exists at {}".format(kg_edges_path))
     
-    # Download phenio relation graph (leave gzip format to save space as we can read through it as is)
+    # Download phenio relation graph (leave gzip format to save space as we can read through it as is).
+    # Releases before 2024-12 shipped it as a tarball of the .tsv instead, so that is fetched and gzipped here
     if not os.path.isfile(phenio_path):
         if args.phenio_version != "latest":
             URL = 'https://github.com/monarch-initiative/phenio/releases/download/v{}/phenio-relation-graph.gz'.format(args.phenio_version)
         else:
             URL = 'https://github.com/monarch-initiative/phenio/releases/latest/download/phenio-relation-graph.gz'
-        download_file_url(URL, kg_dir_path, extract_gz=False, overwrite=False)
+
+        try:
+            download_file_url(URL, kg_dir_path, extract_gz=False, overwrite=False)
+        except requests.HTTPError:
+            print("- No phenio-relation-graph.gz on that release, trying the older phenio-relation-graph.tar.gz...")
+            tar_path = download_file_url(URL.replace(".gz", ".tar.gz"), kg_dir_path, extract_gz=True, overwrite=False)
+            tsv_path = os.path.join(kg_dir_path, "phenio-relation-graph.tsv")
+            with open(tsv_path, "rb") as src, gzip.open(phenio_path, "wb", compresslevel=6) as dst:
+                shutil.copyfileobj(src, dst)
+            os.remove(tsv_path)
+            os.remove(tar_path)
         print("- Download of phenio relation graph succesfull...")
     else:
         print("- Skipping phenio relation graph download... File already exists at {}".format(phenio_path))

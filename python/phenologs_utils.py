@@ -34,13 +34,13 @@ SPECIES_NAMES = {"NCBITaxon:9606": "Homo-sapiens",
                  "NCBITaxon:8364": "Xenopus-tropicalis",
                  "NCBITaxon:44689": "Dictyostelium-discoideum",
                  "NCBITaxon:7227": "Drosophila-melanogaster",
-                 "NCBITaxon:4932": "Saccharomyces-cerevisiae",
+                 "NCBITaxon:559292": "Saccharomyces-cerevisiae",   # the graph uses the S288C strain taxon
                  "NCBITaxon:8355": "Xenopus-laevis",
                  "NCBITaxon:9031": "Gallus-gallus",
                  "NCBITaxon:9615": "Canis-lupus-familiaris",
                  "NCBITaxon:9823": "Sus-scrofa",
                  "NCBITaxon:9913": "Bos-taurus",
-                 "NCBITaxon:162425": "Aspergillus-nidulans"}
+                 "NCBITaxon:227321": "Aspergillus-nidulans"}         # the graph uses the FGSC A4 strain taxon
 
 
 def get_species_name(taxon_id, graph_label=""):
