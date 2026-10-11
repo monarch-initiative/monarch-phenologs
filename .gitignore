@@ -170,3 +170,4 @@ dag.html
 # The kg slices under test_data/ are the one place kg files are tracked
 !test_data/*/monarch_kg/
 !test_data/*/monarch_kg/*
+dashboard/site/data/
