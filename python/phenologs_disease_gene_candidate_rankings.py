@@ -57,8 +57,8 @@ if __name__ == '__main__':
     outdir_name = "{}_{}_to_{}_candidates_fdr{}_{}kneighbs_{}".format(sp_config["species_name"].replace("-", "_"),
                                                                       args.rank_type,
                                                                       args.prediction_network,
-                                                                      args.fdr, 
-                                                                      args.kneighbs, 
+                                                                      args.fdr,
+                                                                      args.kneighbs,
                                                                       args.rank_metric)
     
     g2p_resname = "{}_{}_to_{}_{}kneighbs_{}_{}.pkl".format(sp_config["species_name"],

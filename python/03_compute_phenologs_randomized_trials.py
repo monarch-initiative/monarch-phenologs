@@ -5,7 +5,6 @@ import argparse
 import copy
 import pandas as pd
 import multiprocessing as mp
-from IPython.display import display
 
 # Custom imports
 from phenologs_utils import (SpeciesComparison, 

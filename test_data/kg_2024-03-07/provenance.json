@@ -1,0 +1,8 @@
+{
+  "source_project_dir": "/Users/ao33/Desktop/PHENOLOGS_PAPER/graph_version_comparison/prior_2024-03-07/phenologs-from-kg",
+  "families": 250,
+  "genes_per_family": 3,
+  "min_per_species": 150,
+  "genes": 2960,
+  "terms": 23719
+}

@@ -2,7 +2,6 @@
 import os
 import sys
 import argparse
-import copy
 import pickle
 import math
 import numpy as np
@@ -14,11 +13,11 @@ from typing import Dict, List
 # Custom imports
 from phenologs_utils import (FDR_LEVELS,
                              DEFAULT_FDR,
-                             SPECIES_PLOT_ORDER,
                              TRIAL_PARAM_COLS,
                              PHENOLOG_PARAM_COLS,
                              bulk_compute_hyper_geom,
-                             get_species_name)
+                             build_species_info,
+                             species_plot_order)
 
 
 
@@ -35,7 +34,7 @@ def gather_trial_data(input_dir):
 
     # Gather all filepaths to trial data
     trials_by_species = {}
-    for fname in os.listdir(input_dir):
+    for fname in sorted(os.listdir(input_dir)):
 
         if "_vs_" not in fname:
             continue
@@ -54,13 +53,11 @@ def gather_trial_data(input_dir):
         except:
             continue
 
-
         # Keep track of trial information by species-species comparison
         ddd = fname_formatted.split("_vs_")
         specA = ddd[0]
         specB = ddd[1].split("_")[0]
         key = tuple((specA, specB))
-
         if trials_by_species.get(key, None) == None:
             trials_by_species.update({key:{}})
 
@@ -310,10 +307,9 @@ def plot_fdr_cumul_results(trial_info: Dict,
                            savefig2=False,
                            display_figs=False):
 
-    # Lay comparisons out in plot_order, then append anything present but unlisted so that a newly
-    # added species can't be silently left out of the figures
-    ordered_names = [get_species_name(tx_id) for tx_id in plot_order]
-    plot_keys = [k for name in ordered_names for k in sorted(trial_info) if k[1] == name]
+    # Lay comparisons out in plot_order (species names), then append anything present but unlisted so
+    # that a newly added species can't be silently left out of the figures
+    plot_keys = [k for name in plot_order for k in sorted(trial_info) if k[1] == name]
     plot_keys += [k for k in sorted(trial_info) if k not in plot_keys]
 
     # nrows x 2 columns formatted multiplot figure
@@ -402,64 +398,43 @@ def initiate_phenologs_fdr_fpaths(input_args):
     """
 
     # Ensures part1 & part2 of pipeline have been completed
-    check_file = os.path.join(input_args.project_dir, "species_data", "species_information_table.tsv")
     check_outdir = os.path.join(input_args.project_dir, "random_trials")
-
-    if not os.path.isfile(check_file):
-        print("- ERROR, Project species information table doesn't seem to exist. Exiting...")
-        sys.exit(1)
-
     if not os.path.isdir(check_outdir):
         print("- ERROR, Project random_trials directory doesn't seem to exist. Exiting...")
         sys.exit(1)
 
-    # Figure out which species ids / names we have and which ones are relevant
-    species_df = pd.read_csv(check_file, sep='\t')
-    species_df = species_df[species_df["Genes with >= 1 phenotype edge"] > 0] # Only want species whith non zero phenotype information
-
-    # Which species this run has data for, named from SPECIES_NAMES rather than from the table
-    ids_to_name = {sp_id:get_species_name(sp_id) for sp_id in species_df["Taxon ID"]}
-    org_taxon_ids = copy.copy(ids_to_name)
-
-    # Format, and add additional keys to make more friendly to input arguments
-    ids_to_name.update({sp_id.split(":")[1]:v for sp_id,v in ids_to_name.items()}) # Add keys without NCBITaxon: prefix
-
-    # Figure out which species id(s) we are tasked with comparing to one another
-    valid_species_ids = set(ids_to_name.keys())
+    # Which species this run has. "all" means every one of them in turn
+    org_taxon_ids, species_dict = build_species_info(input_args.project_dir)
     if input_args.taxon_id == "all":
-        t_ids = list(org_taxon_ids.keys())
-    elif input_args.taxon_id in valid_species_ids:
-        t_ids = [input_args.taxon_id]
+        base_species = list(org_taxon_ids.values())
+    elif input_args.taxon_id in species_dict:
+        base_species = [species_dict[input_args.taxon_id].species_name]
     else:
         print('- ERROR, all or relevant taxon id must be supplied for taxon_id argument. Exiting...')
         sys.exit(1)
-
 
     # Now we need to filter our comparison species list by relevant / available prediction networks
     # "phenotype" or "disease" networks are available for use
     res_paths, rand_paths, sp_names = [], [], []
 
-    for sp_id in t_ids:
-        nformatted = ids_to_name[sp_id].replace("-", "_")
-        rand_name = "{}_{}_trials".format(nformatted, input_args.prediction_network)
-        rand_dir = os.path.join(input_args.project_dir, "random_trials", rand_name)
-
-        res_name = "{}_{}_results".format(nformatted, input_args.prediction_network)
-        res_dir = os.path.join(input_args.project_dir, "phenologs_results", res_name)
+    for sp_name in base_species:
+        nformatted = sp_name.replace("-", "_")
+        rand_dir = os.path.join(input_args.project_dir, "random_trials", "{}_{}_trials".format(nformatted, input_args.prediction_network))
+        res_dir = os.path.join(input_args.project_dir, "phenologs_results", "{}_{}_results".format(nformatted, input_args.prediction_network))
 
         if os.path.isdir(res_dir) and os.path.isdir(rand_dir):
             res_paths.append(res_dir)
             rand_paths.append(rand_dir)
-            sp_names.append(ids_to_name[sp_id])
+            sp_names.append(sp_name)
         else:
-            print("- Warning, random_trials and or phenologs_results appear to be missing for {}".format(input_args.taxon_id))
+            print("- Warning, random_trials and or phenologs_results appear to be missing for {}".format(sp_name))
 
     if len(res_paths) == 0:
         print('- ERROR, No relevant data found for taxon_id {} of type {}. Exiting...'.format(input_args.taxon_id,
                                                                                               input_args.prediction_network))
         sys.exit(1)
 
-    return res_paths, rand_paths, sp_names
+    return res_paths, rand_paths, sp_names, list(org_taxon_ids.values())
 
 
 
@@ -486,7 +461,7 @@ if __name__ == '__main__':
     ###############
     ### PROGRAM ###
 
-    fpaths, rpaths, snames = initiate_phenologs_fdr_fpaths(args)
+    fpaths, rpaths, snames, run_species = initiate_phenologs_fdr_fpaths(args)
     for res_path, rand_path, sname in zip(fpaths, rpaths, snames):
 
         # Gather random trial data and compute fdr cuttoff values from hg pvalues
@@ -516,7 +491,7 @@ if __name__ == '__main__':
 
         # Plot our results and save figures
         plot_fdr_cumul_results(trial_info,
-                               plot_order=SPECIES_PLOT_ORDER,
+                               plot_order=species_plot_order(run_species),
                                fdr_default=DEFAULT_FDR,
                                savefig1=plot1_data_outpath,
                                savefig2=plot2_data_outpath,

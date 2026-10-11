@@ -1,21 +1,26 @@
 [tool.poetry]
 name = "monarch-phenologs"
-version = "0.1.0"
-description = ""
+version = "0.2.0"
+description = "Phenologs and cross species gene candidate rankings from the Monarch Knowledge Graph"
 package-mode = false
 authors = ["Aaron Odell <aaron@tislab.org>"]
 
+# Pinned to the versions the paper's runs were made with
 [tool.poetry.dependencies]
-python = ">=3.10"
-pandas = "^1.3.3"
-numpy = "^1.21.2"
-requests = "^2.26.0"
-scipy = "^1.7.1"
-networkx = "^2.6.3"
-pronto = "^2.4.0"
-IPython = "^8.29.0"
-pydantic = ">=2.10"
-matplotlib = "^3.8.0"
+python = ">=3.10,<3.13"
+pandas = "~2.2.3"
+numpy = "~1.26.4"
+scipy = "~1.13.1"
+networkx = "~3.4"
+pydantic = "~2.13"
+matplotlib = "~3.8.4"
+requests = "~2.33"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "~8.2"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]

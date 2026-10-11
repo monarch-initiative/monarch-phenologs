@@ -39,6 +39,7 @@ if __name__ == '__main__':
         parser.add_argument("-kneighbs", help="k-nearest phenologs to use when combing across multiple phenologs", required=True, type=int, default=10)
         parser.add_argument("-rank_metric", help="Which metric to use for combining knearest neighbor... default is naive_bayes (nb), (hg is hyper geometric)", required=False, choices=['nb', 'hg'], default='nb')
         parser.add_argument("-rank_type", help="Which type of analyis to perform, gene ranking or protein family ranking", required=False, choices=["protein_family", "gene"], default='protein_family')
+        parser.add_argument("-xtaxon_ids", help="Comma-separated model-species taxon ids to RESTRICT the ranking to (species-ablation; e.g. '10090' = mouse only). Omit to use all species.", required=False, type=str, default=None)
         return parser.parse_args()
 
     args = parse_input_command()

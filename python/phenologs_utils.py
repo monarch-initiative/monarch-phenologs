@@ -4,16 +4,15 @@ import sys
 import pickle
 import random
 import copy
+import re
 import numpy as np
 import pandas as pd
 import scipy
 from scipy.stats import pearsonr
 from collections import Counter
-from IPython.display import display
 from pathlib import Path
 from pydantic import BaseModel
 from typing import Dict, List, Optional
-
 
 # False discovery rates that _fdr_table.tsv is generated for, and the one used by default downstream.
 # These are true false discovery rates (.05 == 5% of significant phenologs expected to be false).
@@ -22,45 +21,48 @@ FDR_LEVELS = [.1, .05, .01, .001, .0001]
 DEFAULT_FDR = .05
 
 
-# The one name each species goes by, used for filenames, data keys, and figure labels alike.
-# Names are fixed here rather than read from the graph because a monarch kg release once stopped
-# exposing taxon labels, and the extraction fell back to numeric taxon ids for the species affected.
-# That left a run half named and broke every downstream lookup expecting the readable form
+# The one name each species goes by, used for filenames, data keys, and figure labels alike. Dict order
+# is the order species are laid out in multi panel figures. A taxon the graph carries that isn't listed
+# here is named from the graph's own label for it (or its id), and extraction notes that on the species
+# table so a half named run can't go unnoticed
 SPECIES_NAMES = {"NCBITaxon:9606": "Homo-sapiens",
                  "NCBITaxon:10090": "Mus-musculus",
-                 "NCBITaxon:10116": "Rattus-norvegicus",
                  "NCBITaxon:7955": "Danio-rerio",
                  "NCBITaxon:6239": "Caenorhabditis-elegans",
                  "NCBITaxon:4896": "Schizosaccharomyces-pombe",
+                 "NCBITaxon:10116": "Rattus-norvegicus",
                  "NCBITaxon:8364": "Xenopus-tropicalis",
-                 "NCBITaxon:44689": "Dictyostelium-discoideum"}
+                 "NCBITaxon:44689": "Dictyostelium-discoideum",
+                 "NCBITaxon:7227": "Drosophila-melanogaster",
+                 "NCBITaxon:559292": "Saccharomyces-cerevisiae",   # the graph uses the S288C strain taxon
+                 "NCBITaxon:8355": "Xenopus-laevis",
+                 "NCBITaxon:9031": "Gallus-gallus",
+                 "NCBITaxon:9615": "Canis-lupus-familiaris",
+                 "NCBITaxon:9823": "Sus-scrofa",
+                 "NCBITaxon:9913": "Bos-taurus",
+                 "NCBITaxon:227321": "Aspergillus-nidulans"}         # the graph uses the FGSC A4 strain taxon
 
-# Order species are laid out in multi panel figures. Any species a run has no data for is skipped
-SPECIES_PLOT_ORDER = ["NCBITaxon:10090",
-                      "NCBITaxon:7955",
-                      "NCBITaxon:6239",
-                      "NCBITaxon:4896",
-                      "NCBITaxon:10116",
-                      "NCBITaxon:8364",
-                      "NCBITaxon:44689"]
 
-
-def get_species_name(taxon_id):
+def get_species_name(taxon_id, graph_label=""):
     """
     Taxon id (with or without the NCBITaxon: prefix) --> the name this species is known by everywhere.
-    A taxon that made it far enough to be named but isn't registered is an error rather than something
-    to guess at, so that naming can never be applied to some species of a run and not others.
+    Registered species come from SPECIES_NAMES. Anything else gets the graph's label made filename safe
+    (Felis catus --> Felis-catus), or NCBITaxon-<id> if the graph has no label for it either
     """
 
-    key = str(taxon_id)
-    if not key.startswith("NCBITaxon:"):
-        key = "NCBITaxon:{}".format(key)
+    key = "NCBITaxon:{}".format(str(taxon_id).split(":")[-1])
+    if key in SPECIES_NAMES:
+        return SPECIES_NAMES[key]
 
-    if key not in SPECIES_NAMES:
-        print("- ERROR, No name registered for taxon {}. Add it to SPECIES_NAMES in phenologs_utils.py. Exiting...".format(key))
-        sys.exit(1)
+    name = re.sub(r"[^A-Za-z0-9]+", "-", str(graph_label)).strip("-")
+    return name if name != "" else key.replace(":", "-")
 
-    return SPECIES_NAMES[key]
+
+def species_plot_order(species_names):
+    """ Species names in SPECIES_NAMES order, anything unregistered after """
+
+    order = {name:i for i, name in enumerate(SPECIES_NAMES.values())}
+    return sorted(species_names, key=lambda n: (order.get(n, len(order)), n))
 
 
 ###################################################################################################
@@ -70,10 +72,10 @@ class Species:
         self.taxon_id = taxon_id
         self.species_name = species_name
         self.project_dir = project_dir
-        self.file_exts = ["disease_to_ortholog.pkl", 
-                          "gene_to_disease.tsv", 
-                          "gene_to_ortholog.tsv", 
-                          "gene_to_phenotype.tsv", 
+        self.file_exts = ["disease_to_ortholog.pkl",
+                          "gene_to_disease.tsv",
+                          "gene_to_ortholog.tsv",
+                          "gene_to_phenotype.tsv",
                           "phenotype_to_ortholog.pkl"]
 
         self.disease_to_ortholog_path = None
@@ -82,9 +84,9 @@ class Species:
         self.gene_to_phenotype_path = None
         self.phenotype_to_ortholog_path = None
         self.common_orthologs_paths = []
-    
+
     def initiate_filepaths(self):
-        
+
         # Pull in species specific file paths
         for fext in self.file_exts:
             fname = "{}_{}".format(self.species_name, fext)
@@ -94,24 +96,28 @@ class Species:
             elif "disease" not in fext:
                 print("- ERROR, Species {} is missing file: {}".format(self.species_name, fext))
                 sys.exit(1)
-        
+
         # Pull in common orthologs paths
-        for fname in os.listdir(os.path.join(self.project_dir, "species_data")):
+        for fname in sorted(os.listdir(os.path.join(self.project_dir, "species_data"))):
             if fname.startswith("common_orthologs_{}_vs".format(self.species_name)):
                 fpath = os.path.join(self.project_dir, "species_data", fname)
                 if os.path.isfile(fpath):
                     self.common_orthologs_paths.append(fpath)
-        
+
 
 def build_species_info(project_dir):
 
-    # Load in species information table
+    # Load in species information table. Which species take part is decided once, by extraction, and
+    # read from the Included column by every step after. Tables from before that column had no excluded rows
     species_info_file = os.path.join(project_dir, "species_data", "species_information_table.tsv")
     species_df = pd.read_csv(species_info_file, sep='\t')
-    species_df = species_df[species_df["Genes with >= 1 phenotype edge"] > 0] # Only want species whith non zero phenotype information
-    
-    # Which species this run has data for, named from SPECIES_NAMES rather than from the table
-    ids_to_name = {sp_id:get_species_name(sp_id) for sp_id in species_df["Taxon ID"]}
+    if "Included" in species_df.columns:
+        species_df = species_df[species_df["Included"] == True]
+    else:
+        species_df = species_df[species_df["Genes with >= 1 phenotype edge"] > 0]
+
+    # Which species this run has data for, under the name extraction gave each one
+    ids_to_name = dict(zip(species_df["Taxon ID"], species_df["Taxon label"]))
     org_taxon_ids = copy.copy(ids_to_name)
 
     # Generate a dictionary with multiple keys pointing to the same species object
@@ -134,14 +140,17 @@ def validate_species_arguments(species_dict, org_taxon_ids, input_taxon_id, pred
     """
 
     # Ensure input species id is valid
-    input_taxon_id = str(input_taxon_id)
+    input_taxon_id = str(input_taxon_id).strip()
     if input_taxon_id not in species_dict:
-        raise ValueError("- ERROR, relevant taxon id must be supplied for taxon_id argument. Exiting...")
+        print("- ERROR, {!r} is not a species of this run. Known: {}. Exiting...".format(input_taxon_id,
+                                                                                         ", ".join(org_taxon_ids.values())))
+        sys.exit(1)
 
     # Ensure input species has necessary disease/phenotype information available
     fpath = getattr(species_dict[input_taxon_id], "gene_to_{}_path".format(prediction_network))
     if fpath == None:
-        raise ValueError("- ERROR, Species {} is missing gene_to_{} file... Exiting".format(input_taxon_id, prediction_network))
+        print("- ERROR, Species {} is missing gene_to_{} file... Exiting".format(input_taxon_id, prediction_network))
+        sys.exit(1)
     
     # Return the ncbi taxon id NUMBER (i.e. 9606 instead of NCBITaxon:9606)
     return species_dict[input_taxon_id].taxon_id
@@ -187,9 +196,7 @@ def initiate_random_species_comparison_configs(input_args):
         # We want to output our random trial data to species specific directories.
         # Makes downstream analysis easier to deal with
         top_level_random_dir = os.path.join(input_args.project_dir, "random_trials")
-        random_trial_species_dir = os.path.join(top_level_random_dir,
-                                                "{}_{}_trials".format(a_name.replace("-", "_"), 
-                                                                      input_args.prediction_network))
+        random_trial_species_dir = os.path.join(top_level_random_dir, "{}_{}_trials".format(a_name.replace("-", "_"), input_args.prediction_network))
         if not os.path.isdir(random_trial_species_dir):
             os.makedirs(random_trial_species_dir, exist_ok=True)
 
@@ -250,9 +257,7 @@ def initiate_phenologs_species_comparison_configs(input_args):
         # We want to output our results data to species specific directories.
         # Makes downstream analysis easier to deal with
         top_level_res_dir = os.path.join(input_args.project_dir, "phenologs_results")
-        results_species_dir = os.path.join(top_level_res_dir, 
-                                            "{}_{}_results".format(a_name.replace("-", "_"), 
-                                                                    input_args.prediction_network))
+        results_species_dir = os.path.join(top_level_res_dir, "{}_{}_results".format(a_name.replace("-", "_"), input_args.prediction_network))
 
         if not os.path.isdir(results_species_dir):
             os.makedirs(results_species_dir, exist_ok=True)
@@ -296,9 +301,7 @@ def initiate_ortholog_to_phenotype_ranking_calculation_config(input_args):
 
     # Format filenames and paths for fdr table
     sp_name = species_dict[t_id].species_name
-    nformatted = sp_name.replace("-", "_")
-    res_name = "{}_{}_results".format(nformatted, input_args.prediction_network)
-    res_dir = os.path.join(input_args.project_dir, "phenologs_results", res_name)
+    res_dir = os.path.join(input_args.project_dir, "phenologs_results", "{}_{}_results".format(sp_name.replace("-", "_"), input_args.prediction_network))
     fdr_path = os.path.join(res_dir, "{}_fdr_table.tsv".format(sp_name))
     
     # Check if necessary fdr table exists and gather remaining filepaths necessary
@@ -332,22 +335,14 @@ def initiate_ortholog_to_phenotype_ranking_calculation_config(input_args):
                     "gene_to_phen_path":g2p_path,
                     "species_name":sp_name} # Note, phen_path can be disease or phenoptype (but phen is the general programmtic name)
     
-    # If we supplied xtaxon_ids argument, we add that information here
-    # Argument for including only select species during xvalidation ortholog-->phenotype distance calculations
-    # (i.e. so we can observe how each species contributes to the predictions
+    # Restrict the ranking to select model species (to see how each species contributes to the predictions)
     select_taxon_ids = {}
-    try:
+    if getattr(input_args, "xtaxon_ids", None):
         for tx_id in input_args.xtaxon_ids.split(','):
-
-            # Add taxon-name... For example 9606-->Homo-sapiens
-            if tx_id in species_dict:
-                select_taxon_ids.update({species_dict[tx_id].species_name:''})
-            else:
-                raise ValueError("- ERROR, relevant taxon id must be supplied for xtaxon_ids argument. Exiting...")
-
-    # No xtaxon_id argument supplied so we don't do anything
-    except:
-        dummyvar = 1
+            if tx_id not in species_dict:
+                print("- ERROR, xtaxon_ids {} is not a species of this run. Exiting...".format(tx_id))
+                sys.exit(1)
+            select_taxon_ids.update({species_dict[tx_id].species_name:''})
     
     sp_file_info.update({"xtaxon_ids":select_taxon_ids})
     return sp_file_info
@@ -535,7 +530,7 @@ def pool_phenologs_data(results_dir, fdr_lookup_table, sig_outpath, fdr_level:fl
     """
 
     # Assemble relevant phenologs results filepaths
-    phenologs_paths = [os.path.join(results_dir, fname) for fname in os.listdir(results_dir) if fname.endswith("_all_phenologs.tsv")]
+    phenologs_paths = [os.path.join(results_dir, fname) for fname in sorted(os.listdir(results_dir)) if fname.endswith("_all_phenologs.tsv")]
     if len(phenologs_paths) == 0:
         print("- Error, No files ending with _all_phenologs.tsv found in {}... Exiting".format(results_dir))
         sys.exit(1)
@@ -549,7 +544,7 @@ def pool_phenologs_data(results_dir, fdr_lookup_table, sig_outpath, fdr_level:fl
 
         # Generate fdr-pvalue to filter data by from fdr table file by filename scheme formatting
         # Filename should look something like this speci-es-A_vs_sp-ciesB_all_phenologs.tsv)
-        spa, spb = rpath.split('/')[-1].replace("_all_phenologs.tsv", "").split("_vs_")
+        spa, spb = os.path.basename(rpath).replace("_all_phenologs.tsv", "").split("_vs_")
         fdr_key = fdr_lookup_key(spa, spb, fdr_level)
         if fdr_key not in fdr_lookup_table:
             print("- ERROR, Non existant fdr lookup value {}... Try one of {}. Exiting".format(fdr_level, FDR_LEVELS))
@@ -589,7 +584,8 @@ def pool_phenologs_data(results_dir, fdr_lookup_table, sig_outpath, fdr_level:fl
                                                                                       pval_max))
 
     # Write pooled results to file ###
-    sig_phenologs_df = sig_phenologs_df.sort_values(by="hg_pval")
+    # Ties are broken by the ids, so the file (and every top-k cut taken from it) is the same run to run
+    sig_phenologs_df = sig_phenologs_df.sort_values(by=["hg_pval", "Species A Phenotype ID", "X Species Comparison", "Species B Phenotype ID"], kind="mergesort")
 
     # Default is no gzip
     if compress == False:
@@ -1072,7 +1068,7 @@ class PhenologsSpeciesComparison(SpeciesComparison):
 
         fname = "{}_vs_{}_all_phenologs.tsv".format(self.species_a, self.species_b)
         outpath_name = os.path.join(self.output_directory, fname)
-        comparison_data.sort_values("hg_pval").to_csv(outpath_name, sep='\t', index=False)
+        comparison_data.sort_values(["hg_pval", "Species A Phenotype ID", "Species B Phenotype ID"], kind="mergesort").to_csv(outpath_name, sep='\t', index=False)
         
 
 
@@ -1138,7 +1134,12 @@ class OrthologToPhenotypeCalculations(BaseModel):
         # Build up ortholog occurence within each cross species network
         species_orth_anns = {}
         for sp_id in org_taxon_ids:
-            common_orths_path = [fp for fp in species_obj.common_orthologs_paths if species_dict[sp_id].species_name in fp][0]
+
+            # The base species has no comparison against itself, so its own annotations stay out of the background
+            sp_name = species_dict[sp_id].species_name
+            if sp_name == species_obj.species_name:
+                continue
+            common_orths_path = [fp for fp in species_obj.common_orthologs_paths if fp.split("_vs_")[1].split(".")[0] == sp_name][0]
             print("- Processing {}".format(common_orths_path))
             
             # Read relevant data into memory
@@ -1200,7 +1201,7 @@ class OrthologToPhenotypeCalculations(BaseModel):
         common_orths = {}
         global_orths = set()
         for fpath in species_info_dict[str(taxon_id)].common_orthologs_paths:
-            species_name = fpath.split('/')[-1].split("_vs_")[-1].replace(".tsv", "")
+            species_name = fpath.split("_vs_")[1].split(".")[0]
             orths = set(pd.read_csv(fpath)["ortholog_id"])
             common_orths.update({species_name:orths})
             global_orths = global_orths | orths
@@ -1249,12 +1250,11 @@ class OrthologToPhenotypeCalculations(BaseModel):
 
     def read_ortholog_edges_to_gene_maps(self, orths_edges_file, base_taxon_id: str, taxon_id_to_name: dict):
     
-        # Read data into memory as df
-        orth_edges_df = pd.read_csv(orths_edges_file, sep='\t')
-        
-        base_taxon = base_taxon_id
-        if "NCBITaxon:" not in base_taxon_id:
-            base_taxon = "NCBITaxon:{}".format(base_taxon_id)
+        # Read data into memory as df. Everything as text with empties kept empty, as older graphs carry
+        # genes with no name and a NaN would otherwise leak into the name map
+        orth_edges_df = pd.read_csv(orths_edges_file, sep='\t', dtype=str, keep_default_na=False)
+
+        base_taxon = "NCBITaxon:{}".format(str(base_taxon_id).split(":")[-1])
         base_taxon_name = taxon_id_to_name[base_taxon]
             
 
@@ -1277,19 +1277,12 @@ class OrthologToPhenotypeCalculations(BaseModel):
             tx_a = taxon_id_to_name[tx_a]
             tx_b = taxon_id_to_name[tx_b]
             
-            # Update our gene_id --> gene_names
-            if g_a not in species_gene_names:
-                species_gene_names.update({g_a:g_an})
-            elif g_an != species_gene_names[g_a]:
-                raise ValueError("- Different name found for gene id {}-->{}, {}".format(g_a, 
-                                                                                        species_gene_names[g_a],
-                                                                                        g_an))
-            if g_b not in species_gene_names:
-                species_gene_names.update({g_b:g_bn})
-            elif g_bn != species_gene_names[g_b]:
-                raise ValueError("- Different name found for gene id {}-->{}, {}".format(g_b, 
-                                                                                        species_gene_names[g_b],
-                                                                                        g_bn))
+            # Update our gene_id --> gene_names. Names are cosmetic (rankings use gene ids) and older
+            # graphs carry genes with no name, so the first non-empty name wins rather than asserting agreement
+            if not species_gene_names.get(g_a):
+                species_gene_names[g_a] = g_an
+            if not species_gene_names.get(g_b):
+                species_gene_names[g_b] = g_bn
             
             # Only deal with edges that include a base_taxon gene node
             if (base_taxon_name != tx_a) and (base_taxon_name != tx_b):
@@ -1362,7 +1355,7 @@ class OrthologToPhenotypeCalculations(BaseModel):
         zero_sig_phens = {}
         for k in p2_phens:
             p2_phens[k] = copy.copy(sig_phenologs_df.iloc[p2_phens[k]])
-            p2_phens[k] = p2_phens[k].sort_values(by="hg_pval")
+            p2_phens[k] = p2_phens[k].sort_values(by=["hg_pval", "X Species Comparison", "Species B Phenotype ID"], kind="mergesort")
 
             # Ensure data is of proper type for calculations
             p2_phens[k]["Overlap Count"] = p2_phens[k]["Overlap Count"].astype(float)
@@ -1456,7 +1449,7 @@ class OrthologToPhenotypeCalculations(BaseModel):
         zero_sig_phens = {}
         for k in p2_phens:
             p2_phens[k] = copy.copy(sig_phenologs_df.iloc[p2_phens[k]])
-            p2_phens[k] = p2_phens[k].sort_values(by="hg_pval")
+            p2_phens[k] = p2_phens[k].sort_values(by=["hg_pval", "X Species Comparison", "Species B Phenotype ID"], kind="mergesort")
 
             # Ensure data is of proper type for calculations
             p2_phens[k]["Overlap Count"] = p2_phens[k]["Overlap Count"].astype(float)
@@ -1685,7 +1678,7 @@ class OrthologToPhenotypeCalculations(BaseModel):
         zero_sig_phens = {}
         for k in p2_phens:
             p2_phens[k] = copy.copy(sig_phenologs_df.iloc[p2_phens[k]])
-            p2_phens[k] = p2_phens[k].sort_values(by="hg_pval")
+            p2_phens[k] = p2_phens[k].sort_values(by=["hg_pval", "X Species Comparison", "Species B Phenotype ID"], kind="mergesort")
 
             # Ensure data is of proper type for calculations
             p2_phens[k]["Overlap Count"] = p2_phens[k]["Overlap Count"].astype(float)
@@ -2015,7 +2008,7 @@ class OrthologToPhenotypeCalculations(BaseModel):
                 out_df["Protein_family_id"].append(orth_id)
                 
             out_df = pd.DataFrame(out_df)
-            out_df_sorted = out_df.sort_values(by="p-value")
+            out_df_sorted = out_df.sort_values(by=["p-value", "Gene"], kind="mergesort")
             
             # Write data
             if output_dir != False:
