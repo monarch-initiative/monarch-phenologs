@@ -18,6 +18,7 @@ CODE="$HERE/../python"
 TAXON=9606
 PRD=disease
 N_TRIALS="${N_TRIALS:-10}"
+SEED="${SEED:-1}"
 CORES="${CORES:-2}"
 FDR=0.05
 K="${K:-5}"
@@ -38,7 +39,7 @@ echo "== [02] extraction =="
 $PY 02_kg_data_extraction.py -p "$PROJECT" "$@"
 
 echo "== [03] $N_TRIALS random trials =="
-$PY 03_compute_phenologs_randomized_trials.py -p "$PROJECT" -n "$N_TRIALS" -c "$CORES" -taxon_id "$TAXON" -prd "$PRD"
+$PY 03_compute_phenologs_randomized_trials.py -p "$PROJECT" -n "$N_TRIALS" -c "$CORES" -taxon_id "$TAXON" -prd "$PRD" -seed "$SEED"
 
 echo "== [04] real phenologs =="
 $PY 04_compute_phenologs.py -p "$PROJECT" -c "$CORES" -taxon_id "$TAXON" -prd "$PRD"

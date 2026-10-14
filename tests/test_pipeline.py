@@ -197,3 +197,28 @@ def test_unregistered_taxon_is_named_from_the_graph(tmp_path):
     assert "not in SPECIES_NAMES" in felis["Notes"]
     assert os.path.isfile(os.path.join(project, "species_data", "Felis-catus_gene_to_phenotype.tsv"))
     assert "Felis-catus" in build_species_info(project)[1]
+
+
+# ---- random trials with a seed are reproducible ------------------------------------------------
+
+def test_random_trials_repeat_with_a_seed(current_run, tmp_path):
+    """ Two runs with the same seed write the same trial files; another seed writes different ones """
+
+    project, _ = current_run
+
+    def trials(seed, where):
+        where = str(tmp_path / where)
+        shutil.copytree(os.path.join(project, "species_data"), os.path.join(where, "species_data"))
+        subprocess.run([sys.executable, "03_compute_phenologs_randomized_trials.py", "-p", where, "-n", "2", "-c", "2",
+                        "-taxon_id", "9606", "-prd", "disease", "-seed", str(seed)], cwd=CODE, check=True, capture_output=True)
+        trial_dir = os.path.join(where, "random_trials", "Homo_sapiens_disease_trials")
+        out = {}
+        for f in sorted(os.listdir(trial_dir)):
+            with gzip.open(os.path.join(trial_dir, f), "rb") as fh:
+                out[f] = fh.read()
+        return out
+
+    a, b, c = trials(7, "a"), trials(7, "b"), trials(8, "c")
+    assert len(a) > 0 and a.keys() == b.keys() == c.keys()
+    assert a == b
+    assert any(a[f] != c[f] for f in a)

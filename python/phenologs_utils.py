@@ -206,7 +206,8 @@ def initiate_random_species_comparison_configs(input_args):
                     "species_a_phenotype_path":apath,
                     "species_b_phenotype_path":bpath,
                     "common_orthologs_path":cpath,
-                    "output_directory":random_trial_species_dir}
+                    "output_directory":random_trial_species_dir,
+                    "seed":getattr(input_args, "seed", None)}
         
         # Perform comparison in single direction
         configs.append(config_a)
@@ -624,6 +625,7 @@ class SpeciesComparison(BaseModel):
     prediction_network_type: Optional[str] = None # phenotype or disease
     leave_out_validate_set: Optional[set] = set() # Panther ortholog ids... For example set(["PTHR11482", ...])
     leave_out_validate_fdr: Optional[float] = DEFAULT_FDR # FDR lookup value to use to lookup pvalue cutoff we need to use
+    seed: Optional[int] = None # Random trials: trial n is drawn with seed + n, so a run can be repeated exactly
     
     
     def load_species_ortholog_information(self):
@@ -712,9 +714,9 @@ class RandomSpeciesComparison(SpeciesComparison):
         to calculate pvalues and full dataset of non zero overlap count parameters.
         """
         
-        # Optional random seed
-        if seed:
-            np.random.seed(seed)
+        # Optional random seed. The sampling below is python's random module, so that is what gets seeded
+        if seed is not None:
+            random.seed(seed)
         
         # Load initial data
         self.load_species_ortholog_information()
@@ -830,8 +832,9 @@ class RandomSpeciesComparison(SpeciesComparison):
         data = {}
         for i, n_trial in enumerate(n_trials):
 
-            # Generate randomized data trials
-            trial_hg_params, trial_data = self.run_randomized_comparison_pipeline()
+            # Generate randomized data trials. With a seed, trial n is the same whichever core draws it
+            trial_seed = None if self.seed is None else self.seed + n_trial
+            trial_hg_params, trial_data = self.run_randomized_comparison_pipeline(seed=trial_seed)
             
             # Update our hire level output datastructures
             hg_params = hg_params | trial_hg_params
