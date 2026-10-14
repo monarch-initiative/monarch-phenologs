@@ -1,7 +1,7 @@
 // A sortable, pageable, filterable table rendered from rows already in memory.
 //   table(el, rows, columns, options)
-//   columns: [{ key, label, num, format(value, row) -> html, sortValue(row), width }]
-//   options: { pageSize, sortKey, sortDir, search: [keys to match], tools: html, empty }
+//   columns: [{ key, label, num, format(value, row) -> html, sortValue(row), width, help: header tooltip }]
+//   options: { pageSize, sortKey, sortDir, search: [keys to match], placeholder, tools: html, empty }
 import { esc } from "../format.js";
 
 export function table(el, rows, columns, options = {}) {
@@ -41,7 +41,7 @@ export function table(el, rows, columns, options = {}) {
     const slice = all.slice(st.page * st.pageSize, (st.page + 1) * st.pageSize);
 
     const head = columns.map(c => `
-      <th class="${c.num ? "num" : ""} ${st.sortKey === c.key ? "sorted" : ""}" data-key="${c.key}" ${c.width ? `style="width:${c.width}"` : ""}>
+      <th class="${c.num ? "num" : ""} ${st.sortKey === c.key ? "sorted" : ""}" data-key="${c.key}" ${c.width ? `style="width:${c.width}"` : ""} ${c.help ? `title="${esc(c.help)}"` : ""}>
         ${esc(c.label)}${st.sortKey === c.key ? (st.sortDir === "asc" ? " ▲" : " ▼") : ""}</th>`).join("");
     const body = slice.map(r => "<tr>" + columns.map(c => {
       const v = r[c.key];
@@ -51,7 +51,7 @@ export function table(el, rows, columns, options = {}) {
 
     el.innerHTML = `
       <div class="tbl-tools">
-        ${options.search ? `<input type="search" placeholder="Filter…" value="${esc(st.filter)}">` : ""}
+        ${options.search ? `<input type="search" placeholder="${esc(options.placeholder || "Filter…")}" value="${esc(st.filter)}">` : ""}
         ${options.tools || ""}
         <span class="muted" style="margin-left:auto">${all.length.toLocaleString()} rows</span>
       </div>

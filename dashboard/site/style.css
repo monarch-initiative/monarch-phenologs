@@ -124,7 +124,8 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: 13px; }
 .tbl-foot button { background: var(--bg-2); border: 1px solid var(--line); color: var(--text); border-radius: 6px; padding: 3px 10px; cursor: pointer; }
 .tbl-foot button:disabled { opacity: 0.4; cursor: default; }
 .tbl-tools { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 10px; }
-.tbl-tools input[type=search] { padding: 5px 10px; border-radius: 6px; border: 1px solid var(--line); background: var(--bg-2); color: var(--text); font: inherit; }
+.tbl-tools input[type=search] { width: 340px; max-width: 100%; padding: 6px 10px; border-radius: 6px; border: 1px solid var(--line); background: var(--bg-2); color: var(--text); font: inherit; }
+.tbl-tools .chips { order: 1; flex-basis: 100%; }    /* filter chips get their own row under the search box */
 
 /* controls */
 .controls { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; margin-bottom: 12px; font-size: 12.5px; color: var(--muted); }

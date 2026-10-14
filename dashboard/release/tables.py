@@ -26,24 +26,29 @@ def sql(name, run):
                    row_number() OVER (PARTITION BY disease_id ORDER BY score, symbol)::INTEGER AS rank
             FROM cand_raw""",
 
-        # Every gene of every species in the run that has a protein family or a phenotype
+        # Every gene of every species in the run that has a protein family or a phenotype.
+        # n_ortholog_species counts the other species of the run the gene has an ortholog edge to
         "genes": """
             WITH base AS (
                 SELECT species, gene_id, max(family) AS family
                 FROM (SELECT species, gene_id, family FROM g2o UNION ALL SELECT species, gene_id, NULL FROM g2p)
                 GROUP BY species, gene_id),
+            os AS (SELECT o.gene_id, count(DISTINCT s.species) AS n
+                   FROM (SELECT gene_a AS gene_id, taxon_b AS taxon FROM edges UNION SELECT gene_b, taxon_a FROM edges) o
+                   JOIN species_info s ON s.taxon_id = o.taxon GROUP BY o.gene_id),
             np AS (SELECT gene_id, count(DISTINCT phenotype_id) AS n FROM g2p GROUP BY gene_id),
             nk AS (SELECT gene_id, count(DISTINCT disease_id) AS n FROM g2d GROUP BY gene_id),
             pr AS (SELECT gene_id, count(DISTINCT disease_id) AS n, count(DISTINCT disease_id) FILTER (WHERE NOT known) AS novel, min(rank) AS best_rank
                    FROM candidates GROUP BY gene_id)
             SELECT b.species, b.gene_id, coalesce(n.symbol, b.gene_id) AS symbol, b.family,
+                   coalesce(os.n, 0)::INTEGER AS n_ortholog_species,
                    coalesce(np.n, 0)::INTEGER AS n_phenotypes,
                    coalesce(nk.n, 0)::INTEGER AS n_known_diseases,
                    coalesce(pr.n, 0)::INTEGER AS n_predicted_diseases,
                    coalesce(pr.novel, 0)::INTEGER AS n_novel_diseases,
                    pr.best_rank::INTEGER AS best_rank
             FROM base b
-            LEFT JOIN gene_names n USING (gene_id)
+            LEFT JOIN gene_names n USING (gene_id) LEFT JOIN os USING (gene_id)
             LEFT JOIN np USING (gene_id) LEFT JOIN nk USING (gene_id) LEFT JOIN pr USING (gene_id)""",
 
         # The base species' curated gene to disease associations the predictions are measured against
@@ -54,18 +59,26 @@ def sql(name, run):
         "gene_phenotypes": """
             SELECT DISTINCT species, gene_id, phenotype_id, phenotype_name FROM g2p""",
 
-        # Every annotated phenotype of every species, with how often it turns up as a phenolog
+        # Every annotated phenotype of every species, with how often it turns up as a phenolog.
+        # n_known_diseases counts the diseases with a curated gene in one of the phenotype's protein families,
+        # which is every disease the phenolog test could pair it with (so n_diseases <= n_known_diseases)
         "phenotypes": """
             WITH ann AS (
                 SELECT species, phenotype_id, any_value(phenotype_name) AS name,
                        count(DISTINCT gene_id) AS n_genes, count(DISTINCT family) AS n_orthogroups
                 FROM g2p GROUP BY species, phenotype_id),
+            kd AS (
+                SELECT pf.species, pf.phenotype_id, count(DISTINCT df.disease_id) AS n
+                FROM (SELECT DISTINCT species, phenotype_id, family FROM g2p WHERE family IS NOT NULL) pf
+                JOIN (SELECT DISTINCT family, disease_id FROM g2d WHERE family IS NOT NULL) df USING (family)
+                GROUP BY pf.species, pf.phenotype_id),
             ph AS (
                 SELECT species, phenotype_id, count(*) AS n_phenologs, count(DISTINCT disease_id) AS n_diseases, min(pval) AS best_pval
                 FROM phenologs GROUP BY species, phenotype_id)
             SELECT a.species, a.phenotype_id, a.name, a.n_genes::INTEGER AS n_genes, a.n_orthogroups::INTEGER AS n_orthogroups,
+                   coalesce(kd.n, 0)::INTEGER AS n_known_diseases,
                    coalesce(ph.n_phenologs, 0)::INTEGER AS n_phenologs, coalesce(ph.n_diseases, 0)::INTEGER AS n_diseases, ph.best_pval
-            FROM ann a LEFT JOIN ph USING (species, phenotype_id)""",
+            FROM ann a LEFT JOIN kd USING (species, phenotype_id) LEFT JOIN ph USING (species, phenotype_id)""",
 
         # PANTHER families: who is in them, and what they predict
         "families": """
