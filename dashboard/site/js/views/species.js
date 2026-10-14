@@ -5,7 +5,15 @@ import { pageHead, statRow, card, notFound } from "./common.js";
 import { radar, speciesAxes } from "../charts/radar.js";
 import { barList } from "../charts/bars.js";
 import { table } from "../charts/table.js";
-import { RADAR_AXES } from "./overview.js";
+
+const RADAR_AXES = [
+  ["n_phenologs", "Phenologs"],
+  ["n_diseases", "Diseases"],
+  ["n_phenotypes_matched", "Phenotypes"],
+  ["n_candidates", "Candidates"],
+  ["n_common_with_base", "Shared families"],
+  ["n_phenotyped_genes", "Genes w/ phenotypes"],
+];
 
 export async function render(el, name) {
   const ov = state.overview;

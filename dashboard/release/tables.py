@@ -60,18 +60,16 @@ def sql(name, run):
             SELECT DISTINCT species, gene_id, phenotype_id, phenotype_name FROM g2p""",
 
         # Every annotated phenotype of every species, with how often it turns up as a phenolog.
-        # n_known_diseases counts the diseases with a curated gene in one of the phenotype's protein families,
-        # which is every disease the phenolog test could pair it with (so n_diseases <= n_known_diseases)
+        # n_known_diseases counts the curated diseases of the genes annotated with the phenotype. Curated gene to
+        # disease associations are the base species' only, so model organism phenotypes have none
         "phenotypes": """
             WITH ann AS (
                 SELECT species, phenotype_id, any_value(phenotype_name) AS name,
                        count(DISTINCT gene_id) AS n_genes, count(DISTINCT family) AS n_orthogroups
                 FROM g2p GROUP BY species, phenotype_id),
             kd AS (
-                SELECT pf.species, pf.phenotype_id, count(DISTINCT df.disease_id) AS n
-                FROM (SELECT DISTINCT species, phenotype_id, family FROM g2p WHERE family IS NOT NULL) pf
-                JOIN (SELECT DISTINCT family, disease_id FROM g2d WHERE family IS NOT NULL) df USING (family)
-                GROUP BY pf.species, pf.phenotype_id),
+                SELECT p.species, p.phenotype_id, count(DISTINCT d.disease_id) AS n
+                FROM g2p p JOIN g2d d USING (gene_id) GROUP BY p.species, p.phenotype_id),
             ph AS (
                 SELECT species, phenotype_id, count(*) AS n_phenologs, count(DISTINCT disease_id) AS n_diseases, min(pval) AS best_pval
                 FROM phenologs GROUP BY species, phenotype_id)

@@ -43,7 +43,7 @@ const KINDS = {
       { key: "phenotype_id", label: "Id", format: v => `<span class="id muted">${esc(v)}</span>` },
       { key: "species", label: "Species", format: v => speciesChip(v) },
       num("n_genes", "Genes"), num("n_orthogroups", "Families"),
-      num("n_known_diseases", "Known diseases", { help: "Human diseases with a curated gene in one of this phenotype's protein families" }),
+      num("n_known_diseases", "Known diseases", { help: "Curated diseases of the genes annotated with this phenotype (human phenotypes only)" }),
       num("n_diseases", "Phenolog disease associations", { help: "Human diseases this phenotype is a significant phenolog of" }),
     ],
     sort: "n_diseases", search: ["name", "phenotype_id"], placeholder: "Filter by phenotype name or id…",

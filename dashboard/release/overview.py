@@ -1,6 +1,6 @@
 """
 overview.json: everything the release page shows before any parquet is opened. Headline tiles,
-per species stats (the player cards and the tree), the FDR table, common ortholog counts between
+per species stats (the metric cards and the tree), the FDR table, common ortholog counts between
 species, and the top lists. Depends on the tables built by tables.py.
 """
 import json

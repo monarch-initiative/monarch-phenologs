@@ -11,3 +11,17 @@ export function barList(el, items, { max = null, color = null } = {}) {
       <span class="n">${fmt.int(d.value)}</span>
     </div>`).join("") + `</div>`;
 }
+
+// One bar per species, in the order given and in species colours, with the number beside it.
+// items: [{species, label, value, color, href, text}]. log scales bars by log10(1 + value), so the
+// small species stay visible next to the large ones
+export function speciesBars(el, items, { log = false } = {}) {
+  const f = log ? v => Math.log10(1 + v) : v => v;
+  const top = Math.max(...items.map(d => f(d.value)), Number.MIN_VALUE);
+  el.innerHTML = `<div class="sp-bars">` + items.map(d => `
+    <a class="row" data-sp="${esc(d.species)}" href="${d.href}">
+      <span class="lab"><i>${esc(d.label)}</i></span>
+      <span class="track"><span class="bar" style="width:${d.value > 0 ? Math.max(1, 100 * f(d.value) / top).toFixed(1) : 0}%; background:${d.color}"></span></span>
+      <span class="n">${d.text ?? fmt.int(d.value)}</span>
+    </a>`).join("") + `</div>`;
+}

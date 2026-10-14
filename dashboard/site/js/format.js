@@ -30,6 +30,12 @@ export function binomial(name) {
   return speciesOf(name).binomial;
 }
 
+// "Mus-musculus" --> "M. musculus", for tight chart labels
+export function shortBinomial(name) {
+  const [genus, ...rest] = speciesOf(name).binomial.split(" ");
+  return rest.length ? `${genus[0]}. ${rest.join(" ")}` : genus;
+}
+
 // Outbound links. dismech() is the hook for the DisMech knowledge base once we know which
 // disorders it covers; it returns null until then and the views skip it.
 export const links = {
