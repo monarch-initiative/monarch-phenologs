@@ -32,6 +32,20 @@ Source datasets (parsed from the Monarch KG):
 
 
 
+## Setup
+
+The environment is locked (`uv.lock`) to the versions the paper's runs were made with.
+
+```
+uv sync --all-groups          # creates .venv from the lock; add --python 3.10 to match the paper exactly
+uv run python python/01_download_and_setup.py -p path/to/project_dir -gv 2026-03-06 -pv 2025-11-14
+uv run python -m pytest tests/ -q      # the whole pipeline on two small kg slices, about two minutes
+```
+
+`tests/run_pipeline.sh` runs every step on a slice with tiny parameters; `PY=.venv/bin/python` selects
+the interpreter. To change a dependency, edit `pyproject.toml`, run `uv lock`, and re-run the tests.
+The Dockerfile installs the same lock into `python:3.10-slim`.
+
 ## Methods
 
 ### Data Sources:

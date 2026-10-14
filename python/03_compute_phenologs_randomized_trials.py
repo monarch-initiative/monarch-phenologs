@@ -65,6 +65,7 @@ if __name__ == '__main__':
         parser.add_argument("-c", "--cpu_cores", help="Number of cpu cores to use.", required=False, type=int, default=1)
         parser.add_argument("-taxon_id", help='Specicies specific taxon id or "all" are allowed', required=True, type=str)
         parser.add_argument("-prd", "--prediction_network", help="phenotype or disease (which type of network to use for base species comparisons)", required=True, default="phenotype")
+        parser.add_argument("-seed", help="Random seed. Trial n is drawn with seed + n, so the same seed repeats a run exactly", required=False, type=int, default=None)
         return parser.parse_args()
 
     args = parse_input_command()
