@@ -1,27 +1,28 @@
-[tool.poetry]
+[project]
 name = "monarch-phenologs"
-version = "0.2.0"
+version = "0.3.0"
 description = "Phenologs and cross species gene candidate rankings from the Monarch Knowledge Graph"
-package-mode = false
-authors = ["Aaron Odell <aaron@tislab.org>"]
+authors = [{ name = "Aaron Odell", email = "aaron@tislab.org" }]
+requires-python = ">=3.10,<3.13"
 
-# Pinned to the versions the paper's runs were made with
-[tool.poetry.dependencies]
-python = ">=3.10,<3.13"
-pandas = "~2.2.3"
-numpy = "~1.26.4"
-scipy = "~1.13.1"
-networkx = "~3.4"
-pydantic = "~2.13"
-matplotlib = "~3.8.4"
-requests = "~2.33"
+# Pinned to the versions the paper's runs were made with. Bump on purpose, re-lock (uv lock),
+# and re-run the slice tests before promoting a new container
+dependencies = [
+    "pandas==2.2.3",
+    "numpy==1.26.4",
+    "scipy==1.13.1",
+    "networkx==3.4",
+    "pydantic==2.13.3",
+    "matplotlib==3.8.4",
+    "requests==2.33.1",
+]
 
-[tool.poetry.group.dev.dependencies]
-pytest = "~8.2"
+[dependency-groups]
+dev = ["pytest==8.2.1"]
+dashboard = ["duckdb==1.1.1"]    # dashboard/build_release.py
+
+[tool.uv]
+package = false    # a set of scripts, not an installable package
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-
-[build-system]
-requires = ["poetry-core>=1.0.0"]
-build-backend = "poetry.core.masonry.api"
