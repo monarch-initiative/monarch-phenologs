@@ -1,8 +1,9 @@
 """
-Serves dashboard/site locally. A plain static server with HTTP range support, so the browser side
-can read parquet the same way it would from a bucket.
+Serves dashboard/site locally, with the releases folder at /releases/ (where the site looks for them).
+A plain static server with HTTP range support, so the browser side can read parquet the same way it
+would from a bucket.
 
-    python dashboard/serve.py [--port 8765] [--dir dashboard/site]
+    python dashboard/serve.py [--port 8765] [--dir dashboard/site] [--releases dashboard/releases]
 """
 import os
 import re
@@ -11,9 +12,18 @@ import http.server
 
 
 class RangeHandler(http.server.SimpleHTTPRequestHandler):
+    releases = None
     extensions_map = dict(http.server.SimpleHTTPRequestHandler.extensions_map,
                           **{".wasm": "application/wasm", ".mjs": "text/javascript", ".js": "text/javascript",
                              ".parquet": "application/octet-stream", ".json": "application/json"})
+
+    def translate_path(self, path):
+        """ /releases/... is read from the releases folder, everything else from the site """
+        site = super().translate_path(path)
+        mount = os.path.join(self.directory, "releases")
+        if site == mount or site.startswith(mount + os.sep):
+            return self.releases + site[len(mount):]
+        return site
 
     def send_head(self):
         self.range = None
@@ -61,8 +71,10 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Serve the phenologs dashboard locally")
     parser.add_argument("--port", type=int, default=8765)
     parser.add_argument("--dir", type=str, default=os.path.join(os.path.dirname(os.path.abspath(__file__)), "site"))
+    parser.add_argument("--releases", type=str, default=os.path.join(os.path.dirname(os.path.abspath(__file__)), "releases"))
     args = parser.parse_args()
 
     os.chdir(args.dir)
-    print("- Serving {} at http://localhost:{}/".format(args.dir, args.port))
+    RangeHandler.releases = os.path.abspath(args.releases)
+    print("- Serving {} at http://localhost:{}/ and {} at /releases/".format(args.dir, args.port, RangeHandler.releases))
     http.server.ThreadingHTTPServer(("", args.port), RangeHandler).serve_forever()

@@ -1,6 +1,6 @@
 """
 Where a pipeline run keeps the things the dashboard needs, and DuckDB views over them.
-Everything downstream (tables.py, additive.py, overview.py) reads these views only, so a change
+Everything downstream (tables.py, additive.py, overview.py, downloads.py) reads these views only, so a change
 in the pipeline's file layout is a change here and nowhere else.
 """
 import os
@@ -75,6 +75,9 @@ class Run:
         self.fdr_table = os.path.join(self.results_dir, "{}_fdr_table.tsv".format(base))
         self.candidates_dir = os.path.join(self.results_dir, "{}_gene_to_{}_candidates_fdr{}_{}kneighbs_{}".format(
             base.replace("-", "_"), prediction_network, fdr, kneighbs, rank_metric))
+        self.all_candidates_dirs = os.path.join(self.results_dir, "{}_gene_to_{}_candidates_fdr{}_*kneighbs_*".format(
+            base.replace("-", "_"), prediction_network, fdr))
+        self.all_phenologs = os.path.join(self.results_dir, "{}_vs_*_all_phenologs.tsv".format(base))
         self.species_table = os.path.join(self.species_data, "species_information_table.tsv")
 
         for path in (self.species_table, self.pooled, self.fdr_table, self.candidates_dir):
@@ -214,14 +217,35 @@ class Run:
                    realized_fdr::DOUBLE AS realized_fdr, n_random_trials::INTEGER AS n_random_trials
             FROM {}""".format(read_tsv_sql(self.fdr_table)))
 
+        # Every disease-phenotype pair the run tested, one file per model species (pooled keeps the significant ones)
+        con.execute("""
+            CREATE VIEW all_phenologs AS
+            SELECT "Species A Phenotype ID"              AS disease_id,
+                   "Species A Phenotype Name"            AS disease_name,
+                   regexp_extract(filename, '_vs_([^/]+)_all_phenologs\\.tsv$', 1) AS species,
+                   "Species B Phenotype ID"              AS phenotype_id,
+                   "Species B Phenotype Name"            AS phenotype_name,
+                   "Overlap Count"::INTEGER              AS overlap,
+                   "Ortholog Count A"::INTEGER           AS n_disease_orthogroups,
+                   "Ortholog Count B"::INTEGER           AS n_phenotype_orthogroups,
+                   "Common Ortholog Count"::INTEGER      AS n_common,
+                   hg_pval::DOUBLE                       AS pval
+            FROM {}""".format(read_tsv_sql(self.all_phenologs, filename="true", all_varchar="true")))
+
+        # The candidate rankings, one file per disease. cand_raw is the ranking the dashboard serves, rankings every
+        # ranking the run made at its FDR (k x rank metric). After the genes it scored, the pipeline lists the
+        # disease's known genes no phenolog reached, with no score
         cand_types = "{'Gene':'VARCHAR','Gene_name':'VARCHAR','Association_exists':'BOOLEAN','XSpecies_occurence':'VARCHAR'," \
                      "'p-value':'DOUBLE','XSpecies_phenotypes':'VARCHAR','Protein_family_id':'VARCHAR'}"
-        con.execute("""
-            CREATE VIEW cand_raw AS
-            SELECT 'MONDO:' || regexp_extract(filename, 'MONDO-(\\d+)_', 1) AS disease_id,
-                   Gene AS gene_id, Gene_name AS symbol, Association_exists AS known,
-                   XSpecies_occurence AS species_occurrence, "p-value" AS score, Protein_family_id AS family
-            FROM {}""".format(read_tsv_sql(os.path.join(self.candidates_dir, "*.tsv"), filename="true", types=cand_types)))
+        for view, folders in (("cand_raw", self.candidates_dir), ("rankings", self.all_candidates_dirs)):
+            con.execute("""
+                CREATE VIEW {} AS
+                SELECT regexp_extract(filename, '_(\\d+)kneighbs_', 1)::INTEGER AS kneighbs,
+                       regexp_extract(filename, 'kneighbs_([a-z]+)/', 1) AS rank_metric,
+                       'MONDO:' || regexp_extract(filename, 'MONDO-(\\d+)_', 1) AS disease_id,
+                       Gene AS gene_id, Gene_name AS symbol, Association_exists AS known, XSpecies_occurence AS species_hits,
+                       "p-value" AS score, XSpecies_phenotypes AS phenotypes, Protein_family_id AS family
+                FROM {}""".format(view, read_tsv_sql(os.path.join(folders, "*.tsv"), filename="true", types=cand_types)))
 
         con.execute("""
             CREATE VIEW g2p AS

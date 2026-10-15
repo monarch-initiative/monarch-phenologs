@@ -8,6 +8,9 @@ import json
 import os
 import datetime
 
+# The layout of a release folder. Bump it when a table or file changes, and rebuild the older releases with it
+SCHEMA = 1
+
 
 def rows(con, query):
     cur = con.execute(query)
@@ -47,7 +50,8 @@ def build(con, run, outdir, table_counts):
     }
 
     out = {
-        "release": {"graph_version": run.graph_version,
+        "release": {"schema": SCHEMA,
+                    "graph_version": run.graph_version,
                     "phenio_version": run.phenio_version,
                     "built": datetime.date.today().isoformat(),
                     "base_species": base,

@@ -229,8 +229,8 @@ def support_mismatches(con):
 
     return con.execute("""
         WITH occ AS (SELECT disease_id, gene_id, split_part(item, ':', 1) AS species, split_part(item, ':', 2)::INTEGER AS n_hits
-                     FROM (SELECT disease_id, gene_id, unnest(string_split(species_occurrence, ',')) AS item
-                           FROM cand_raw WHERE score IS NOT NULL AND species_occurrence <> ''))
+                     FROM (SELECT disease_id, gene_id, unnest(string_split(species_hits, ',')) AS item
+                           FROM cand_raw WHERE score IS NOT NULL AND species_hits <> ''))
         SELECT count(DISTINCT (disease_id, gene_id)), count(DISTINCT disease_id)
         FROM occ FULL JOIN support s USING (disease_id, gene_id, species)
         WHERE occ.n_hits IS DISTINCT FROM s.n_hits""").fetchone()

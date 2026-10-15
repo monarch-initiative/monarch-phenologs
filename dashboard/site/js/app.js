@@ -1,5 +1,5 @@
-// Shell: loads overview.json, routes on the hash, runs the search box. Views live in ./views.
-import { ensure, query, lit } from "./db.js";
+// Shell: opens the release, routes on the hash, runs the search box. Views live in ./views.
+import { ensure, query, lit, openRelease } from "./db.js";
 import { setOverview, state, esc } from "./format.js";
 import * as overview from "./views/overview.js";
 import * as disease from "./views/disease.js";
@@ -103,7 +103,7 @@ function setupSearch() {
 }
 
 async function boot() {
-  const ov = await (await fetch("data/overview.json")).json();
+  const ov = await openRelease();
   setOverview(ov);
   const r = ov.release;
   document.getElementById("brand-release").textContent = `kg ${r.graph_version}`;

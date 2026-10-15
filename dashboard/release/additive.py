@@ -25,9 +25,9 @@ def build(con, run, outdir, top_phenologs=20, top_families=40):
             SELECT t.disease_id, f.family, t.rank AS phenolog_rank, t.phenotype_id, t.phenotype_name, t.species,
                    (t.overlap::DOUBLE / t.n_disease_orthogroups) * (1 - t.pval) AS score
             FROM top_ph t JOIN phen_fam f ON f.species = t.species AND f.phenotype_id = t.phenotype_id),
-        fam_tot AS (
-            SELECT disease_id, family, sum(score) AS family_total,
-                   row_number() OVER (PARTITION BY disease_id ORDER BY sum(score) DESC, family)::INTEGER AS family_rank
+        fam_tot AS (                        -- summed as decimals, so the totals and the order of tied families are the same every build
+            SELECT disease_id, family, sum(score::DECIMAL(38, 18))::DOUBLE AS family_total,
+                   row_number() OVER (PARTITION BY disease_id ORDER BY sum(score::DECIMAL(38, 18)) DESC, family)::INTEGER AS family_rank
             FROM contrib GROUP BY disease_id, family),
         base_genes AS (                     -- the base species' genes of each family, split by whether the disease already knows them
             SELECT ft.disease_id, ft.family,
