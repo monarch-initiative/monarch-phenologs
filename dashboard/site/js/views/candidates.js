@@ -1,11 +1,11 @@
 // Every gene-disease candidate pair in one list across all diseases, best score first (the paper's global
 // ranking). 1.5M rows stay in DuckDB; each page, sort and filter is a query
 import { ensure, query, lit } from "../db.js";
-import { state, fmt, esc, speciesOf, occurrenceChips, route } from "../format.js";
-import { legend, PAIR_KEY } from "./common.js";
+import { state, fmt, esc, supportChips, route } from "../format.js";
+import { legend, PAIR_KEY, HELP } from "./common.js";
 import { pagedTable } from "../charts/table.js";
 
-const SORTABLE = ["global_rank", "symbol", "disease_name", "rank", "score", "family"];
+const SORTABLE = ["global_rank", "symbol", "disease_name", "rank", "score", "family", "n_phenologs"];
 
 export async function render(el) {
   await ensure("candidates", "genes", "diseases");
@@ -15,27 +15,28 @@ export async function render(el) {
 
   el.innerHTML = `
     <div class="page-head"><div class="titles"><div class="kicker">Candidates</div><h1>Gene–disease candidates</h1>
-      <div class="muted">Every gene–disease pair the ranking scored, in one list across all diseases, best ${esc(ov.release.rank_metric)} score first</div></div></div>
+      <div class="muted">The novel candidate pairs of every disease in one list, best score first, as in the paper's global ranking.
+        Diseases with many phenologs get smaller scores, so they fill the top of the list</div></div></div>
     <div class="card"><div class="card-head"><h2>Global ranking</h2><span class="sub">${legend(PAIR_KEY)}</span></div><div id="list"></div></div>`;
 
   const tools = `<span class="chip toggle off" id="known-toggle">include known pairs</span>
-    <span class="chips" id="sp-filter">${model.map(s => `<span class="chip toggle" data-sp="${s.species}"><span class="dot" style="background:${s.color}"></span><i>${esc(s.binomial)}</i></span>`).join("")}</span>`;
+    <span class="chips" id="sp-filter"><span class="faint">supported by</span> ${model.map(s => `<span class="chip toggle" data-sp="${s.species}"><span class="dot" style="background:${s.color}"></span><i>${esc(s.binomial)}</i></span>`).join("")}</span>`;
 
   const columns = [
-    { key: "global_rank", label: "#", num: true, sortDir: "asc", help: "Place among the novel pairs of every disease (ties share a place); known pairs are not ranked",
+    { key: "global_rank", label: "Global rank", num: true, sortDir: "asc", help: "Place among the novel pairs of every disease, by score (ties share a place); known pairs are not ranked",
       format: v => v == null ? `<span class="known-mark">known</span>` : fmt.int(v) },
     { key: "symbol", label: "Gene", format: (v, r) => `<a href="${route.gene(r.gene_id)}" class="${r.known ? "known-mark" : ""}">${esc(v)}</a>` },
     { key: "disease_name", label: "Human disease", format: (v, r) => `<a href="${route.disease(r.disease_id)}">${esc(v)}</a> <span class="id faint">${esc(r.disease_id)}</span>` },
-    { key: "rank", label: "Rank in disease", num: true, sortDir: "asc" },
-    { key: "score", label: "Score (p)", num: true, sortDir: "asc", format: v => `<span class="mono">${fmt.p(v)}</span>` },
+    { key: "rank", label: "Rank in disease", num: true, sortDir: "asc", help: HELP.rank },
+    { key: "score", label: "Score", num: true, sortDir: "asc", help: HELP.score, format: v => `<span class="mono">${fmt.p(v)}</span>` },
     { key: "family", label: "Family", format: v => v ? `<a class="mono" href="${route.family(v)}">${esc(v)}</a>` : "" },
-    { key: "species_occurrence", label: "Supporting phenologs by species", sortable: false, format: v => occurrenceChips(v) },
+    { key: "n_phenologs", label: "Supporting phenologs", sortDir: "desc", help: HELP.support, format: (v, r) => supportChips(r.support, r.symbol) },
   ];
 
   async function fetchPage({ sortKey, sortDir, filter, page, pageSize }) {
     const where = [];
     if (!filters.known) where.push("NOT known");
-    if (filters.species) where.push(`species_occurrence LIKE ${lit("%" + filters.species + ":%")}`);
+    if (filters.species) where.push(`support LIKE ${lit("%" + filters.species + ":%")}`);
     const q = filter.trim();
     if (q) {
       // names are matched in the small gene and disease tables, then the 1.5M pairs are filtered by id
@@ -46,7 +47,7 @@ export async function render(el) {
     const w = where.length ? "WHERE " + where.join(" AND ") : "";
     const key = SORTABLE.includes(sortKey) ? sortKey : "score";
     const [rows, [{ n }]] = await Promise.all([
-      query(`SELECT * FROM candidates ${w} ORDER BY ${key} ${sortDir === "desc" ? "DESC" : "ASC"} NULLS LAST, score, disease_id, rank
+      query(`SELECT * FROM candidates ${w} ORDER BY ${key} ${sortDir === "desc" ? "DESC" : "ASC"} NULLS LAST, score, disease_id, rank, symbol
              LIMIT ${pageSize} OFFSET ${page * pageSize}`),
       query(`SELECT count(*)::INTEGER AS n FROM candidates ${w}`),
     ]);

@@ -38,10 +38,40 @@ export function legend(items) {
 }
 
 // The two kinds of gene-disease pair every ranking shows
-export const PAIR_KEY = [["var(--accent)", "known gene–disease pair"], ["var(--accent-2)", "candidate pair"]];
+export const PAIR_KEY = [["var(--accent)", "known gene–disease pair"], ["var(--accent-2)", "novel candidate pair"]];
 
-// Names in left-aligned columns, as many as fit: [{ label, href, cls, note }]
-export function nameGrid(items) {
-  return `<div class="name-grid">${items.map(i =>
-    `<a class="${i.cls || ""}" href="${i.href}" title="${esc(i.title || i.label)}">${esc(i.label)}${i.note ? ` <span class="faint">${esc(i.note)}</span>` : ""}</a>`).join("")}</div>`;
+// Header tooltips for the columns every candidate table shares
+export const HELP = {
+  score: "The candidate ranking's hypergeometric p-value: how unlikely this many phenotype annotations of the gene's orthologs are " +
+         "among the disease's nearest phenologs. Smaller ranks higher. A ranking score, not a corrected significance level",
+  support: "Per species, how many of the disease's phenologs are phenotypes of an ortholog of the gene, out of the phenologs " +
+           "with that species the ranking used (the disease's nearest, which is all of them unless it has more than k). " +
+           "Hover a species for the orthologs behind it",
+  rank: "Place in the disease's ranking by score (ties share a place), out of every gene it scored, known genes included",
+};
+
+// Header tooltips for the FDR tables (release and species pages)
+export const FDR_HELP = {
+  cutoff: "Largest p-value still called a phenolog at this FDR",
+  phenologs: "Real disease–phenotype comparisons at or below the cutoff",
+  expected: "Randomised comparisons at or below the cutoff, per trial (mean over the trials)",
+  realised: "Expected false positives / phenologs",
+};
+
+// Header tooltips for the phenolog tables (disease, phenotype and species pages)
+export const PHENOLOG_HELP = {
+  rank: "Place among the disease's phenologs, by p-value",
+  overlap: "Protein families carrying both the disease and the phenotype",
+  n_disease_orthogroups: "Protein families of the disease's genes, counting only families the two species share",
+  n_phenotype_orthogroups: "Protein families of the phenotype's genes, counting only families the two species share",
+  n_common: "Protein families present in both species: the background of the test",
+  pval: "Hypergeometric p-value of the overlap; a phenolog is significant at or below its species' FDR cutoff",
+};
+
+// Names in left-aligned columns, as many as fit: [{ label, href, cls, note, title, ext }]. wide: columns for longer
+// names. ext: the link leaves the site (opens a new tab)
+export function nameGrid(items, { wide = false } = {}) {
+  return `<div class="name-grid ${wide ? "wide" : ""}">${items.map(i =>
+    `<a class="${i.cls || ""}" href="${i.href}" title="${esc(i.title || i.label)}" ${i.ext ? `target="_blank" rel="noopener"` : ""}>` +
+    `${esc(i.label)}${i.note ? ` <span class="faint">${esc(i.note)}</span>` : ""}</a>`).join("")}</div>`;
 }

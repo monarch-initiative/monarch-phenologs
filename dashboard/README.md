@@ -5,7 +5,7 @@ protein family and species as a page you can search for. There is no server side
 pipeline's TSVs into parquet tables, and the browser queries those with DuckDB-WASM.
 
 ```
-python dashboard/build_release.py -p path/to/project_dir --phenio_version 2025-11-14   # ~5 s, ~26 MB
+python dashboard/build_release.py -p path/to/project_dir --phenio_version 2025-11-14   # ~10 s, ~30 MB
 python dashboard/serve.py                                                             # http://localhost:8765
 ```
 
@@ -39,10 +39,10 @@ dashboard/
 | table | one row per | notes |
 |---|---|---|
 | `phenologs` | significant phenolog | ranked within its disease by p |
-| `candidates` | (disease, gene) the ranking scored | rank within the disease, global rank among novel pairs (the paper's global ranking), score, known flag, supporting species. The pipeline also appends a disease's known genes its phenologs never reached, without a p-value; those are left out |
+| `candidates` | (disease, gene) the ranking scored | rank within the disease and global rank among novel pairs (the paper's global ranking), ties sharing a place; score, known flag, and support: per species, the disease's phenologs that are phenotypes of an ortholog of the gene, of how many, through how many orthologs, and the (phenolog, ortholog) hits the score counts (the pipeline's `XSpecies_occurence`). The pipeline also appends a disease's known genes its phenologs never reached, without a p-value; those are left out |
 | `human_orthologs` | (model gene, human gene) | ortholog edges from the run's species to the base species |
 | `additive` | (disease, family, phenolog) | top 20 phenologs x top 40 families per disease; the page re-slices by k, species and order |
-| `diseases`, `genes`, `phenotypes`, `families`, `species` | entity | counts the pages and browse lists show |
+| `diseases`, `genes`, `phenotypes`, `families`, `species` | entity | counts the pages and browse lists show. `genes.in_reach`: a base species gene one of whose orthologs carries a phenotype the ranking can use |
 | `known_associations` | curated gene-disease pair | from the base species' gene_to_disease table |
 | `gene_phenotypes` | gene-phenotype annotation | every species |
 | `search` | searchable thing | kind, id, label, detail, weight |
@@ -59,7 +59,7 @@ and the charts in `js/charts/`. Anything that needs a new column goes in `tables
 ## Hosting
 
 Any static host works (a bucket, GitHub Pages). The parquet files are fetched whole on first use (the
-largest is 16 MB), so range support is not required; `serve.py` has it anyway for when the data layer
+largest is 17 MB), so range support is not required; `serve.py` has it anyway for when the data layer
 moves to range reads. Scripts come from jsdelivr (DuckDB-WASM) and cdnjs (D3); fonts from Google Fonts.
 
 ## Later

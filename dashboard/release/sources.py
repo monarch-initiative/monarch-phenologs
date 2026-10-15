@@ -112,7 +112,6 @@ class Run:
                              divergence_mya=DIVERGENCE_MYA.get(taxon),
                              n_genes=int(r["Taxon gene count"]),
                              n_phenotyped_genes=int(r["Genes with >= 1 phenotype edge"]),
-                             n_phenotypes_annotated=int(r["Unique phenotypes"]),
                              n_ortholog_genes=int(r["Genes with >= 1 ortholog edge"]),
                              n_orthogroups=int(r["Unique ortholog ids (orthogroups)"])))
         order = species_plot_order([r["species"] for r in rows])
@@ -235,6 +234,18 @@ class Run:
             CREATE VIEW g2o AS
             SELECT regexp_extract(filename, '([^/]+)_gene_to_ortholog\\.tsv$', 1) AS species, gene AS gene_id, ortholog_id AS family
             FROM {}""".format(read_tsv_sql(os.path.join(sd, "*_gene_to_ortholog.tsv"), filename="true", all_varchar="true")))
+
+        # The families each model species shares with the base species, and the phenotype annotations the
+        # candidate ranking can use: only genes of those families count, as in the pipeline
+        con.execute("""
+            CREATE VIEW common_families AS
+            SELECT regexp_extract(filename, '_vs_([^/]+)\\.tsv$', 1) AS species, ortholog_id AS family
+            FROM {}""".format(read_tsv_sql(os.path.join(sd, "common_orthologs_{}_vs_*.tsv".format(self.base)),
+                                           filename="true", all_varchar="true")))
+        con.execute("""
+            CREATE VIEW ranking_g2p AS
+            SELECT DISTINCT g.species, g.gene_id, g.phenotype_id
+            FROM g2p g JOIN common_families c ON c.species = g.species AND c.family = g.family""")
 
         con.execute("""
             CREATE VIEW g2d AS

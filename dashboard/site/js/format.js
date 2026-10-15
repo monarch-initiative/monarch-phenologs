@@ -16,6 +16,7 @@ export const fmt = {
     return Number(p).toPrecision(2);
   },
   score: s => (s == null ? "–" : Number(s).toFixed(3)),
+  dec: x => (x == null ? "–" : Number(x).toLocaleString("en-US", { minimumFractionDigits: 1, maximumFractionDigits: 1 })),
 };
 
 export function speciesOf(name) {
@@ -62,12 +63,24 @@ export function speciesChip(name, { count, href } = {}) {
   return `<a class="chip" href="${href || route.species(name)}">${inner}</a>`;
 }
 
-// "Mus-musculus:30,Danio-rerio:5" --> [["Mus-musculus", 30], ...]
-export function parseOccurrence(s) {
+// A candidate's support, "species:phenologs:of the disease's:orthologs:hits,..." (most phenologs first)
+export function parseSupport(s) {
   if (!s) return [];
-  return s.split(",").filter(Boolean).map(item => { const [sp, n] = item.split(":"); return [sp, Number(n)]; });
+  return s.split(",").map(item => {
+    const [species, phenologs, used, orthologs, hits] = item.split(":");
+    return { species, phenologs: +phenologs, used: +used, orthologs: +orthologs, hits: +hits };
+  });
 }
 
-export function occurrenceChips(s) {
-  return parseOccurrence(s).map(([sp, n]) => speciesChip(sp, { count: n })).join(" ");
+// One chip per species: how many of the disease's phenologs with that species are phenotypes of an ortholog
+// of the gene, out of how many the ranking used. The tooltip has the orthologs and the hits the score counts
+export function supportChips(s, gene) {
+  return parseSupport(s).map(x => {
+    const sp = speciesOf(x.species);
+    const title = `${fmt.int(x.phenologs)} of the ${fmt.int(x.used)} ${sp.binomial} phenologs the disease's ranking used are phenotypes of ` +
+                  `${fmt.int(x.orthologs)} ${sp.binomial} ortholog${x.orthologs === 1 ? "" : "s"} of ${gene} ` +
+                  `(${fmt.int(x.hits)} ortholog–phenotype annotations; the score counts these)`;
+    return `<a class="chip" href="${route.species(x.species)}" title="${esc(title)}"><span class="dot" style="background:${sp.color}"></span>` +
+           `<i>${esc(shortBinomial(x.species))}</i> <span>${fmt.int(x.phenologs)}<span class="faint">/${fmt.int(x.used)}</span></span></a>`;
+  }).join(" ");
 }

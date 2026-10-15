@@ -41,7 +41,7 @@ export function additiveChart(el, rows, opts = {}) {
 
   const color = d3.scaleOrdinal().domain(phenologs.map(p => p.phenolog_rank)).range(PALETTE);
   const width = Math.max(680, el.clientWidth || 900);
-  const rowH = 22, mLeft = 112, mRight = 300, mTop = 8, mBottom = 30;
+  const rowH = 22, mLeft = 112, mRight = 300, mTop = 8, mBottom = 42;
   const height = mTop + families.length * rowH + mBottom;
   const x = d3.scaleLinear().domain([0, d3.max(families, f => f.total) || 1]).nice().range([0, width - mLeft - mRight]);
 
@@ -53,7 +53,7 @@ export function additiveChart(el, rows, opts = {}) {
   g.append("g").selectAll("line").data(x.ticks(6)).join("line").attr("class", "gridline")
     .attr("x1", d => x(d)).attr("x2", d => x(d)).attr("y1", 0).attr("y2", families.length * rowH);
   svg.append("text").attr("x", mLeft + x.range()[1] / 2).attr("y", height - 2).attr("text-anchor", "middle")
-    .attr("font-size", 11).attr("fill", "#8b97a8").text("additive prediction score  Σ (overlap / disease orthogroups) × (1 − p)");
+    .attr("font-size", 11).attr("fill", "#8b97a8").text("additive score: Σ (shared families / disease families) × (1 − p) over the family's phenologs");
 
   const fam = g.selectAll("g.fam").data(families).join("g").attr("class", "fam")
     .attr("transform", (f, i) => `translate(0,${i * rowH})`);

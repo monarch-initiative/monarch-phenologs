@@ -1,4 +1,4 @@
-// A radar (player card) chart. axes: [{ label, value (0..1), text }]
+// A radar (player card) chart. axes: [{ label, value (0..1), text }]; a label may break over lines with \n
 import { showTip, moveTip, hideTip } from "./tooltip.js";
 
 export function radar(el, axes, { size = 150, color = "#f0b84a", levels = 4, labels = false } = {}) {
@@ -30,15 +30,18 @@ export function radar(el, axes, { size = 150, color = "#f0b84a", levels = 4, lab
   svg.selectAll("circle.v").data(axes).join("circle").attr("class", "v")
     .attr("cx", (a, i) => poly[i][0]).attr("cy", (a, i) => poly[i][1]).attr("r", 3)
     .attr("fill", "#fff").attr("stroke", color).attr("stroke-width", 1.5)
-    .on("mousemove", (e, a) => { showTip(e, `<b>${a.label}</b><br>${a.text ?? ""}`); moveTip(e); })
+    .on("mousemove", (e, a) => { showTip(e, `<b>${a.label.replace(/\n/g, " ")}</b><br>${a.text ?? ""}`); moveTip(e); })
     .on("mouseleave", hideTip);
 
   if (labels) {
     axes.forEach((a, i) => {
       const [x, y] = pt(i, 1.17);
-      svg.append("text").attr("x", x).attr("y", y).attr("text-anchor", "middle").attr("dominant-baseline", "middle")
-        .attr("font-size", 10).attr("fill", "#8b97a8").text(a.label);
-      svg.append("text").attr("x", x).attr("y", y + 12).attr("text-anchor", "middle").attr("dominant-baseline", "middle")
+      const lines = a.label.split("\n");
+      const y0 = y - (lines.length - 1) * 5.5;
+      const t = svg.append("text").attr("x", x).attr("y", y0).attr("text-anchor", "middle").attr("dominant-baseline", "middle")
+        .attr("font-size", 10).attr("fill", "#8b97a8");
+      lines.forEach((line, j) => t.append("tspan").attr("x", x).attr("dy", j ? 11 : 0).text(line));
+      svg.append("text").attr("x", x).attr("y", y0 + (lines.length - 1) * 11 + 12).attr("text-anchor", "middle").attr("dominant-baseline", "middle")
         .attr("font-size", 10.5).attr("font-weight", 600).attr("fill", color).text(a.text ?? "");
     });
   }

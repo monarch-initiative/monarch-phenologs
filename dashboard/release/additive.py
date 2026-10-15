@@ -1,8 +1,9 @@
 """
 The additive decomposition behind a disease's candidates (Woods et al. 2013, as drawn in the paper's
 case study figure). For each disease: its top phenologs by p-value; for each phenolog, the protein
-families carrying that model phenotype; each (family, phenolog) pair contributes
-(overlap / disease orthogroups) * (1 - p). Families are ranked by their summed contribution.
+families carrying that model phenotype that the species shares with the base species (the families the
+phenolog test counts); each (family, phenolog) pair contributes (overlap / disease orthogroups) * (1 - p).
+Families are ranked by their summed contribution.
 
 One row per (disease, family, phenolog) is kept so the page can re-slice by species or by a smaller
 k without going back to the pipeline. Depends on the phenologs, genes and known_associations tables.
@@ -16,9 +17,10 @@ def build(con, run, outdir, top_phenologs=20, top_families=40):
         WITH top_ph AS (
             SELECT disease_id, phenotype_id, phenotype_name, species, overlap, n_disease_orthogroups, pval, rank
             FROM phenologs WHERE rank <= {top_phenologs}),
-        phen_fam AS (                       -- the protein families carrying each model phenotype
+        phen_fam AS (                       -- the protein families carrying each model phenotype, shared with the base species
             SELECT DISTINCT p.species, p.phenotype_id, o.family
-            FROM g2p p JOIN g2o o ON o.species = p.species AND o.gene_id = p.gene_id),
+            FROM g2p p JOIN g2o o ON o.species = p.species AND o.gene_id = p.gene_id
+            JOIN common_families c ON c.species = o.species AND c.family = o.family),
         contrib AS (
             SELECT t.disease_id, f.family, t.rank AS phenolog_rank, t.phenotype_id, t.phenotype_name, t.species,
                    (t.overlap::DOUBLE / t.n_disease_orthogroups) * (1 - t.pval) AS score

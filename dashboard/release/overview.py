@@ -21,17 +21,17 @@ def build(con, run, outdir, table_counts):
     for s in species:
         s["is_base"] = bool(s["is_base"])
 
-    funnel = known_funnel(con, base)
+    funnel = known_funnel(con)
     tiles = rows(con, """
         SELECT (SELECT count(*) FROM diseases)                                   AS diseases,
                (SELECT count(*) FROM phenologs)                                  AS phenologs,
                (SELECT count(DISTINCT (species, phenotype_id)) FROM phenologs)   AS model_phenotypes,
                (SELECT count(*) FROM candidates)                                 AS candidate_pairs,
                (SELECT count(*) FROM candidates WHERE NOT known)                 AS novel_pairs,
-               (SELECT count(DISTINCT gene_id) FROM candidates)                  AS candidate_genes,
+               (SELECT count(DISTINCT gene_id) FROM candidates WHERE NOT known)  AS candidate_genes,
                (SELECT count(DISTINCT family) FROM candidates)                   AS families_implicated,
                (SELECT count(*) FROM species WHERE NOT is_base)                  AS model_species""")[0]
-    tiles.update(known_recovered=funnel["recovered"], known_pairs=funnel["curated"], known_in_world=funnel["in_world"])
+    tiles.update(known_recovered=funnel["recovered"], known_pairs=funnel["curated"], known_in_reach=funnel["in_reach"])
 
     top = {
         "diseases": rows(con, """SELECT disease_id AS id, name AS label, n_phenologs AS value, n_species, n_novel_candidates, top_species
@@ -70,33 +70,34 @@ def build(con, run, outdir, table_counts):
     return path
 
 
-def known_funnel(con, base):
+def known_funnel(con):
     """
     How far the base species' curated gene-disease pairs (and their diseases) get. Each step keeps the
-    pairs of the step before: the gene has a protein family, the family carries phenotypes in a model
-    species (the phenologs world), the disease has a significant phenolog, and the gene is in the
-    disease's candidate ranking (recovered, in-sample)
+    pairs of the step before: the gene has an ortholog in a model species of the run, one of those orthologs
+    carries a phenotype the ranking can use (only then can any disease's ranking reach the gene), the disease
+    has a significant phenolog (the pair is in reach: it can be recovered), and the gene is in the disease's
+    candidate ranking (recovered, in-sample)
     """
 
     return rows(con, """
-        WITH pairs AS (SELECT gene_id, disease_id, any_value(family) AS family FROM known_associations GROUP BY gene_id, disease_id),
-        world AS (SELECT DISTINCT family FROM g2p WHERE species <> '{base}' AND family IS NOT NULL),
+        WITH pairs AS (SELECT DISTINCT gene_id, disease_id FROM known_associations),
         f AS (SELECT p.disease_id,
-                     p.family IS NOT NULL AS has_family,
-                     coalesce(p.family IN (SELECT family FROM world), false) AS in_world,
+                     p.gene_id IN (SELECT human_gene_id FROM human_orthologs) AS has_ortholog,
+                     p.gene_id IN (SELECT gene_id FROM genes WHERE in_reach) AS gene_in_reach,
                      p.disease_id IN (SELECT disease_id FROM diseases) AS has_phenolog,
                      (p.disease_id, p.gene_id) IN (SELECT (disease_id, gene_id) FROM candidates WHERE known) AS recovered
               FROM pairs p)
         SELECT count(*) AS curated,
-               count(*) FILTER (WHERE has_family) AS has_family,
-               count(*) FILTER (WHERE in_world) AS in_world,
-               count(*) FILTER (WHERE in_world AND has_phenolog) AS has_phenolog,
+               count(*) FILTER (WHERE has_ortholog) AS has_ortholog,
+               count(*) FILTER (WHERE gene_in_reach) AS gene_in_reach,
+               count(*) FILTER (WHERE gene_in_reach AND has_phenolog) AS in_reach,
                count(*) FILTER (WHERE recovered) AS recovered,
                count(DISTINCT disease_id) AS diseases,
-               count(DISTINCT disease_id) FILTER (WHERE has_family) AS diseases_family,
-               count(DISTINCT disease_id) FILTER (WHERE in_world) AS diseases_world,
-               count(DISTINCT disease_id) FILTER (WHERE in_world AND has_phenolog) AS diseases_phenolog
-        FROM f""".format(base=base))[0]
+               count(DISTINCT disease_id) FILTER (WHERE has_ortholog) AS diseases_ortholog,
+               count(DISTINCT disease_id) FILTER (WHERE gene_in_reach) AS diseases_gene_in_reach,
+               count(DISTINCT disease_id) FILTER (WHERE gene_in_reach AND has_phenolog) AS diseases_in_reach,
+               count(DISTINCT disease_id) FILTER (WHERE recovered) AS diseases_recovered
+        FROM f""")[0]
 
 
 def _json_default(value):

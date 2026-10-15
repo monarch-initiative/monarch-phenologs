@@ -1,7 +1,7 @@
 // One phenotype: the human diseases it is a phenolog of, and the genes annotated with it
 import { ensure, query, lit } from "../db.js";
 import { state, fmt, esc, speciesChip, route, links } from "../format.js";
-import { pageHead, statRow, card, notFound } from "./common.js";
+import { pageHead, statRow, card, notFound, PHENOLOG_HELP } from "./common.js";
 import { table } from "../charts/table.js";
 
 const ORTHOLOGS_SHOWN = 4;
@@ -32,24 +32,26 @@ export async function render(el, id) {
                  links: [{ label: "Monarch", href: links.monarch(p.phenotype_id) }],
                  after: `<div class="chips" style="align-self:center">${rows.map(r => speciesChip(r.species)).join("")}</div>` })}
     ${rows.map(r => statRow([[`<i>${esc(r.species.replace(/-/g, " "))}</i>`, "species"], [r.n_genes, "genes annotated"], [r.n_orthogroups, "protein families"],
-                             ...(r.species === base ? [[r.n_known_diseases, "known diseases"]]
-                                                    : [[r.n_diseases, "human disease phenologs"], [fmt.p(r.best_pval), "best p"]])])).join("")}
+                             ...(r.species === base ? [[r.n_known_diseases, "known diseases of these genes"]]
+                                                    : [[r.n_shared_orthogroups, "families shared with human"], [r.n_diseases, "human disease phenologs"],
+                                                       [fmt.p(r.best_pval), "best p"]])])).join("")}
+    ${model ? "" : `<p class="muted" style="margin:-6px 0 16px">Phenologs in this release compare human diseases, not human phenotypes, with the model species' phenotypes.</p>`}
     <div class="grid" style="grid-template-columns:1fr; gap:16px">
       ${model ? card("Phenologs", "phens", { sub: "human diseases whose protein families overlap this phenotype's more than chance" }) : ""}
-      ${card("Genes annotated", "genes", { sub: "the genes carrying this phenotype, and so the protein families behind every phenolog above" })}
+      ${card("Genes annotated", "genes", { sub: model ? "the genes carrying this phenotype, and so the protein families behind every phenolog above" : "the genes carrying this phenotype" })}
     </div>`;
 
   if (model) {
     table(el.querySelector("#phens"), phen, [
       { key: "disease_name", label: "Human diseases", format: (v, r) => `<a href="${route.disease(r.disease_id)}">${esc(v)}</a> <span class="id faint">${esc(r.disease_id)}</span>` },
       ...(several ? [{ key: "species", label: "Species", format: v => speciesChip(v) }] : []),
-      { key: "rank", label: "Rank in disease", num: true },
-      { key: "overlap", label: "Overlap", num: true },
-      { key: "n_disease_orthogroups", label: "Disease fam.", num: true },
-      { key: "n_phenotype_orthogroups", label: "Phenotype fam.", num: true },
-      { key: "pval", label: "p", num: true, format: v => `<span class="mono">${fmt.p(v)}</span>` },
+      { key: "rank", label: "Phenolog rank in disease", num: true, sortDir: "asc", help: PHENOLOG_HELP.rank },
+      { key: "overlap", label: "Shared families", num: true, help: PHENOLOG_HELP.overlap },
+      { key: "n_disease_orthogroups", label: "Disease families", num: true, help: PHENOLOG_HELP.n_disease_orthogroups },
+      { key: "n_phenotype_orthogroups", label: "Phenotype families", num: true, help: PHENOLOG_HELP.n_phenotype_orthogroups },
+      { key: "pval", label: "p", num: true, sortDir: "asc", help: PHENOLOG_HELP.pval, format: v => `<span class="mono">${fmt.p(v)}</span>` },
     ], { sortKey: "pval", sortDir: "asc", search: ["disease_name", "disease_id"], placeholder: "Filter by disease name or Mondo id…",
-         empty: "Not a significant phenolog of any disease" });
+         empty: "Not a significant phenolog of any disease", wrapHead: true });
   }
 
   table(el.querySelector("#genes"), genes, [
@@ -57,7 +59,8 @@ export async function render(el, id) {
     ...(several ? [{ key: "species", label: "Species", format: v => speciesChip(v) }] : []),
     { key: "family", label: "Family", format: v => v ? `<a class="mono" href="${route.family(v)}">${esc(v)}</a>` : `<span class="faint">none</span>` },
     ...(model ? [{ key: "human", label: "Human ortholog(s)", format: orthologLinks, sortValue: r => r.human ? r.human.toLowerCase() : null }] : []),
-  ], { sortKey: "symbol", sortDir: "asc", search: ["symbol", "family", "gene_id", "human"], placeholder: "Filter by gene, family or human ortholog…" });
+  ], { sortKey: "symbol", sortDir: "asc", search: ["symbol", "family", "gene_id", "human"],
+       placeholder: model ? "Filter by gene, family or human ortholog…" : "Filter by gene or family…" });
 }
 
 // "SYMBOL|ID,SYMBOL|ID" --> links to the human genes

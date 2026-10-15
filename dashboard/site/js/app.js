@@ -108,7 +108,8 @@ async function boot() {
   const r = ov.release;
   document.getElementById("brand-release").textContent = `kg ${r.graph_version}`;
   document.getElementById("footer-release").textContent =
-    `Monarch KG ${r.graph_version}${r.phenio_version ? " · phenio " + r.phenio_version : ""} · FDR ${r.fdr} · k=${r.kneighbs} ${r.rank_metric} · built ${r.built}`;
+    `Monarch KG ${r.graph_version}${r.phenio_version ? " · phenio " + r.phenio_version : ""} · FDR ${r.fdr} · ` +
+    `${r.rank_metric === "hg" ? "hypergeometric" : "naive Bayes"} ranking over each disease's ${Number(r.kneighbs).toLocaleString("en-US")} nearest phenologs · built ${r.built}`;
   setupSearch();
   window.addEventListener("hashchange", navigate);
   await navigate();

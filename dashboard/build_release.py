@@ -46,6 +46,10 @@ if __name__ == "__main__":
     t0 = time.time()
     con = run.connect()
     counts = tables.build(con, run, args.outdir)
+    pairs, diseases = tables.support_mismatches(con)
+    if pairs:
+        print("- Note, supporting phenolog counts differ from the pipeline's XSpecies_occurence for {:,} pairs in {:,} "
+              "disease(s) (p-value ties at the k boundary, broken differently before phenologs were sorted deterministically)".format(pairs, diseases))
     counts["additive"] = additive.build(con, run, args.outdir, args.top_phenologs, args.top_families)
     for name, n in counts.items():
         print("  {:<20} {:>10,} rows  {:>7.1f} MB".format(name, n, os.path.getsize(os.path.join(args.outdir, name + ".parquet")) / 1e6))

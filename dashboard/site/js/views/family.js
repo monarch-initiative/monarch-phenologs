@@ -1,7 +1,7 @@
 // One PANTHER protein family: its members across species, and the diseases it is implicated in
 import { ensure, query, lit } from "../db.js";
 import { state, fmt, esc, speciesChip, route, links } from "../format.js";
-import { pageHead, statRow, card, notFound, legend, nameGrid, PAIR_KEY } from "./common.js";
+import { pageHead, statRow, card, notFound, legend, nameGrid, HELP } from "./common.js";
 import { table } from "../charts/table.js";
 
 const MEMBERS_SHOWN = 150;    // per species, before "+N more"
@@ -13,7 +13,9 @@ export async function render(el, id) {
 
   const [members, predicted, known] = await Promise.all([
     query(`SELECT species, gene_id, symbol, n_phenotypes, n_known_diseases FROM genes WHERE family = ${lit(id)} ORDER BY species, symbol`),
-    query(`SELECT c.disease_id, d.name, min(c.score) AS best_score, min(c.rank) AS best_rank, bool_or(c.known) AS known, d.n_candidates
+    // a disease is known for the family when one of its human genes is curated for it, scored or not
+    query(`SELECT c.disease_id, d.name, min(c.score) AS best_score, min(c.rank) AS best_rank, d.n_candidates,
+                  c.disease_id IN (SELECT disease_id FROM known_associations WHERE family = ${lit(id)}) AS known
            FROM candidates c JOIN diseases d USING (disease_id) WHERE c.family = ${lit(id)}
            GROUP BY c.disease_id, d.name, d.n_candidates ORDER BY best_score`),
     query(`SELECT DISTINCT gene_id, symbol, disease_id, disease_name FROM known_associations WHERE family = ${lit(id)} ORDER BY disease_name, symbol`),
@@ -26,10 +28,10 @@ export async function render(el, id) {
     ${pageHead({ kicker: "Protein family", title: `<span class="mono" style="font-size:inherit">${esc(f.family)}</span>`,
                  links: [{ label: "PANTHER", href: links.panther(f.family) }] })}
     ${statRow([[f.n_genes, "genes"], [f.n_species, "species"], [f.n_base_genes, "human genes"], [f.n_known_diseases, "known diseases"],
-               [f.n_predicted_diseases, "diseases ranked"], [f.n_novel_diseases, "of them novel"], [fmt.p(f.best_score), "best score"]])}
+               [f.n_predicted_diseases, "diseases ranked for"], [f.n_novel_diseases, "of them novel"], [fmt.p(f.best_score), "best score"]])}
     <div class="grid" style="grid-template-columns:1fr; gap:16px">
-      ${card("Members by species", "members", { sub: legend([["var(--accent)", "has a curated disease"], ["var(--text)", "no curated disease"]]) })}
-      ${card("Diseases this family is ranked for", "pred", { sub: `${legend(PAIR_KEY)}<span class="faint">best score of any member gene</span>` })}
+      ${card("Members by species", "members", { sub: legend([["var(--accent)", "human gene with a curated disease"], ["var(--text)", "no curated disease"]]) })}
+      ${card("Diseases this family is ranked for", "pred", { sub: `${legend([["var(--accent)", "a human member is a known gene of the disease"], ["var(--accent-2)", "novel for the family"]])}<span class="faint">best rank and score of any member gene</span>` })}
       ${known.length ? card("Known associations", "known", { sub: "curated gene–disease pairs involving this family" }) : ""}
     </div>`;
 
@@ -43,8 +45,9 @@ export async function render(el, id) {
 
   table(el.querySelector("#pred"), predicted, [
     { key: "name", label: "Human disease", format: (v, r) => `<a href="${route.disease(r.disease_id)}" class="${r.known ? "known-mark" : ""}">${esc(v)}</a>` },
-    { key: "best_rank", label: "Best rank", num: true, format: (v, r) => `${fmt.int(v)} <span class="faint">/ ${fmt.int(r.n_candidates)}</span>` },
-    { key: "best_score", label: "Score (p)", num: true, format: v => `<span class="mono">${fmt.p(v)}</span>` },
+    { key: "best_rank", label: "Best rank in disease", num: true, sortDir: "asc", help: "Best place of any member gene in the disease's ranking, out of every gene it scored",
+      format: (v, r) => `${fmt.int(v)} <span class="faint">/ ${fmt.int(r.n_candidates)}</span>` },
+    { key: "best_score", label: "Best score", num: true, sortDir: "asc", help: HELP.score, format: v => `<span class="mono">${fmt.p(v)}</span>` },
   ], { sortKey: "best_score", sortDir: "asc", search: ["name", "disease_id"], placeholder: "Filter by disease name or Mondo id…", empty: "Not in any candidate ranking" });
 
   if (known.length) {

@@ -180,7 +180,10 @@ svg text { font-family: var(--sans); }
 .key .sw { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
 .name-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 5px 16px; font-size: 13px; }
 .name-grid a { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.name-grid.wide { grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); }
 .name-grid a.plain { color: var(--text); }
+.name-grid a.out { color: var(--faint); }
+.name-grid a.current { color: var(--text); font-weight: 700; text-decoration: underline; text-underline-offset: 3px; }
 .name-grid a.known-mark .faint { font-weight: 400; }
 .member-row { display: grid; grid-template-columns: 210px minmax(0, 1fr); gap: 14px; align-items: start; padding: 10px 0; border-bottom: 1px solid var(--line); }
 .member-row:last-child { border-bottom: 0; }
@@ -195,12 +198,14 @@ svg text { font-family: var(--sans); }
 .player .radar { display: flex; justify-content: center; margin-top: auto; padding-top: 6px; }
 .species-top { grid-template-columns: 360px minmax(0, 1fr); align-items: stretch; }
 @media (max-width: 900px) { .species-top { grid-template-columns: 1fr; } }
-.radar-card { display: flex; align-items: center; justify-content: center; padding: 22px; }
+.radar-card { display: flex; flex-direction: column; }
+.radar-card > #radar { flex: 1; display: flex; align-items: center; justify-content: center; }
 .bar-list .row { display: grid; grid-template-columns: minmax(0, 1fr) 150px 56px; gap: 10px; align-items: center; padding: 4px 0; font-size: 13px; }
 .bar-list .lab { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .bar-list .bar { height: 10px; border-radius: 3px; background: var(--accent); opacity: 0.85; }
 .bar-list .n { text-align: right; font-variant-numeric: tabular-nums; color: var(--muted); font-size: 12px; }
 .known-mark { color: var(--accent); font-weight: 600; }
+.tbl tr.current-row td { color: var(--text); font-weight: 700; background: var(--card-2); }
 .loading { color: var(--muted); padding: 30px; text-align: center; }
 .empty { color: var(--faint); font-style: italic; padding: 10px 0; }
 .note { color: var(--faint); font-size: 12px; margin-top: 8px; }
