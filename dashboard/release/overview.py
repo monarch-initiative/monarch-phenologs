@@ -75,7 +75,7 @@ def known_funnel(con):
     How far the base species' curated gene-disease pairs (and their diseases) get. Each step keeps the
     pairs of the step before: the gene has an ortholog in a model species of the run, one of those orthologs
     carries a phenotype the ranking can use (only then can any disease's ranking reach the gene), the disease
-    has a significant phenolog (the pair is in reach: it can be recovered), and the gene is in the disease's
+    has a significant phenolog (the pair is within reach: it can be recovered), and the gene is in the disease's
     candidate ranking (recovered, in-sample)
     """
 

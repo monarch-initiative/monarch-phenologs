@@ -129,6 +129,8 @@ code, .id, .mono { font-family: var(--mono); font-size: 12.5px; }
 .funnel .bar { display: block; height: 14px; border-radius: 3px; opacity: 0.85; }
 .funnel .n { text-align: right; font-variant-numeric: tabular-nums; }
 .funnel .pct { text-align: right; color: var(--faint); font-size: 12px; font-variant-numeric: tabular-nums; }
+.funnel .foot { margin-top: 8px; padding-top: 9px; border-top: 1px solid var(--line); color: var(--muted); font-size: 12.5px; }
+.funnel .foot b { color: var(--text); font-weight: 600; font-variant-numeric: tabular-nums; }
 
 /* tables */
 .tbl-wrap { overflow: auto; }

@@ -61,8 +61,8 @@ export async function render(el) {
         ${tile(t.phenologs, "significant phenologs", { cls: "accent", help: "Disease–phenotype pairs at or below their species' FDR cutoff" })}
         ${tile(t.model_phenotypes, "model phenotypes with diseases", { help: "Model species phenotypes in at least one phenolog (a term used by two species counts twice)" })}
         ${tile(t.model_species, "model species", { help: "Species besides human taking part in this release" })}
-        ${tile(t.known_recovered, `known gene–disease pairs recovered (${fmt.pct(t.known_recovered / t.known_in_reach)} of ${fmt.int(t.known_in_reach)} in reach)`,
-               { target: "pipeline", help: "Known pairs whose gene is in the disease's candidate ranking, out of the pairs in reach (the gene has an ortholog with phenotypes and the disease has a phenolog). Click for each step" })}
+        ${tile(t.known_recovered, `known gene–disease pairs recovered (${fmt.pct(t.known_recovered / t.known_in_reach)} within reach, ${fmt.pct(t.known_recovered / t.known_pairs)} overall)`,
+               { target: "pipeline", help: "Known pairs whose gene is in the disease's candidate ranking. Within reach: out of the pairs whose gene has an ortholog with phenotypes and whose disease has a phenolog. Overall: out of every curated pair. Click for each step" })}
         ${tile(t.candidate_genes, "genes with one or more candidate disease associations", { help: "Human genes ranked for at least one disease they are not known for" })}
         ${tile(t.families_implicated, "protein families with a ranked gene", { help: "PANTHER families with a human gene in at least one disease's ranking" })}
         ${tile(t.candidate_pairs, "ranked gene–disease pairs", { help: "Every (disease, gene) pair the ranking scored, known pairs included" })}
@@ -137,20 +137,22 @@ export async function render(el) {
   // from graph to phenologs
   inputsTable(el.querySelector("#inputs"), ov.inputs);
   const k = ov.known_funnel;
+  const share = (n, of) => `<b>${fmt.pct(n / Math.max(1, of))}</b>`;
   funnel(el.querySelector("#funnel-pairs"), [
     { label: "curated in the graph", n: k.curated },
     { label: "gene has an ortholog in a model species", n: k.has_ortholog },
     { label: "gene has ≥ 1 ortholog annotated with a phenotype", n: k.gene_in_reach },
-    { label: "disease has a significant phenolog <span class=\"faint\">(in reach)</span>", n: k.in_reach },
+    { label: "disease has a significant phenolog <span class=\"faint\">(within reach)</span>", n: k.in_reach },
     { label: "gene–disease pairs recovered by phenologs method", n: k.recovered },
-  ]);
+  ], { foot: `recovered: ${share(k.recovered, k.in_reach)} of pairs within reach · ${share(k.recovered, k.curated)} overall` });
   funnel(el.querySelector("#funnel-diseases"), [
     { label: "diseases with a curated gene", n: k.diseases },
     { label: "with a gene that has an ortholog in a model species", n: k.diseases_ortholog },
     { label: "with a gene that has ≥ 1 ortholog annotated with a phenotype", n: k.diseases_gene_in_reach },
-    { label: "with a significant phenolog <span class=\"faint\">(in reach)</span>", n: k.diseases_in_reach },
+    { label: "with a significant phenolog <span class=\"faint\">(within reach)</span>", n: k.diseases_in_reach },
     { label: "with a known gene recovered", n: k.diseases_recovered },
-  ], { color: "var(--accent-2)" });
+  ], { color: "var(--accent-2)",
+       foot: `with a known gene recovered: ${share(k.diseases_recovered, k.diseases_in_reach)} of diseases within reach · ${share(k.diseases_recovered, k.diseases)} overall` });
   el.querySelectorAll(".tile[data-target]").forEach(tl => tl.addEventListener("click", () => {
     document.getElementById(tl.dataset.target).scrollIntoView({ behavior: "smooth" });
   }));
