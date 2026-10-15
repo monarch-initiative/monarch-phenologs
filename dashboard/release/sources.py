@@ -120,6 +120,36 @@ class Run:
             r["plot_order"] = order.index(r["species"])
         return sorted(rows, key=lambda r: r["plot_order"])
 
+    def graph_inputs(self):
+        """
+        Every taxon of the species table, taken part or not, with what extraction found for it: what the graph
+        gave the pipeline. Included species first in plot order. Older tables have no Included, Notes or
+        phenotype-and-ortholog columns
+        """
+
+        df = pd.read_csv(self.species_table, sep="\t", keep_default_na=False)
+        rows = []
+        for _, r in df.iterrows():
+            taxon, token = r["Taxon ID"], r["Taxon label"]
+            disp = SPECIES_DISPLAY.get(taxon, dict(common="", color="#7F7F7F"))
+            both = r.get("Genes with >= 1 phenotype and ortholog edge", "")
+            rows.append(dict(taxon_id=taxon,
+                             species=token,
+                             binomial=token.replace("-", " "),
+                             common=disp["common"],
+                             color=disp["color"],
+                             included=str(r.get("Included", True)) == "True",
+                             notes=str(r.get("Notes", "")),
+                             n_genes=int(r["Taxon gene count"]),
+                             n_phenotyped_genes=int(r["Genes with >= 1 phenotype edge"]),
+                             n_ortholog_genes=int(r["Genes with >= 1 ortholog edge"]),
+                             n_both=int(both) if both != "" else None,
+                             n_phenotypes=int(r["Unique phenotypes"]),
+                             n_orthogroups=int(r["Unique ortholog ids (orthogroups)"]),
+                             n_g2p_edges=int(r["Total gene2phenotype edges"])))
+        order = species_plot_order([r["species"] for r in rows])
+        return sorted(rows, key=lambda r: (not r["included"], order.index(r["species"])))
+
     def species_tree(self, rows):
         """
         Nested {name, taxon_id, time, children} joining species by divergence from the base species.

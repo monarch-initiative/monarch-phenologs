@@ -14,7 +14,7 @@ const KINDS = {
       { key: "name", label: "Disease", format: (v, r) => `<a href="${route.disease(r.disease_id)}">${esc(v)}</a>` },
       { key: "disease_id", label: "Id", format: v => `<span class="id muted">${esc(v)}</span>` },
       num("n_known_genes", "Known genes"), num("n_phenologs", "Phenologs"), num("n_species", "Species"),
-      num("n_known_recovered", "Recovered"), num("n_candidates", "Ranked genes"),
+      num("n_known_recovered", "Recovered", { help: "Known genes in the disease's candidate ranking (in-sample)" }), num("n_candidates", "Ranked genes"),
       { key: "top_species", label: "Top species", format: v => v ? speciesChip(v) : "" },
       num("best_pval", "Best p", { format: p }),
     ],

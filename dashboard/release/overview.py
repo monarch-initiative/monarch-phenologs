@@ -1,7 +1,8 @@
 """
 overview.json: everything the release page shows before any parquet is opened. Headline tiles,
 per species stats (the metric cards and the tree), the FDR table, common ortholog counts between
-species, and the top lists. Depends on the tables built by tables.py.
+species, the top lists, and what the graph gave the pipeline (every taxon's extraction counts and how
+far the curated disease genes get). Depends on the tables built by tables.py.
 """
 import json
 import os
@@ -20,17 +21,17 @@ def build(con, run, outdir, table_counts):
     for s in species:
         s["is_base"] = bool(s["is_base"])
 
+    funnel = known_funnel(con, base)
     tiles = rows(con, """
         SELECT (SELECT count(*) FROM diseases)                                   AS diseases,
                (SELECT count(*) FROM phenologs)                                  AS phenologs,
                (SELECT count(DISTINCT (species, phenotype_id)) FROM phenologs)   AS model_phenotypes,
                (SELECT count(*) FROM candidates)                                 AS candidate_pairs,
                (SELECT count(*) FROM candidates WHERE NOT known)                 AS novel_pairs,
-               (SELECT count(*) FROM candidates WHERE known)                     AS known_recovered,
                (SELECT count(DISTINCT gene_id) FROM candidates)                  AS candidate_genes,
                (SELECT count(DISTINCT family) FROM candidates)                   AS families_implicated,
-               (SELECT count(*) FROM known_associations)                         AS known_pairs,
                (SELECT count(*) FROM species WHERE NOT is_base)                  AS model_species""")[0]
+    tiles.update(known_recovered=funnel["recovered"], known_pairs=funnel["curated"], known_in_world=funnel["in_world"])
 
     top = {
         "diseases": rows(con, """SELECT disease_id AS id, name AS label, n_phenologs AS value, n_species, n_novel_candidates, top_species
@@ -66,11 +67,42 @@ def build(con, run, outdir, table_counts):
         "common_orthologs": rows(con, "SELECT species_a, species_b, n_common FROM common_counts"),
         "top": top,
         "pval_bins": pval_bins,
+        "inputs": run.graph_inputs(),
+        "known_funnel": funnel,
     }
     path = os.path.join(outdir, "overview.json")
     with open(path, "w") as fh:
         json.dump(out, fh, indent=1, default=_json_default)
     return path
+
+
+def known_funnel(con, base):
+    """
+    How far the base species' curated gene-disease pairs (and their diseases) get. Each step keeps the
+    pairs of the step before: the gene has a protein family, the family carries phenotypes in a model
+    species (the phenologs world), the disease has a significant phenolog, and the gene is in the
+    disease's candidate ranking (recovered, in-sample)
+    """
+
+    return rows(con, """
+        WITH pairs AS (SELECT gene_id, disease_id, any_value(family) AS family FROM known_associations GROUP BY gene_id, disease_id),
+        world AS (SELECT DISTINCT family FROM g2p WHERE species <> '{base}' AND family IS NOT NULL),
+        f AS (SELECT p.disease_id,
+                     p.family IS NOT NULL AS has_family,
+                     coalesce(p.family IN (SELECT family FROM world), false) AS in_world,
+                     p.disease_id IN (SELECT disease_id FROM diseases) AS has_phenolog,
+                     (p.disease_id, p.gene_id) IN (SELECT (disease_id, gene_id) FROM candidates WHERE known) AS recovered
+              FROM pairs p)
+        SELECT count(*) AS curated,
+               count(*) FILTER (WHERE has_family) AS has_family,
+               count(*) FILTER (WHERE in_world) AS in_world,
+               count(*) FILTER (WHERE in_world AND has_phenolog) AS has_phenolog,
+               count(*) FILTER (WHERE recovered) AS recovered,
+               count(DISTINCT disease_id) AS diseases,
+               count(DISTINCT disease_id) FILTER (WHERE has_family) AS diseases_family,
+               count(DISTINCT disease_id) FILTER (WHERE in_world) AS diseases_world,
+               count(DISTINCT disease_id) FILTER (WHERE in_world AND has_phenolog) AS diseases_phenolog
+        FROM f""".format(base=base))[0]
 
 
 def _json_default(value):

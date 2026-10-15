@@ -18,13 +18,15 @@ def sql(name, run):
             SELECT p.*, row_number() OVER (PARTITION BY disease_id ORDER BY pval, species, phenotype_id)::INTEGER AS rank
             FROM pooled p""",
 
-        # Every candidate gene the ranking wrote, ranked within its disease. One row per (disease, gene)
+        # Every candidate gene the ranking scored, ranked within its disease. One row per (disease, gene).
+        # The pipeline also appends the disease's known genes its phenologs never reached, with no p-value.
+        # Those are not candidates and are left out here (known_associations still has them)
         "candidates": """
             SELECT disease_id, gene_id, symbol, family, score, known, species_occurrence,
                    CASE WHEN species_occurrence = '' THEN 0
                         ELSE length(species_occurrence) - length(replace(species_occurrence, ',', '')) + 1 END::INTEGER AS n_species,
                    row_number() OVER (PARTITION BY disease_id ORDER BY score, symbol)::INTEGER AS rank
-            FROM cand_raw""",
+            FROM cand_raw WHERE score IS NOT NULL""",
 
         # Every gene of every species in the run that has a protein family or a phenotype.
         # n_ortholog_species counts the other species of the run the gene has an ortholog edge to

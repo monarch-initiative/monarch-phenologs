@@ -81,13 +81,15 @@ code, .id, .mono { font-family: var(--mono); font-size: 12.5px; }
 .card-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
 .card-head h2 { font-size: 12.5px; }
 .card-head .sub { color: var(--faint); font-size: 12px; }
-.section { margin-top: 26px; }
+.section { margin-top: 26px; scroll-margin-top: 72px; }
 
 .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
 .tile { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px 16px; }
 .tile .n { font-size: 26px; font-weight: 700; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
 .tile .l { color: var(--muted); font-size: 12px; margin-top: 2px; }
 .tile.accent .n { color: var(--accent); }
+.tile.link { cursor: pointer; transition: border-color .15s; }
+.tile.link:hover { border-color: var(--muted); }
 
 .stat-row { display: flex; gap: 22px; flex-wrap: wrap; margin: 6px 0 14px; }
 .stat-row .stat .n { font-size: 20px; font-weight: 600; font-variant-numeric: tabular-nums; }
@@ -114,6 +116,18 @@ code, .id, .mono { font-family: var(--mono); font-size: 12.5px; }
 .metrics.hl [data-sp]:not(.on) { opacity: 0.22; }
 #metric-scale { display: inline-flex; margin-left: 10px; vertical-align: middle; }
 #metric-scale .chip { padding: 1px 9px; font-size: 11.5px; }
+
+/* from graph to phenologs: the species table and the known pair funnels */
+.inputs td .faint { font-size: 11.5px; margin-top: 1px; }
+.inputs td.num .hair { display: block; height: 2px; margin: 4px 0 0 auto; border-radius: 1px; opacity: 0.8; }
+.inputs tr.excluded td { opacity: 0.5; }
+.funnel .step { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr) 64px 50px; gap: 10px; align-items: center; padding: 5px 0; font-size: 12.5px; }
+.funnel .lab { color: var(--muted); }
+.funnel .track { display: flex; justify-content: center; }
+.funnel .bar { display: block; height: 14px; border-radius: 3px; opacity: 0.85; }
+.funnel .n { text-align: right; font-variant-numeric: tabular-nums; }
+.funnel .pct { text-align: right; color: var(--faint); font-size: 12px; font-variant-numeric: tabular-nums; }
+.note { color: var(--faint); font-size: 12px; margin: 10px 2px 0; }
 
 /* tables */
 .tbl-wrap { overflow: auto; }

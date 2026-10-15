@@ -1,7 +1,7 @@
 // The release page: what this month's graph gave us, species by species
 import { state, fmt, esc, speciesOf, shortBinomial, route } from "../format.js";
 import { speciesTree } from "../charts/tree.js";
-import { barList, speciesBars } from "../charts/bars.js";
+import { barList, speciesBars, funnel } from "../charts/bars.js";
 import { showTip, moveTip, hideTip } from "../charts/tooltip.js";
 
 // One card per species statistic: [key, title, what it counts]
@@ -12,6 +12,17 @@ const METRICS = [
   ["n_candidates", "Candidate pairs", "gene–disease candidates its phenologs support"],
   ["n_phenotyped_genes", "Genes with phenotypes", "annotated genes the test starts from"],
   ["n_common_with_base", "Families shared with human", "PANTHER families both species carry"],
+];
+
+// The species table's counts, as columns of the graph inputs table
+const INPUT_COLUMNS = [
+  ["n_genes", "Genes"],
+  ["n_phenotyped_genes", "With phenotypes"],
+  ["n_ortholog_genes", "With orthologs"],
+  ["n_both", "With both"],
+  ["n_phenotypes", "Phenotypes"],
+  ["n_orthogroups", "Protein families"],
+  ["n_g2p_edges", "Phenotype annotations"],
 ];
 
 const TREE_METRICS = {
@@ -50,7 +61,7 @@ export async function render(el) {
         ${tile(t.phenologs, "significant phenologs", "accent")}
         ${tile(t.model_phenotypes, "model phenotypes with diseases")}
         ${tile(t.model_species, "model species")}
-        ${tile(t.known_recovered, `known gene–disease pairs recovered (${fmt.pct(t.known_recovered / t.known_pairs)})`)}
+        ${tile(t.known_recovered, `known gene–disease pairs recovered (${fmt.pct(t.known_recovered / t.known_in_world)} of ${fmt.int(t.known_in_world)} in reach)`, "", "pipeline")}
         ${tile(t.candidate_genes, "genes with one or more candidate disease associations")}
         ${tile(t.families_implicated, "protein families implicated")}
         ${tile(t.candidate_pairs, "ranked gene–disease pairs")}
@@ -85,6 +96,18 @@ export async function render(el) {
       ${listCard("Model phenotypes matching the most diseases", "top-phenotypes", "#/browse/phenotypes", "phenotypes carried by at least 5 protein families")}
       ${listCard("Human genes predicted for the most diseases", "top-genes", "#/browse/genes")}
       ${listCard("Protein families behind the most predictions", "top-families", "#/browse/families")}
+    </section>
+
+    <section class="section" id="pipeline">
+      <div class="card-head"><h2>From graph to phenologs</h2><span class="sub">what the knowledge graph gave the pipeline, and how far its curated disease genes get</span></div>
+      <div class="card"><div class="card-head"><h2>Species in the graph</h2><span class="sub">the pipeline's species table · a species takes part when it has genes with both a phenotype and an ortholog</span></div>
+        <div id="inputs"></div></div>
+      <div class="grid cols-2" style="margin-top:16px">
+        <div class="card"><div class="card-head"><h2>Known gene–disease pairs</h2><span class="sub">curated for ${esc(base.binomial)}</span></div><div id="funnel-pairs"></div></div>
+        <div class="card"><div class="card-head"><h2>Diseases with a known gene</h2><span class="sub">and how many find a phenolog</span></div><div id="funnel-diseases"></div></div>
+      </div>
+      <p class="note">Recovered is in-sample: a known gene helps find the phenologs that then rank it. The out-of-sample test is the
+        pipeline's leave-one-out cross-validation, which is not part of this release yet.</p>
     </section>`;
 
   // metric cards: the same species, in the same order and colours, in every card
@@ -115,6 +138,26 @@ export async function render(el) {
       <td class="num">${Number(f.expected_false_positives).toFixed(1)}</td><td class="num">${fmt.pct(f.realized_fdr)}</td></tr>`).join("")}
     </tbody></table></div>`;
 
+  // from graph to phenologs
+  inputsTable(el.querySelector("#inputs"), ov.inputs);
+  const k = ov.known_funnel;
+  funnel(el.querySelector("#funnel-pairs"), [
+    { label: "curated in the graph", n: k.curated },
+    { label: "gene has a protein family", n: k.has_family },
+    { label: "family has model organism phenotypes <span class=\"faint\">(in reach)</span>", n: k.in_world },
+    { label: "disease has a significant phenolog", n: k.has_phenolog },
+    { label: "recovered: gene is in the disease's ranking", n: k.recovered },
+  ]);
+  funnel(el.querySelector("#funnel-diseases"), [
+    { label: "diseases with a curated gene", n: k.diseases },
+    { label: "a gene with a protein family", n: k.diseases_family },
+    { label: "a gene whose family has model organism phenotypes", n: k.diseases_world },
+    { label: "a significant phenolog", n: k.diseases_phenolog },
+  ], { color: "var(--accent-2)" });
+  el.querySelectorAll(".tile[data-target]").forEach(tl => tl.addEventListener("click", () => {
+    document.getElementById(tl.dataset.target).scrollIntoView({ behavior: "smooth" });
+  }));
+
   // top lists
   const top = ov.top;
   barList(el.querySelector("#top-diseases"), top.diseases.map(d => ({ label: d.label, value: d.value, href: route.disease(d.id), sub: `${d.n_species} sp.`, color: speciesOf(d.top_species).color })));
@@ -123,8 +166,8 @@ export async function render(el) {
   barList(el.querySelector("#top-families"), top.families.map(d => ({ label: d.label, value: d.value, href: route.family(d.id), sub: esc((d.base_symbols || "").split(", ").slice(0, 3).join(", ")) })));
 }
 
-function tile(n, label, cls = "") {
-  return `<div class="tile ${cls}"><div class="n">${fmt.int(n)}</div><div class="l">${label}</div></div>`;
+function tile(n, label, cls = "", target = "") {
+  return `<div class="tile ${cls} ${target ? "link" : ""}" ${target ? `data-target="${target}"` : ""}><div class="n">${fmt.int(n)}</div><div class="l">${label}</div></div>`;
 }
 
 function metricCard(title, sub, id, cls = "") {
@@ -148,6 +191,27 @@ function followSpecies(root) {
 
 function listCard(title, id, browseHref, sub = "") {
   return `<div class="card"><div class="card-head"><h2>${title}</h2><span class="sub">${sub ? sub + " · " : ""}<a href="${browseHref}">browse all</a></span></div><div id="${id}"></div></div>`;
+}
+
+// What the graph gave the pipeline: every taxon of the species table, with a hairline bar under each count
+// (scaled within its column). Species left out are dimmed with the reason extraction gave
+function inputsTable(el, rows) {
+  const cols = INPUT_COLUMNS.filter(([key]) => rows.some(r => r[key] != null));    // older species tables have no "with both"
+  const max = Object.fromEntries(cols.map(([key]) => [key, Math.max(1, ...rows.map(r => r[key] || 0))]));
+  el.innerHTML = `<div class="tbl-wrap"><table class="tbl inputs"><thead><tr><th>Species</th>
+      ${cols.map(([, label]) => `<th class="num">${label}</th>`).join("")}</tr></thead><tbody>
+    ${rows.map(r => `<tr class="${r.included ? "" : "excluded"}" ${r.notes ? `title="${esc(r.notes)}"` : ""}>
+      <td>${r.included ? `<a href="${route.species(r.species)}">` : ""}<span class="dot" style="background:${r.color}"></span> <i>${esc(r.binomial)}</i>${r.included ? "</a>" : ""}
+        <div class="faint">${r.included ? esc(r.common) : `left out · ${leftOut(r)}`}</div></td>
+      ${cols.map(([key]) => `<td class="num">${fmt.int(r[key])}<span class="hair" style="width:${(100 * (r[key] || 0) / max[key]).toFixed(1)}%; background:${r.color}"></span></td>`).join("")}
+    </tr>`).join("")}</tbody></table></div>`;
+}
+
+// Why a species sat out, in a few words; the pipeline's own note is the row's tooltip
+function leftOut(r) {
+  if (r.n_phenotyped_genes === 0) return r.n_ortholog_genes === 0 ? "no phenotype annotations or orthologs" : "no phenotype annotations";
+  if (r.n_ortholog_genes === 0) return "no orthologs";
+  return esc(r.notes || "too few genes with both a phenotype and an ortholog");
 }
 
 // How strong each species' phenologs are: a histogram of -log10 p per species, one strip per row.

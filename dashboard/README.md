@@ -22,7 +22,7 @@ dashboard/
     sources.py           where a run keeps things; DuckDB views over its files; species display details and the tree
     tables.py            one SQL statement per entity table (phenologs, candidates, genes, phenotypes, families, diseases, species, search)
     additive.py          the Woods 2013 additive decomposition, per disease (what the case study figure shows)
-    overview.py          overview.json: tiles, species stats, FDR table, tree, top lists
+    overview.py          overview.json: tiles, species stats, FDR table, tree, top lists, graph inputs, known pair funnel
   serve.py               local static server with HTTP range support
   site/
     index.html, style.css
@@ -39,7 +39,7 @@ dashboard/
 | table | one row per | notes |
 |---|---|---|
 | `phenologs` | significant phenolog | ranked within its disease by p |
-| `candidates` | (disease, gene) in the ranking | rank, score, known flag, supporting species |
+| `candidates` | (disease, gene) the ranking scored | rank, score, known flag, supporting species. The pipeline also appends a disease's known genes its phenologs never reached, without a p-value; those are left out |
 | `additive` | (disease, family, phenolog) | top 20 phenologs x top 40 families per disease; the page re-slices by k, species and order |
 | `diseases`, `genes`, `phenotypes`, `families`, `species` | entity | counts the pages and browse lists show |
 | `known_associations` | curated gene-disease pair | from the base species' gene_to_disease table |
