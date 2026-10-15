@@ -37,16 +37,20 @@ export function legend(items) {
     `<span class="key-item"><span class="sw" style="background:${color}"></span>${esc(label)}</span>`).join("")}</span>`;
 }
 
+// Whether a known pair was recovered, for the known disease and known gene grids (each page adds a third key)
+export const RECOVERY_KEY = [["var(--accent)", "known gene–disease pair recovered"], ["var(--text)", "gene–disease pair not recovered by associated phenologs"]];
+
 // The two kinds of gene-disease pair every ranking shows
 export const PAIR_KEY = [["var(--accent)", "known gene–disease pair"], ["var(--accent-2)", "novel candidate pair"]];
+
+// The column every candidate table shares, and its header tooltip below
+export const SUPPORT_LABEL = "Species phenologs supporting this gene–disease pair";
 
 // Header tooltips for the columns every candidate table shares
 export const HELP = {
   score: "The candidate ranking's hypergeometric p-value: how unlikely this many phenotype annotations of the gene's orthologs are " +
          "among the disease's nearest phenologs. Smaller ranks higher. A ranking score, not a corrected significance level",
-  support: "Per species, how many of the disease's phenologs are phenotypes of an ortholog of the gene, out of the phenologs " +
-           "with that species the ranking used (the disease's nearest, which is all of them unless it has more than k). " +
-           "Hover a species for the orthologs behind it",
+  support: "x/y: x of the disease's y phenologs in that species are phenotypes of an ortholog of this gene",
   rank: "Place in the disease's ranking by score (ties share a place), out of every gene it scored, known genes included",
 };
 

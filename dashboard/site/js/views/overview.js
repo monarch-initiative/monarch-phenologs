@@ -48,7 +48,7 @@ export async function render(el) {
         <p class="lede">Orthologous phenotypes between <i>${esc(base.binomial)}</i> diseases and the phenotypes of
           ${model.length} model species, and the gene candidates they imply. Overlap is measured on PANTHER protein
           families, each species' p-value cutoff is set from ${fmt.int(trials)} randomised trials at an FDR of ${r.fdr}, and candidates are
-          ranked by the ${r.rank_metric === "hg" ? "hypergeometric" : "naive Bayes"} score over each disease's ${fmt.int(r.kneighbs)} most significant phenologs (k).</p>
+          ranked by the ${r.rank_metric === "hg" ? "hypergeometric" : "naive Bayes"} score over each disease's ${fmt.int(r.kneighbs)} most significant phenologs.</p>
         <div class="meta">
           <span>graph <b>${esc(r.graph_version)}</b></span>
           ${r.phenio_version ? `<span>phenio <b>${esc(r.phenio_version)}</b></span>` : ""}
@@ -62,7 +62,7 @@ export async function render(el) {
         ${tile(t.model_phenotypes, "model phenotypes with diseases", { help: "Model species phenotypes in at least one phenolog (a term used by two species counts twice)" })}
         ${tile(t.model_species, "model species", { help: "Species besides human taking part in this release" })}
         ${tile(t.known_recovered, `known gene–disease pairs recovered (${fmt.pct(t.known_recovered / t.known_in_reach)} of ${fmt.int(t.known_in_reach)} in reach)`,
-               { target: "pipeline", help: "Curated pairs the disease's ranking scored (in-sample), out of the pairs it could reach: the gene has an ortholog with a phenotype and the disease has a phenolog. Click for every step" })}
+               { target: "pipeline", help: "Known pairs whose gene is in the disease's candidate ranking, out of the pairs in reach (the gene has an ortholog with phenotypes and the disease has a phenolog). Click for each step" })}
         ${tile(t.candidate_genes, "genes with one or more candidate disease associations", { help: "Human genes ranked for at least one disease they are not known for" })}
         ${tile(t.families_implicated, "protein families with a ranked gene", { help: "PANTHER families with a human gene in at least one disease's ranking" })}
         ${tile(t.candidate_pairs, "ranked gene–disease pairs", { help: "Every (disease, gene) pair the ranking scored, known pairs included" })}
@@ -102,8 +102,8 @@ export async function render(el) {
       <div class="card"><div class="card-head"><h2>Species in the graph</h2><span class="sub">the pipeline's species table · a species takes part when enough of its genes have both a phenotype and an ortholog</span></div>
         <div id="inputs"></div></div>
       <div class="grid cols-2" style="margin-top:16px">
-        <div class="card"><div class="card-head"><h2>Known gene–disease pairs</h2><span class="sub">curated for ${esc(base.binomial)} · % of the curated pairs</span></div><div id="funnel-pairs"></div></div>
-        <div class="card"><div class="card-head"><h2>Diseases with a known gene</h2><span class="sub">and how far they get · % of those diseases</span></div><div id="funnel-diseases"></div></div>
+        <div class="card"><div class="card-head"><h2>Known gene–disease pairs</h2><span class="sub">curated for ${esc(base.binomial)} · % of the step above</span></div><div id="funnel-pairs"></div></div>
+        <div class="card"><div class="card-head"><h2>Diseases with a known gene</h2><span class="sub">and how far they get · % of the step above</span></div><div id="funnel-diseases"></div></div>
       </div>
     </section>`;
 
@@ -142,7 +142,7 @@ export async function render(el) {
     { label: "gene has an ortholog in a model species", n: k.has_ortholog },
     { label: "gene has ≥ 1 ortholog annotated with a phenotype", n: k.gene_in_reach },
     { label: "disease has a significant phenolog <span class=\"faint\">(in reach)</span>", n: k.in_reach },
-    { label: "gene–disease pairs recovered by phenologs method <span class=\"faint\">(in-sample)</span>", n: k.recovered },
+    { label: "gene–disease pairs recovered by phenologs method", n: k.recovered },
   ]);
   funnel(el.querySelector("#funnel-diseases"), [
     { label: "diseases with a curated gene", n: k.diseases },

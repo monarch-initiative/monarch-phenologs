@@ -73,13 +73,12 @@ export function parseSupport(s) {
 }
 
 // One chip per species: how many of the disease's phenologs with that species are phenotypes of an ortholog
-// of the gene, out of how many the ranking used. The tooltip has the orthologs and the hits the score counts
+// of the gene, out of how many the ranking used. The tooltip adds how many orthologs that takes
 export function supportChips(s, gene) {
   return parseSupport(s).map(x => {
     const sp = speciesOf(x.species);
-    const title = `${fmt.int(x.phenologs)} of the ${fmt.int(x.used)} ${sp.binomial} phenologs the disease's ranking used are phenotypes of ` +
-                  `${fmt.int(x.orthologs)} ${sp.binomial} ortholog${x.orthologs === 1 ? "" : "s"} of ${gene} ` +
-                  `(${fmt.int(x.hits)} ortholog–phenotype annotations; the score counts these)`;
+    const title = `${fmt.int(x.phenologs)} of ${fmt.int(x.used)} ${shortBinomial(x.species)} phenologs, ` +
+                  `through ${fmt.int(x.orthologs)} ortholog${x.orthologs === 1 ? "" : "s"} of ${gene}`;
     return `<a class="chip" href="${route.species(x.species)}" title="${esc(title)}"><span class="dot" style="background:${sp.color}"></span>` +
            `<i>${esc(shortBinomial(x.species))}</i> <span>${fmt.int(x.phenologs)}<span class="faint">/${fmt.int(x.used)}</span></span></a>`;
   }).join(" ");

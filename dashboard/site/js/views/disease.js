@@ -1,7 +1,7 @@
 // One disease: its known genes, its phenologs, the additive decomposition and the candidate ranking
 import { ensure, query, lit } from "../db.js";
 import { state, fmt, esc, speciesOf, speciesChip, supportChips, route, links } from "../format.js";
-import { pageHead, statRow, card, notFound, legend, nameGrid, PAIR_KEY, HELP, PHENOLOG_HELP } from "./common.js";
+import { pageHead, statRow, card, notFound, legend, nameGrid, PAIR_KEY, HELP, PHENOLOG_HELP, SUPPORT_LABEL, RECOVERY_KEY } from "./common.js";
 import { table } from "../charts/table.js";
 import { additiveChart, ORDERS } from "../charts/stacked.js";
 
@@ -30,11 +30,10 @@ export async function render(el, id) {
                    <div class="chips">${Object.entries(bySpecies).map(([s, n]) => speciesChip(s, { count: n })).join("")}</div></div>` })}
     ${statRow([[d.n_known_genes, "known genes"], [d.n_phenologs, "phenologs"], [d.n_species, "species with phenologs"],
                [fmt.p(d.best_pval), "best phenolog p"], [d.n_candidates, "genes ranked"],
-               [`${fmt.int(d.n_known_recovered)} / ${fmt.int(d.n_known_genes)}`, "known genes recovered, any rank"]])}
+               [`${fmt.int(d.n_known_recovered)} / ${fmt.int(d.n_known_genes)}`, "known genes recovered"]])}
 
     <div class="grid" style="grid-template-columns: 1fr; gap:16px">
-      ${card("Known genes", "known", { sub: legend([["var(--accent)", "recovered by the ranking, with its rank"], ["var(--text)", "not reached by this disease's phenologs"],
-                                                    ["var(--faint)", "out of reach: no ortholog with a phenotype"]]) })}
+      ${card("Known genes", "known", { sub: legend([...RECOVERY_KEY, ["var(--faint)", "gene has no ortholog with phenotypes"]]) })}
       ${card("Additive decomposition", "additive", { tools: `<div class="controls" id="add-controls"></div>` })}
       ${card("Candidate genes", "cands", { sub: `${legend(PAIR_KEY)}<span class="faint">ranked by score over ${d.n_phenologs > kn ? `the disease's ${fmt.int(kn)} most significant phenologs` : "all of the disease's phenologs"}</span>` })}
       ${card("Phenologs", "phens", { sub: "model phenotypes whose protein families overlap this disease's more than chance" })}
@@ -56,7 +55,7 @@ export async function render(el, id) {
     { key: "symbol", label: "Gene", format: (v, r) => `<a href="${route.gene(r.gene_id)}" class="${r.known ? "known-mark" : ""}">${esc(v)}</a>` },
     { key: "family", label: "Family", format: v => v ? `<a class="mono" href="${route.family(v)}">${esc(v)}</a>` : "" },
     { key: "score", label: "Score", num: true, sortDir: "asc", help: HELP.score, format: v => `<span class="mono">${fmt.p(v)}</span>` },
-    { key: "n_phenologs", label: "Supporting phenologs", sortDir: "desc", help: HELP.support, format: (v, r) => supportChips(r.support, r.symbol) },
+    { key: "n_phenologs", label: SUPPORT_LABEL, sortDir: "desc", help: HELP.support, format: (v, r) => supportChips(r.support, r.symbol) },
   ];
   const candTable = table(el.querySelector("#cands"), cands, candCols, {
     sortKey: "rank", sortDir: "asc", search: ["symbol", "family"], placeholder: "Filter by gene or family…", pageSize: 25,
@@ -105,8 +104,8 @@ function additiveSection(chartEl, controlsEl, rows) {
     draw();
   }));
   draw();
-  chartEl.insertAdjacentHTML("beforeend", `<div class="note">Where the evidence for this disease comes from, as in Woods et al. 2013: each bar is a
-    PANTHER family, each segment one of the disease's top phenologs whose phenotype the family carries, sized (shared families / disease families) × (1 − p).
-    The candidate table below ranks genes by its own score, so the two orders can differ. Human genes of the family follow each bar,
+  chartEl.insertAdjacentHTML("beforeend", `<div class="note">Each bar is a PANTHER family and each segment one of the disease's top phenologs
+    whose phenotype the family carries, sized (shared families / disease families) × (1 − p) (Woods et al. 2013). The candidate genes below are
+    ranked by the hypergeometric score instead, so the two orders can differ. Human genes of the family follow each bar,
     <span class="known-mark">known genes of this disease</span> first.</div>`);
 }

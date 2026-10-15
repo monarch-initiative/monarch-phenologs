@@ -2,7 +2,7 @@
 // A model species gene: its phenotypes, its human orthologs, its protein family
 import { ensure, query, lit } from "../db.js";
 import { state, fmt, esc, speciesOf, speciesChip, supportChips, route, links } from "../format.js";
-import { pageHead, statRow, card, notFound, legend, nameGrid, PAIR_KEY, HELP } from "./common.js";
+import { pageHead, statRow, card, notFound, legend, nameGrid, PAIR_KEY, HELP, SUPPORT_LABEL, RECOVERY_KEY } from "./common.js";
 import { table } from "../charts/table.js";
 
 const MEMBERS_SHOWN = 60;    // per species, before "+N more"
@@ -43,8 +43,7 @@ export async function render(el, id) {
                  after: `<div style="align-self:center">${speciesChip(g.species)} ${g.family ? `<a class="chip mono" href="${route.family(g.family)}">${esc(g.family)}</a>` : ""}</div>` })}
     ${statRow(stats)}
     <div class="grid" style="grid-template-columns:1fr; gap:16px">
-      ${isBase ? card("Known diseases", "known", { sub: known.length ? legend([["var(--accent)", "recovered by the disease's ranking, with its rank"], ["var(--text)", "not reached by the disease's phenologs"],
-                                                                               ["var(--faint)", "disease has no phenologs (opens Monarch)"]]) : "" }) : ""}
+      ${isBase ? card("Known diseases", "known", { sub: known.length ? legend([...RECOVERY_KEY, ["var(--faint)", "no phenolog associations"]]) : "" }) : ""}
       ${isBase ? card("Diseases this gene is ranked for", "ranked", { sub: `${legend(PAIR_KEY)}<span class="faint">every disease whose candidate ranking scored this gene</span>` }) : ""}
       ${isBase ? "" : card("Human orthologs", "human", { sub: "ortholog edges to human genes in the graph" })}
       ${card("Phenotypes", "phenos", { sub: `${esc(speciesOf(g.species).ontology || "phenotype")} annotations of this gene` })}
@@ -62,7 +61,7 @@ export async function render(el, id) {
       { key: "rank", label: "Rank in disease", num: true, sortDir: "asc", help: HELP.rank, format: (v, r) => `${fmt.int(v)} <span class="faint">/ ${fmt.int(r.n_candidates)}</span>` },
       { key: "name", label: "Human disease", format: (v, r) => `<a href="${route.disease(r.disease_id)}" class="${r.known ? "known-mark" : ""}">${esc(v)}</a>` },
       { key: "score", label: "Score", num: true, sortDir: "asc", help: HELP.score, format: v => `<span class="mono">${fmt.p(v)}</span>` },
-      { key: "n_phenologs", label: "Supporting phenologs", sortDir: "desc", help: HELP.support, format: (v, r) => supportChips(r.support, g.symbol) },
+      { key: "n_phenologs", label: SUPPORT_LABEL, sortDir: "desc", help: HELP.support, format: (v, r) => supportChips(r.support, g.symbol) },
     ], { sortKey: "score", sortDir: "asc", search: ["name", "disease_id"], placeholder: "Filter by disease name or Mondo id…",
          empty: g.in_reach ? "No disease's phenologs reach this gene"
               : g.n_ortholog_species ? `No ortholog of ${g.symbol} in the model species carries a phenotype, so no disease's ranking can reach it`

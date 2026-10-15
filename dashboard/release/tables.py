@@ -40,8 +40,7 @@ def sql(name, run):
         # One row per (disease, gene). The pipeline also appends the disease's known genes its phenologs never
         # reached, with no p-value. Those are not candidates and are left out here (known_associations still has them).
         # support is "species:phenologs:of the disease's:orthologs:hits" per species, most phenologs first.
-        # global_rank places each novel pair in one list across all diseases, as the paper's global ranking
-        # does (known pairs are not ranked; ties share a rank)
+        # global_rank places every pair, known or novel, in one list across all diseases by score (ties share a rank)
         "candidates": """
             WITH c AS (
                 SELECT disease_id, gene_id, symbol, family, score, known,
@@ -56,7 +55,7 @@ def sql(name, run):
             names AS (SELECT disease_id, any_value(disease_name) AS disease_name FROM pooled GROUP BY disease_id)
             SELECT c.*, coalesce(s.support, '') AS support, coalesce(s.n_species, 0)::INTEGER AS n_species,
                    coalesce(s.n_phenologs, 0)::INTEGER AS n_phenologs, n.disease_name,
-                   CASE WHEN NOT c.known THEN rank() OVER (PARTITION BY c.known ORDER BY c.score) END::INTEGER AS global_rank
+                   rank() OVER (ORDER BY c.score)::INTEGER AS global_rank
             FROM c LEFT JOIN s USING (disease_id, gene_id) LEFT JOIN names n USING (disease_id)
             ORDER BY c.score, c.disease_id, c.symbol""",
 

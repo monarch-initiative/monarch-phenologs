@@ -26,14 +26,15 @@ export function speciesBars(el, items, { log = false } = {}) {
     </a>`).join("") + `</div>`;
 }
 
-// A funnel: each step keeps part of the one before. steps: [{label, n}]; bars and percentages are of the first step
+// A funnel: each step keeps part of the one before. steps: [{label, n}]; bars are scaled to the first step,
+// percentages are of the step above (the first step shows none)
 export function funnel(el, steps, { color = "var(--accent)" } = {}) {
   const first = Math.max(1, steps[0]?.n || 0);
-  el.innerHTML = `<div class="funnel">` + steps.map(st => `
+  el.innerHTML = `<div class="funnel">` + steps.map((st, i) => `
     <div class="step">
       <span class="lab">${st.label}</span>
       <span class="track"><span class="bar" style="width:${(100 * st.n / first).toFixed(1)}%; background:${color}"></span></span>
       <span class="n">${fmt.int(st.n)}</span>
-      <span class="pct">${fmt.pct(st.n / first)}</span>
+      <span class="pct">${i ? fmt.pct(st.n / Math.max(1, steps[i - 1].n)) : ""}</span>
     </div>`).join("") + `</div>`;
 }

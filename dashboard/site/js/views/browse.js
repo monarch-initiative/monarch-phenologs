@@ -26,7 +26,7 @@ const KINDS = {
       { key: "disease_id", label: "Id", format: v => `<span class="id muted">${esc(v)}</span>` },
       num("n_known_genes", "Known genes", { help: "Curated genes of the disease in the graph" }), num("n_phenologs", "Phenologs"),
       num("n_species", "Species", { help: "Model species with at least one phenolog for the disease" }),
-      num("n_known_recovered", "Recovered", { help: "Known genes the disease's candidate ranking scored (in-sample)" }),
+      num("n_known_recovered", "Recovered", { help: "Known genes recovered by the disease's candidate ranking" }),
       num("n_candidates", "Genes ranked", { help: "Genes the disease's candidate ranking scored, known genes included" }),
       { key: "top_species", label: "Top species", help: "The species with the most phenologs for the disease", format: v => v ? speciesChip(v) : "" },
       num("best_pval", "Best phenolog p", { format: p, sortDir: "asc" }),
