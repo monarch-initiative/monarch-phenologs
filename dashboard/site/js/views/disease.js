@@ -1,7 +1,7 @@
 // One disease: its known genes, its phenologs, the additive decomposition and the candidate ranking
 import { ensure, query, lit } from "../db.js";
 import { state, fmt, esc, speciesOf, speciesChip, occurrenceChips, route, links } from "../format.js";
-import { pageHead, statRow, card, notFound } from "./common.js";
+import { pageHead, statRow, card, notFound, legend, nameGrid, PAIR_KEY } from "./common.js";
 import { table } from "../charts/table.js";
 import { additiveChart, ORDERS } from "../charts/stacked.js";
 
@@ -29,15 +29,16 @@ export async function render(el, id) {
                [`${fmt.int(d.n_known_recovered)} / ${fmt.int(d.n_known_genes)}`, "known genes recovered"]])}
 
     <div class="grid" style="grid-template-columns: 1fr; gap:16px">
-      ${card("Known genes", "known", { sub: "curated gene–disease associations in the graph · amber = recovered by the ranking, with its rank" })}
+      ${card("Known genes", "known", { sub: legend([["var(--accent)", "recovered by the ranking, with its rank"], ["var(--text)", "not reached by its phenologs"]]) })}
       ${card("Additive decomposition", "additive", { tools: `<div class="controls" id="add-controls"></div>` })}
-      ${card("Candidate genes", "cands", { sub: `ranked by the ${state.overview.release.rank_metric} score over the k=${state.overview.release.kneighbs} nearest phenologs` })}
+      ${card("Candidate genes", "cands", { sub: `${legend(PAIR_KEY)}<span class="faint">ranked by the ${state.overview.release.rank_metric} score over the k=${state.overview.release.kneighbs} nearest phenologs</span>` })}
       ${card("Phenologs", "phens", { sub: "model phenotypes whose protein families overlap this disease's more than chance" })}
     </div>`;
 
   // known genes
   el.querySelector("#known").innerHTML = known.length
-    ? `<div class="chips">${known.map(g => `<a class="chip ${recovered.has(g.gene_id) ? "known" : ""}" href="${route.gene(g.gene_id)}">${esc(g.symbol)}${recovered.has(g.gene_id) ? ` <span class="muted">#${recovered.get(g.gene_id)}</span>` : ""}</a>`).join("")}</div>`
+    ? nameGrid(known.map(g => ({ label: g.symbol, href: route.gene(g.gene_id), cls: recovered.has(g.gene_id) ? "known-mark" : "plain",
+                                 note: recovered.has(g.gene_id) ? `#${fmt.int(recovered.get(g.gene_id))}` : "" })))
     : `<div class="empty">No curated genes for this disease in the graph</div>`;
 
   // additive decomposition with its controls
@@ -47,14 +48,14 @@ export async function render(el, id) {
   let novelOnly = false;
   const candCols = [
     { key: "rank", label: "#", num: true, width: "50px" },
-    { key: "symbol", label: "Gene", format: (v, r) => `<a href="${route.gene(r.gene_id)}" class="${r.known ? "known-mark" : ""}">${esc(v)}</a>${r.known ? ' <span class="faint" title="known association">★</span>' : ""}` },
+    { key: "symbol", label: "Gene", format: (v, r) => `<a href="${route.gene(r.gene_id)}" class="${r.known ? "known-mark" : ""}">${esc(v)}</a>` },
     { key: "family", label: "Family", format: v => `<a class="mono" href="${route.family(v)}">${esc(v)}</a>` },
     { key: "score", label: "Score (p)", num: true, format: v => `<span class="mono">${fmt.p(v)}</span>` },
     { key: "n_species", label: "Species", num: true },
     { key: "species_occurrence", label: "Supporting phenologs by species", format: v => occurrenceChips(v) },
   ];
   const candTable = table(el.querySelector("#cands"), cands, candCols, {
-    sortKey: "rank", sortDir: "asc", search: ["symbol", "family"], pageSize: 25,
+    sortKey: "rank", sortDir: "asc", search: ["symbol", "family"], placeholder: "Filter by gene or family…", pageSize: 25,
     tools: `<label class="chip toggle" id="novel-toggle"><input type="checkbox" style="display:none">novel only</label>`,
     onDraw: root => {
       const tog = root.querySelector("#novel-toggle");

@@ -46,11 +46,6 @@ def build(con, run, outdir, table_counts):
                                  FROM families ORDER BY n_predicted_diseases DESC, family LIMIT 15"""),
     }
 
-    # How strongly each species' phenologs score: -log10 p binned per species, for the overview strip
-    pval_bins = rows(con, """
-        SELECT species, least(floor(-log10(greatest(pval, 1e-300))), 50)::INTEGER AS neglog10, count(*) AS n
-        FROM phenologs GROUP BY species, neglog10 ORDER BY species, neglog10""")
-
     out = {
         "release": {"graph_version": run.graph_version,
                     "phenio_version": run.phenio_version,
@@ -66,7 +61,6 @@ def build(con, run, outdir, table_counts):
         "fdr": rows(con, "SELECT * FROM fdr_table ORDER BY species, fdr"),
         "common_orthologs": rows(con, "SELECT species_a, species_b, n_common FROM common_counts"),
         "top": top,
-        "pval_bins": pval_bins,
         "inputs": run.graph_inputs(),
         "known_funnel": funnel,
     }

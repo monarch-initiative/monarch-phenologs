@@ -2,6 +2,8 @@
 import { ensure, query, lit } from "../db.js";
 import { state, fmt, esc, speciesChip, speciesOf, route } from "../format.js";
 import { table } from "../charts/table.js";
+import { radar, speciesAxes } from "../charts/radar.js";
+import { RADAR_AXES } from "./species.js";
 
 const num = (key, label, extra = {}) => ({ key, label, num: true, ...extra });
 const p = v => `<span class="mono">${fmt.p(v)}</span>`;
@@ -64,14 +66,16 @@ const KINDS = {
     title: "Species", sub: "The species of this release",
     sql: () => `SELECT * FROM species ORDER BY plot_order`,
     columns: [
-      { key: "binomial", label: "Species", format: (v, r) => `<a href="${route.species(r.species)}"><span class="dot" style="background:${r.color}"></span> <i>${esc(v)}</i></a> <span class="muted">${esc(r.common)}</span>` },
-      { key: "taxon_id", label: "Taxon", format: v => `<span class="id muted">${esc(v)}</span>` },
-      { key: "ontology", label: "Ontology" },
-      num("n_genes", "Genes"), num("n_phenotyped_genes", "With phenotypes"), num("n_phenotypes_annotated", "Phenotypes"),
+      { key: "binomial", label: "Species", width: "250px", format: (v, r) => `<a href="${route.species(r.species)}"><span class="dot" style="background:${r.color}"></span> <i>${esc(v)}</i></a>
+          <div class="faint nowrap" style="font-size:11.5px">${esc(r.common)}${r.ontology ? " · " + esc(r.ontology) : ""} · <span class="id" style="font-size:11px">${esc(r.taxon_id)}</span></div>` },
+      num("n_genes", "Genes in graph"),
+      num("n_ortholog_genes", "With an ortholog", { help: "Protein-coding genes with an ortholog in any species of the graph" }),
+      num("n_human_ortholog_genes", "With a human ortholog", { help: "Protein-coding genes with a human ortholog" }),
+      num("n_phenotyped_genes", "With phenotypes"), num("n_phenotypes_annotated", "Phenotypes"),
       num("n_orthogroups", "Families"), num("n_common_with_base", "Shared w/ human"), num("n_phenologs", "Phenologs"),
       num("n_diseases", "Diseases"), num("n_candidates", "Candidate pairs"), num("fdr_cutoff", "p cutoff", { format: p }),
     ],
-    sort: "n_phenologs", search: ["binomial", "common"], placeholder: "Filter by species…",
+    sort: "n_phenologs", search: ["binomial", "common"], placeholder: "Filter by species…", wrapHead: true, before: speciesCards,
   },
 };
 
@@ -84,7 +88,9 @@ export async function render(el, kind) {
 
   el.innerHTML = `
     <div class="page-head"><div class="titles"><div class="kicker">Browse</div><h1>${esc(cfg.title)}</h1><div class="muted">${esc(cfg.sub)}</div></div></div>
+    ${cfg.before ? `<div id="before"></div>` : ""}
     <div class="card" id="list"></div>`;
+  if (cfg.before) cfg.before(el.querySelector("#before"), rows);
 
   // species filter chips for the big lists
   let active = null;
@@ -92,7 +98,7 @@ export async function render(el, kind) {
   const tools = speciesPresent.length ? `<span class="chips" id="sp-filter">${speciesPresent.map(s => `<span class="chip toggle" data-sp="${s}"><span class="dot" style="background:${speciesOf(s).color}"></span><i>${esc(speciesOf(s).binomial)}</i></span>`).join("")}</span>` : "";
 
   const t = table(el.querySelector("#list"), rows, cfg.columns, {
-    sortKey: cfg.sort, sortDir: "desc", search: cfg.search, placeholder: cfg.placeholder, pageSize: 50, tools,
+    sortKey: cfg.sort, sortDir: "desc", search: cfg.search, placeholder: cfg.placeholder, wrapHead: cfg.wrapHead, pageSize: 50, tools,
     onDraw: root => root.querySelectorAll("#sp-filter .chip").forEach(chip => {
       chip.classList.toggle("off", active != null && active !== chip.dataset.sp);
       chip.addEventListener("click", () => {
@@ -100,5 +106,19 @@ export async function render(el, kind) {
         t.setRows(active ? rows.filter(r => r.species === active) : rows);
       });
     }),
+  });
+}
+
+// The model species as player cards: one radar each, every axis log-scaled against the strongest species
+function speciesCards(el, rows) {
+  const model = rows.filter(r => !r.is_base);
+  el.innerHTML = `<div class="grid player-grid">${model.map(s => `
+    <a class="card player" href="${route.species(s.species)}">
+      <div class="name" style="color:${s.color}">${esc(s.binomial)}</div>
+      <div class="common">${esc(s.common)}${s.ontology ? " · " + esc(s.ontology) : ""}</div>
+      <div class="radar" data-sp="${esc(s.species)}"></div></a>`).join("")}</div>`;
+  el.querySelectorAll(".radar").forEach(div => {
+    const s = model.find(m => m.species === div.dataset.sp);
+    radar(div, speciesAxes(s, model, RADAR_AXES), { size: Math.min(280, div.clientWidth || 280), color: s.color, labels: true });
   });
 }

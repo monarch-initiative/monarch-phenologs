@@ -1,7 +1,7 @@
 // One gene: what it is known for, what it is predicted for, its phenotypes, its protein family
 import { ensure, query, lit } from "../db.js";
 import { state, fmt, esc, speciesOf, speciesChip, occurrenceChips, route, links } from "../format.js";
-import { pageHead, statRow, card, notFound } from "./common.js";
+import { pageHead, statRow, card, notFound, legend, PAIR_KEY } from "./common.js";
 import { table } from "../charts/table.js";
 
 export async function render(el, id) {
@@ -34,7 +34,7 @@ export async function render(el, id) {
                [g.n_novel_diseases, "of them novel"], [g.best_rank ?? "–", "best rank"]])}
     <div class="grid" style="grid-template-columns:1fr; gap:16px">
       ${isBase ? card("Known diseases", "known", { sub: "curated associations in the graph" }) : ""}
-      ${isBase ? card("Predicted diseases", "pred", { sub: "every disease whose candidate ranking includes this gene · ★ = already known" }) : ""}
+      ${isBase ? card("Predicted diseases", "pred", { sub: `${legend(PAIR_KEY)}<span class="faint">every disease whose candidate ranking includes this gene</span>` }) : ""}
       ${card("Phenotypes", "phenos", { sub: isBase ? "HPO annotations of this gene" : "annotations that feed the phenolog calculation" })}
       ${g.family ? card("Protein family " + g.family, "members", { sub: "all genes of the family in this release" }) : ""}
     </div>`;
@@ -46,7 +46,7 @@ export async function render(el, id) {
 
     table(el.querySelector("#pred"), predicted, [
       { key: "rank", label: "Rank", num: true, format: (v, r) => `${v} <span class="faint">/ ${fmt.int(r.n_candidates)}</span>` },
-      { key: "name", label: "Disease", format: (v, r) => `<a href="${route.disease(r.disease_id)}" class="${r.known ? "known-mark" : ""}">${esc(v)}</a>${r.known ? " ★" : ""}` },
+      { key: "name", label: "Disease", format: (v, r) => `<a href="${route.disease(r.disease_id)}" class="${r.known ? "known-mark" : ""}">${esc(v)}</a>` },
       { key: "score", label: "Score (p)", num: true, format: v => `<span class="mono">${fmt.p(v)}</span>` },
       { key: "species_occurrence", label: "Supporting phenologs by species", format: v => occurrenceChips(v) },
     ], { sortKey: "score", sortDir: "asc", search: ["name", "disease_id"], empty: "This gene is in no candidate ranking" });

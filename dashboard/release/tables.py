@@ -6,7 +6,7 @@ Counts are 32 bit so they arrive in the browser as plain numbers.
 import os
 
 # Built in this order. Later tables may refer to earlier ones
-TABLES = ["phenologs", "candidates", "genes", "known_associations", "gene_phenotypes",
+TABLES = ["phenologs", "candidates", "genes", "human_orthologs", "known_associations", "gene_phenotypes",
           "phenotypes", "families", "diseases", "species", "search"]
 
 
@@ -20,13 +20,21 @@ def sql(name, run):
 
         # Every candidate gene the ranking scored, ranked within its disease. One row per (disease, gene).
         # The pipeline also appends the disease's known genes its phenologs never reached, with no p-value.
-        # Those are not candidates and are left out here (known_associations still has them)
+        # Those are not candidates and are left out here (known_associations still has them).
+        # global_rank places each novel pair in one list across all diseases, as the paper's global ranking
+        # does (known pairs are not ranked; ties share a rank)
         "candidates": """
-            SELECT disease_id, gene_id, symbol, family, score, known, species_occurrence,
-                   CASE WHEN species_occurrence = '' THEN 0
-                        ELSE length(species_occurrence) - length(replace(species_occurrence, ',', '')) + 1 END::INTEGER AS n_species,
-                   row_number() OVER (PARTITION BY disease_id ORDER BY score, symbol)::INTEGER AS rank
-            FROM cand_raw WHERE score IS NOT NULL""",
+            WITH c AS (
+                SELECT disease_id, gene_id, symbol, family, score, known, species_occurrence,
+                       CASE WHEN species_occurrence = '' THEN 0
+                            ELSE length(species_occurrence) - length(replace(species_occurrence, ',', '')) + 1 END::INTEGER AS n_species,
+                       row_number() OVER (PARTITION BY disease_id ORDER BY score, symbol)::INTEGER AS rank
+                FROM cand_raw WHERE score IS NOT NULL),
+            names AS (SELECT disease_id, any_value(disease_name) AS disease_name FROM pooled GROUP BY disease_id)
+            SELECT c.*, n.disease_name,
+                   CASE WHEN NOT c.known THEN rank() OVER (PARTITION BY c.known ORDER BY c.score) END::INTEGER AS global_rank
+            FROM c LEFT JOIN names n USING (disease_id)
+            ORDER BY c.score, c.disease_id, c.rank""",
 
         # Every gene of every species in the run that has a protein family or a phenotype.
         # n_ortholog_species counts the other species of the run the gene has an ortholog edge to
@@ -52,6 +60,15 @@ def sql(name, run):
             FROM base b
             LEFT JOIN gene_names n USING (gene_id) LEFT JOIN os USING (gene_id)
             LEFT JOIN np USING (gene_id) LEFT JOIN nk USING (gene_id) LEFT JOIN pr USING (gene_id)""",
+
+        # Every gene of the run's other species with an ortholog edge to a base species gene, one row per pair
+        "human_orthologs": """
+            WITH base AS (SELECT taxon_id FROM species_info WHERE species = '{base}'),
+            pairs AS (SELECT taxon_a AS taxon, gene_a AS gene_id, gene_b AS human_gene_id FROM edges WHERE taxon_b = (SELECT taxon_id FROM base)
+                      UNION SELECT taxon_b, gene_b, gene_a FROM edges WHERE taxon_a = (SELECT taxon_id FROM base))
+            SELECT s.species, p.gene_id, p.human_gene_id, coalesce(n.symbol, p.human_gene_id) AS human_symbol
+            FROM pairs p JOIN species_info s ON s.taxon_id = p.taxon LEFT JOIN gene_names n ON n.gene_id = p.human_gene_id
+            ORDER BY s.species, p.gene_id, human_symbol""",
 
         # The base species' curated gene to disease associations the predictions are measured against
         "known_associations": """
@@ -121,13 +138,15 @@ def sql(name, run):
             cs AS (SELECT split_part(item, ':', 1) AS species, count(*) AS n_candidates, count(*) FILTER (WHERE NOT known) AS n_novel
                    FROM occ GROUP BY 1),
             cc AS (SELECT species_b AS species, n_common FROM common_counts WHERE species_a = '{base}'),
+            ho AS (SELECT species, count(DISTINCT gene_id) AS n FROM human_orthologs GROUP BY species),
             fd AS (SELECT species, pvalue_cutoff, phenolog_count FROM fdr_table WHERE fdr = {fdr})
             SELECT i.*, coalesce(ph.n_phenologs, 0)::INTEGER AS n_phenologs, coalesce(ph.n_diseases, 0)::INTEGER AS n_diseases,
                    coalesce(ph.n_phenotypes_matched, 0)::INTEGER AS n_phenotypes_matched,
                    coalesce(cs.n_candidates, 0)::INTEGER AS n_candidates, coalesce(cs.n_novel, 0)::INTEGER AS n_novel_candidates,
-                   cc.n_common::INTEGER AS n_common_with_base, fd.pvalue_cutoff AS fdr_cutoff
+                   cc.n_common::INTEGER AS n_common_with_base, ho.n::INTEGER AS n_human_ortholog_genes, fd.pvalue_cutoff AS fdr_cutoff
             FROM species_info i
-            LEFT JOIN ph USING (species) LEFT JOIN cs USING (species) LEFT JOIN cc USING (species) LEFT JOIN fd USING (species)""",
+            LEFT JOIN ph USING (species) LEFT JOIN cs USING (species) LEFT JOIN cc USING (species)
+            LEFT JOIN ho USING (species) LEFT JOIN fd USING (species)""",
 
         # One row per thing the search box can find
         "search": """

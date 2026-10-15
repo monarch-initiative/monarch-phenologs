@@ -2,7 +2,6 @@
 import { state, fmt, esc, speciesOf, shortBinomial, route } from "../format.js";
 import { speciesTree } from "../charts/tree.js";
 import { barList, speciesBars, funnel } from "../charts/bars.js";
-import { showTip, moveTip, hideTip } from "../charts/tooltip.js";
 
 // One card per species statistic: [key, title, what it counts]
 const METRICS = [
@@ -74,8 +73,6 @@ export async function render(el) {
           <span class="chips" id="metric-scale"><span class="chip toggle" data-scale="linear">linear</span><span class="chip toggle off" data-scale="log">log</span></span></span></div>
       <div class="grid cols-3 metrics" id="metrics">
         ${METRICS.map(([key, title, sub]) => metricCard(title, sub, "m-" + key)).join("")}
-        ${metricCard("p-value cutoff", `per species pair at FDR ${r.fdr}; lower is stricter`, "m-cutoff")}
-        ${metricCard("Phenolog strength", "−log10 p of its significant phenologs, scaled within each species", "m-strength", "wide")}
       </div>
     </section>
 
@@ -106,16 +103,12 @@ export async function render(el) {
         <div class="card"><div class="card-head"><h2>Known gene–disease pairs</h2><span class="sub">curated for ${esc(base.binomial)}</span></div><div id="funnel-pairs"></div></div>
         <div class="card"><div class="card-head"><h2>Diseases with a known gene</h2><span class="sub">and how many find a phenolog</span></div><div id="funnel-diseases"></div></div>
       </div>
-      <p class="note">Recovered is in-sample: a known gene helps find the phenologs that then rank it. The out-of-sample test is the
-        pipeline's leave-one-out cross-validation, which is not part of this release yet.</p>
     </section>`;
 
   // metric cards: the same species, in the same order and colours, in every card
   const metrics = el.querySelector("#metrics");
   const drawMetrics = log => METRICS.forEach(([key]) => speciesBars(metrics.querySelector("#m-" + key), speciesItems(model, key), { log }));
   drawMetrics(false);
-  speciesBars(metrics.querySelector("#m-cutoff"), speciesItems(model, "fdr_cutoff", fmt.p));
-  strengthStrips(metrics.querySelector("#m-strength"), ov.pval_bins, model);
   el.querySelectorAll("#metric-scale .chip").forEach(chip => chip.addEventListener("click", () => {
     el.querySelectorAll("#metric-scale .chip").forEach(c => c.classList.toggle("off", c !== chip));
     drawMetrics(chip.dataset.scale === "log");
@@ -143,16 +136,16 @@ export async function render(el) {
   const k = ov.known_funnel;
   funnel(el.querySelector("#funnel-pairs"), [
     { label: "curated in the graph", n: k.curated },
-    { label: "gene has a protein family", n: k.has_family },
-    { label: "family has model organism phenotypes <span class=\"faint\">(in reach)</span>", n: k.in_world },
+    { label: "gene has ortholog", n: k.has_family },
+    { label: "gene has ≥ 1 ortholog annotated with a phenotype <span class=\"faint\">(in reach)</span>", n: k.in_world },
     { label: "disease has a significant phenolog", n: k.has_phenolog },
-    { label: "recovered: gene is in the disease's ranking", n: k.recovered },
+    { label: "gene–disease pairs recovered by phenologs method", n: k.recovered },
   ]);
   funnel(el.querySelector("#funnel-diseases"), [
     { label: "diseases with a curated gene", n: k.diseases },
-    { label: "a gene with a protein family", n: k.diseases_family },
-    { label: "a gene whose family has model organism phenotypes", n: k.diseases_world },
-    { label: "a significant phenolog", n: k.diseases_phenolog },
+    { label: "with a gene that has ≥ 1 ortholog across species", n: k.diseases_family },
+    { label: "with a gene that has ≥ 1 ortholog annotated with a phenotype", n: k.diseases_world },
+    { label: "with a significant phenolog", n: k.diseases_phenolog },
   ], { color: "var(--accent-2)" });
   el.querySelectorAll(".tile[data-target]").forEach(tl => tl.addEventListener("click", () => {
     document.getElementById(tl.dataset.target).scrollIntoView({ behavior: "smooth" });
@@ -212,31 +205,4 @@ function leftOut(r) {
   if (r.n_phenotyped_genes === 0) return r.n_ortholog_genes === 0 ? "no phenotype annotations or orthologs" : "no phenotype annotations";
   if (r.n_ortholog_genes === 0) return "no orthologs";
   return esc(r.notes || "too few genes with both a phenotype and an ortholog");
-}
-
-// How strong each species' phenologs are: a histogram of -log10 p per species, one strip per row.
-// Rows match the bar cards (labels, height, where the bars start) so species line up across the cards
-function strengthStrips(el, bins, species) {
-  const width = Math.max(300, el.clientWidth || 600), rowH = 24, left = 104, right = 16, maxX = 15;    // >99% of phenologs sit below 12
-  bins = d3.rollups(bins, v => d3.sum(v, b => b.n), b => b.species, b => Math.min(b.neglog10, maxX))
-           .flatMap(([species, byBin]) => byBin.map(([neglog10, n]) => ({ species, neglog10, n })));
-  const x = d3.scaleLinear().domain([2, maxX + 1]).range([0, width - left - right]);
-  const svg = d3.select(el).append("svg").attr("width", width).attr("height", species.length * rowH + 22);
-  species.forEach((s, i) => {
-    const mine = bins.filter(b => b.species === s.species);
-    const total = d3.sum(mine, b => b.n) || 1;
-    const maxN = d3.max(mine, b => b.n) || 1;
-    const y = d3.scaleLinear().domain([0, maxN]).range([0, rowH - 6]);
-    const g = svg.append("g").attr("transform", `translate(0,${i * rowH})`).attr("data-sp", s.species).style("cursor", "pointer")
-      .on("click", () => { location.hash = route.species(s.species); });
-    g.append("text").attr("y", rowH / 2 + 4).attr("font-size", 12.5).attr("font-style", "italic").attr("fill", "#8b97a8").text(shortBinomial(s.species));
-    g.append("g").attr("transform", `translate(${left},0)`).selectAll("rect").data(mine).join("rect")
-      .attr("x", b => x(b.neglog10)).attr("width", Math.max(1, x(3) - x(2) - 1))
-      .attr("y", b => rowH - 3 - y(b.n)).attr("height", b => y(b.n))
-      .attr("fill", s.color).attr("fill-opacity", 0.9)
-      .on("mousemove", (e, b) => { showTip(e, `<b>${esc(s.binomial)}</b><br>−log10 p in [${b.neglog10}, ${b.neglog10 + 1}): ${fmt.int(b.n)} phenologs (${fmt.pct(b.n / total)})`); moveTip(e); })
-      .on("mouseleave", hideTip);
-  });
-  svg.append("g").attr("class", "axis").attr("transform", `translate(${left},${species.length * rowH + 2})`)
-    .call(d3.axisBottom(x).ticks(8).tickFormat(d => d >= maxX ? `${maxX}+` : d)).call(a => a.select(".domain").remove());
 }

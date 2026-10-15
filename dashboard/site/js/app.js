@@ -9,6 +9,7 @@ import * as family from "./views/family.js";
 import * as species from "./views/species.js";
 import * as browse from "./views/browse.js";
 import * as search from "./views/search.js";
+import * as candidates from "./views/candidates.js";
 
 const ROUTES = [
   [/^#\/?$/, overview.render, ""],
@@ -18,6 +19,7 @@ const ROUTES = [
   [/^#\/family\/(.+)$/, family.render],
   [/^#\/species\/(.+)$/, species.render],
   [/^#\/browse\/(\w+)$/, browse.render],
+  [/^#\/candidates$/, candidates.render],
   [/^#\/search\/(.*)$/, search.render],
 ];
 

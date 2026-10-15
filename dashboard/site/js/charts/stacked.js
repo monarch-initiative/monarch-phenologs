@@ -1,7 +1,7 @@
 // The additive decomposition of a disease's prediction: one bar per protein family, one segment per
 // contributing phenolog (the paper's case study figure, interactive). rows = additive.parquet rows of
 // one disease. Everything is re-sliced client side from the per (family, phenolog) rows.
-import { esc, fmt, speciesOf, route } from "../format.js";
+import { esc, fmt, speciesOf, shortBinomial, route } from "../format.js";
 import { showTip, moveTip, hideTip } from "./tooltip.js";
 
 const PALETTE = [...d3.schemeTableau10, ...d3.schemeSet3.filter(c => c !== "#d9d9d9" && c !== "#ffffb3")];
@@ -90,13 +90,14 @@ export function additiveChart(el, rows, opts = {}) {
     if (shown.length > limit) t.append("tspan").attr("fill", "#5c687a").text(`  +${shown.length - limit}`);
   });
 
-  // legend: phenologs in rank order
+  // legend: phenologs in rank order, down three columns
   const legend = document.createElement("div");
-  legend.className = "legend";
+  legend.className = "legend cols";
+  legend.style.setProperty("--rows", Math.ceil(phenologs.length / 3));
   legend.innerHTML = phenologs.map(p => `
     <span class="item"><span class="sw" style="background:${color(p.phenolog_rank)}"></span>
-      <span class="faint">#${p.phenolog_rank}</span>
-      <a href="${route.phenotype(p.phenotype_id)}">${esc(p.phenotype_name)}</a>
-      <i class="muted">${esc(speciesOf(p.species).binomial)}</i></span>`).join("");
+      <span class="faint rank">#${p.phenolog_rank}</span>
+      <a href="${route.phenotype(p.phenotype_id)}" title="${esc(p.phenotype_name)}">${esc(p.phenotype_name)}</a>
+      <i class="muted">${esc(shortBinomial(p.species))}</i></span>`).join("");
   el.appendChild(legend);
 }
