@@ -4,6 +4,7 @@
 
 # General imports
 import os
+import re
 import json
 import hashlib
 import datetime
@@ -681,17 +682,21 @@ def known_funnel(con):
 
 def code_version():
     """
-    The version of this code, as git describes it: tag, commits since, commit (v0.4.0-0-g1a2b3c4). The image's is set
-    when it is built; otherwise git is asked
+    This code's version and commit, e.g. 0.4.0 (1a2b3c4): the version in pyproject.toml, and the commit the image was
+    built from (set by its build) or, outside the image, what git says of this checkout
     """
 
-    if os.environ.get("PHENOLOGS_VERSION"):
-        return os.environ["PHENOLOGS_VERSION"]
-    try:
-        return subprocess.run(["git", "describe", "--tags", "--long", "--always", "--dirty"], cwd=os.path.dirname(os.path.abspath(__file__)),
-                              capture_output=True, text=True, check=True).stdout.strip()
-    except (OSError, subprocess.CalledProcessError):
-        return "unknown"
+    here = os.path.dirname(os.path.abspath(__file__))
+    with open(os.path.join(here, "..", "pyproject.toml")) as fh:
+        version = re.search(r'^version = "(.+)"', fh.read(), re.M).group(1)
+    commit = os.environ.get("PHENOLOGS_COMMIT")
+    if not commit:
+        try:
+            commit = subprocess.run(["git", "describe", "--always", "--dirty", "--exclude=*"], cwd=here,
+                                    capture_output=True, text=True, check=True).stdout.strip()
+        except (OSError, subprocess.CalledProcessError):
+            commit = "unknown"
+    return "{} ({})".format(version, commit)
 
 
 def _json_default(value):

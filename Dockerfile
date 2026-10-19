@@ -17,9 +17,9 @@ RUN uv sync --frozen --all-groups
 COPY . .
 ENV PATH="/app/.venv/bin:$PATH"
 
-# The code's version, which 07_build_release.py records in each release. Given by the build:
-#   docker build --build-arg PHENOLOGS_VERSION=$(git describe --tags --long --always --dirty) .
-ARG PHENOLOGS_VERSION=unknown
-ENV PHENOLOGS_VERSION=$PHENOLOGS_VERSION
+# The commit the image is built from, which 07_build_release.py records with the version in pyproject.toml:
+#   docker build --build-arg PHENOLOGS_COMMIT=$(git rev-parse --short HEAD) .
+ARG PHENOLOGS_COMMIT=unknown
+ENV PHENOLOGS_COMMIT=$PHENOLOGS_COMMIT
 
 CMD ["/bin/bash"]

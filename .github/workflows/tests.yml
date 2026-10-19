@@ -1,10 +1,11 @@
-# The whole pipeline on the two kg slices (tests/), for every pull request and every push to main
-name: tests
+# The whole pipeline on the two kg slices (tests/), for every pull request and every push to main, or from the Actions tab
+name: Test
 
 on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
 
 jobs:
   tests:
