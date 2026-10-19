@@ -53,6 +53,7 @@ export async function render(el) {
           <span>graph <b>${esc(r.graph_version)}</b></span>
           ${r.phenio_version ? `<span>phenio <b>${esc(r.phenio_version)}</b></span>` : ""}
           <span>fdr <b>${r.fdr}</b></span><span>k <b>${r.kneighbs}</b></span><span>metric <b>${esc(r.rank_metric)}</b></span>
+          ${r.code_version ? `<span>code <b>${esc(r.code_version)}</b></span>` : ""}
           <span>built <b>${esc(r.built)}</b></span>
         </div>
       </div>

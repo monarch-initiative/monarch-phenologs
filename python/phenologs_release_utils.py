@@ -1,13 +1,13 @@
 # Builds a release from a finished pipeline run, for 07_build_release.py. The sections run in the order the
 # build calls them: the run's files as DuckDB views, the tables the dashboard reads, the additive decomposition,
-# overview.json, the downloads, and the files that list them (manifest.json, releases.json)
+# overview.json, the README on every table and column, and manifest.json listing every file
 
 # General imports
 import os
-import re
 import json
 import hashlib
 import datetime
+import subprocess
 import duckdb
 import pandas as pd
 
@@ -67,15 +67,23 @@ class Run:
     """ One pipeline run (a project directory) and the parameter set the dashboard is built from """
 
     def __init__(self, project_dir, base="Homo-sapiens", prediction_network="disease", fdr=0.05,
-                 kneighbs=1000, rank_metric="hg", graph_version=None, phenio_version=None):
+                 kneighbs=1000, rank_metric="hg"):
         self.project_dir = os.path.abspath(project_dir)
         self.base = base
         self.prediction_network = prediction_network
         self.fdr = fdr
         self.kneighbs = kneighbs
         self.rank_metric = rank_metric
-        self.graph_version = graph_version or self._version_from_path()
-        self.phenio_version = phenio_version or ""
+
+        # The kg and phenio versions 01_download_and_setup.py settled on
+        versions_path = os.path.join(self.project_dir, "monarch_kg", "versions.json")
+        if not os.path.isfile(versions_path):
+            raise FileNotFoundError("No {}. 01_download_and_setup.py writes it".format(versions_path))
+        with open(versions_path) as fh:
+            versions = json.load(fh)
+        self.graph_version = versions["graph_version"]
+        self.phenio_version = versions["phenio_version"]
+        self.graph_url = versions["graph_url"]
 
         self.species_data = os.path.join(self.project_dir, "species_data")
         self.results_dir = os.path.join(self.project_dir, "phenologs_results",
@@ -84,20 +92,11 @@ class Run:
         self.fdr_table = os.path.join(self.results_dir, "{}_fdr_table.tsv".format(base))
         self.candidates_dir = os.path.join(self.results_dir, "{}_gene_to_{}_candidates_fdr{}_{}kneighbs_{}".format(
             base.replace("-", "_"), prediction_network, fdr, kneighbs, rank_metric))
-        self.all_candidates_dirs = os.path.join(self.results_dir, "{}_gene_to_{}_candidates_fdr{}_*kneighbs_*".format(
-            base.replace("-", "_"), prediction_network, fdr))
-        self.all_phenologs = os.path.join(self.results_dir, "{}_vs_*_all_phenologs.tsv".format(base))
         self.species_table = os.path.join(self.species_data, "species_information_table.tsv")
 
         for path in (self.species_table, self.pooled, self.fdr_table, self.candidates_dir):
             if not os.path.exists(path):
                 raise FileNotFoundError("Expected pipeline output missing: {}".format(path))
-
-    def _version_from_path(self):
-        m = re.search(r"(\d{4}-\d{2}-\d{2})", self.project_dir)
-        if m is None:
-            raise ValueError("No graph version given, and no date in the project path to take it from: {}".format(self.project_dir))
-        return m.group(1)
 
     # -- species -----------------------------------------------------------------------------------
     def species_rows(self):
@@ -228,35 +227,16 @@ class Run:
                    realized_fdr::DOUBLE AS realized_fdr, n_random_trials::INTEGER AS n_random_trials
             FROM {}""".format(read_tsv_sql(self.fdr_table)))
 
-        # Every disease-phenotype pair the run tested, one file per model species (pooled keeps the significant ones)
-        con.execute("""
-            CREATE VIEW all_phenologs AS
-            SELECT "Species A Phenotype ID"              AS disease_id,
-                   "Species A Phenotype Name"            AS disease_name,
-                   regexp_extract(filename, '_vs_([^/]+)_all_phenologs\\.tsv$', 1) AS species,
-                   "Species B Phenotype ID"              AS phenotype_id,
-                   "Species B Phenotype Name"            AS phenotype_name,
-                   "Overlap Count"::INTEGER              AS overlap,
-                   "Ortholog Count A"::INTEGER           AS n_disease_orthogroups,
-                   "Ortholog Count B"::INTEGER           AS n_phenotype_orthogroups,
-                   "Common Ortholog Count"::INTEGER      AS n_common,
-                   hg_pval::DOUBLE                       AS pval
-            FROM {}""".format(read_tsv_sql(self.all_phenologs, filename="true", all_varchar="true")))
-
-        # The candidate rankings, one file per disease. cand_raw is the ranking the dashboard serves, rankings every
-        # ranking the run made at its FDR (k x rank metric). After the genes it scored, the pipeline lists the
-        # disease's known genes no phenolog reached, with no score
+        # The candidate ranking the release serves, one file per disease. After the genes it scored, the pipeline
+        # lists the disease's known genes no phenolog reached, with no score
         cand_types = "{'Gene':'VARCHAR','Gene_name':'VARCHAR','Association_exists':'BOOLEAN','XSpecies_occurence':'VARCHAR'," \
                      "'p-value':'DOUBLE','XSpecies_phenotypes':'VARCHAR','Protein_family_id':'VARCHAR'}"
-        for view, folders in (("cand_raw", self.candidates_dir), ("rankings", self.all_candidates_dirs)):
-            con.execute("""
-                CREATE VIEW {} AS
-                SELECT regexp_extract(filename, '_(\\d+)kneighbs_', 1)::INTEGER AS kneighbs,
-                       regexp_extract(filename, 'kneighbs_([a-z]+)/', 1) AS rank_metric,
-                       'MONDO:' || regexp_extract(filename, 'MONDO-(\\d+)_', 1) AS disease_id,
-                       Gene AS gene_id, Gene_name AS symbol, Association_exists AS known, XSpecies_occurence AS species_hits,
-                       "p-value" AS score, XSpecies_phenotypes AS phenotypes, Protein_family_id AS family
-                FROM {}""".format(view, read_tsv_sql(os.path.join(folders, "*.tsv"), filename="true", types=cand_types)))
+        con.execute("""
+            CREATE VIEW cand_raw AS
+            SELECT 'MONDO:' || regexp_extract(filename, 'MONDO-(\\d+)_', 1) AS disease_id,
+                   Gene AS gene_id, Gene_name AS symbol, Association_exists AS known, XSpecies_occurence AS species_hits,
+                   "p-value" AS score, XSpecies_phenotypes AS phenotypes, Protein_family_id AS family
+            FROM {}""".format(read_tsv_sql(os.path.join(self.candidates_dir, "*.tsv"), filename="true", types=cand_types)))
 
         con.execute("""
             CREATE VIEW g2p AS
@@ -647,11 +627,12 @@ def build_overview(con, run, outdir, table_counts):
         "release": {"schema": SCHEMA,
                     "graph_version": run.graph_version,
                     "phenio_version": run.phenio_version,
+                    "graph_url": run.graph_url,
+                    "code_version": code_version(),
                     "built": datetime.date.today().isoformat(),
                     "base_species": base,
                     "prediction_network": run.prediction_network,
                     "fdr": run.fdr, "kneighbs": run.kneighbs, "rank_metric": run.rank_metric,
-                    "project_dir": os.path.basename(run.project_dir.rstrip("/")),
                     "table_rows": table_counts},
         "tiles": tiles,
         "species": species,
@@ -698,6 +679,21 @@ def known_funnel(con):
         FROM f""")[0]
 
 
+def code_version():
+    """
+    The version of this code, as git describes it: tag, commits since, commit (v0.4.0-0-g1a2b3c4). The image's is set
+    when it is built; otherwise git is asked
+    """
+
+    if os.environ.get("PHENOLOGS_VERSION"):
+        return os.environ["PHENOLOGS_VERSION"]
+    try:
+        return subprocess.run(["git", "describe", "--tags", "--long", "--always", "--dirty"], cwd=os.path.dirname(os.path.abspath(__file__)),
+                              capture_output=True, text=True, check=True).stdout.strip()
+    except (OSError, subprocess.CalledProcessError):
+        return "unknown"
+
+
 def _json_default(value):
     """ numpy scalars from DuckDB/pandas --> plain json """
     if hasattr(value, "item"):
@@ -705,128 +701,235 @@ def _json_default(value):
     raise TypeError(type(value))
 
 
-############################################################
-### The run's raw results as single tables, for download ###
+#################################################################
+### README.md, what every table and column of a release holds ###
 
-# Every candidate ranking the run made, every disease-phenotype pair it tested, the significant phenologs and the
-# FDR table, with a README on their columns. COPY streams each straight from the pipeline's files, so nothing big
-# is held in memory. Needs the phenologs table
+# Written next to the tables, so whoever downloads a release has its documentation with it. Every table's columns
+# are listed (tests/test_pipeline.py checks that none is missing)
 
-DOWNLOADS = {
-    # Grouped by ranking, then by disease. Each disease's genes keep the pipeline's order
-    "candidate_rankings.parquet": "SELECT * FROM rankings",
+def build_readme(run, outdir, top_phenologs=20, top_families=40):
+    """ Write <outdir>/README.md """
 
-    # A pair is a phenolog when its p-value is at or below its species' cutoff at the run's FDR (as the pipeline pools them)
-    "phenologs_all_tested.parquet": """
-        SELECT a.*, a.pval <= f.pvalue_cutoff AS significant
-        FROM all_phenologs a LEFT JOIN fdr_table f ON f.species = a.species AND f.fdr = {fdr}
-        ORDER BY a.species, a.pval, a.disease_id, a.phenotype_id""",
-
-    "phenologs_significant.tsv.gz": "SELECT * FROM phenologs ORDER BY pval, disease_id, species, phenotype_id",
-    "fdr_table.tsv": "SELECT * FROM fdr_table ORDER BY species, fdr",
-}
+    with open(os.path.join(outdir, "README.md"), "w") as fh:
+        fh.write(RELEASE_README.format(graph_version=run.graph_version, phenio_version=run.phenio_version, code_version=code_version(),
+                                       fdr=run.fdr, kneighbs=run.kneighbs, metric=METRICS[run.rank_metric][0],
+                                       score=METRICS[run.rank_metric][1], top_phenologs=top_phenologs, top_families=top_families))
 
 
-def build_downloads(con, run, outdir):
-    """ Write every download and the README to <outdir>/downloads """
+# Each rank metric's name, and what its score is
+METRICS = {"hg": ("hypergeometric", "the hypergeometric p-value of the gene's hits, out of every hit the ranking drew"),
+           "nb": ("naive Bayes", "the product, over the gene's hits, of 1 - (the phenolog's overlap / the disease's known genes) x "
+                                 "(1 - the phenolog's p-value)")}
 
-    folder = os.path.join(outdir, "downloads")
-    os.makedirs(folder, exist_ok=True)
-    for name, query in DOWNLOADS.items():
-        options = "FORMAT PARQUET, COMPRESSION ZSTD" if name.endswith(".parquet") else "FORMAT CSV, DELIMITER '\\t', HEADER"
-        con.execute("COPY ({}) TO '{}' ({})".format(query.format(fdr=run.fdr), os.path.join(folder, name), options))
+RELEASE_README = """# Phenologs from Monarch KG {graph_version}
 
-    with open(os.path.join(folder, "README.md"), "w") as fh:
-        fh.write(DOWNLOADS_README.format(graph_version=run.graph_version, fdr=run.fdr, kneighbs=run.kneighbs, rank_metric=run.rank_metric,
-                               phenio=" and phenio {}".format(run.phenio_version) if run.phenio_version else ""))
+Phenologs and gene candidates computed from Monarch KG {graph_version} (PHENIO {phenio_version}) by monarch-phenologs
+{code_version} (https://github.com/monarch-initiative/monarch-phenologs).
 
-
-DOWNLOADS_README = """# Phenologs downloads, Monarch KG {graph_version}
-
-The raw results of one phenologs pipeline run, on Monarch KG {graph_version}{phenio}. Human diseases are compared
-with the phenotypes of each model species through the PANTHER protein families of their genes. A disease and a
-phenotype whose families overlap more than chance at FDR {fdr} make a phenolog. Each disease's phenologs then rank
-the human genes they point to as candidates for that disease.
+Human diseases are compared with the phenotypes of each model species through the PANTHER protein families of their
+genes. A disease and a phenotype whose families overlap more than chance make a phenolog: each species' p-value cutoff
+is set from randomised trials at an FDR of {fdr} (`fdr` in `overview.json`). Each disease's {kneighbs:,} most significant
+phenologs then rank the human genes they point to as candidates for the disease, by the {metric} score.
 
 | file | one row per |
 |---|---|
-| `candidate_rankings.parquet` | (ranking, disease, gene): every candidate gene ranking the run made |
-| `phenologs_all_tested.parquet` | (disease, species, phenotype): every pair the run tested |
-| `phenologs_significant.tsv.gz` | phenolog: the significant pairs, as a tab separated table |
-| `fdr_table.tsv` | (species, FDR level): the p-value cutoffs |
+| `candidates.parquet` | (disease, gene) the ranking scored: the gene candidates |
+| `phenologs.parquet` | significant phenolog |
+| `known_associations.parquet` | curated human gene-disease association |
+| `gene_phenotypes.parquet` | gene-phenotype annotation, every species |
+| `human_orthologs.parquet` | (model species gene, human gene) ortholog pair |
+| `additive.parquet` | (disease, protein family, phenolog), for each disease's top {top_phenologs} phenologs and top {top_families} families |
+| `diseases.parquet`, `genes.parquet`, `phenotypes.parquet`, `families.parquet`, `species.parquet` | disease, gene, phenotype, protein family, species, with their counts |
+| `search.parquet` | thing the site's search box finds |
 
-`../manifest.json` lists every file of the release with its size, row count and sha256.
+`overview.json` holds what the site's release page shows; its `release` block has the versions and settings.
+`manifest.json` lists every file with its size, row count and sha256.
 
-The parquet files open in DuckDB, Python and R:
+The tables open in DuckDB, Python and R:
 
-    duckdb -c "SELECT * FROM 'candidate_rankings.parquet' WHERE kneighbs = {kneighbs} AND rank_metric = '{rank_metric}' LIMIT 10"
-    python -c "import pandas as pd; print(pd.read_parquet('phenologs_all_tested.parquet').head())"
-    Rscript -e "print(head(arrow::read_parquet('phenologs_all_tested.parquet')))"
+    duckdb -c "SELECT * FROM 'candidates.parquet' WHERE NOT known ORDER BY global_rank LIMIT 10"
+    python -c "import pandas as pd; print(pd.read_parquet('candidates.parquet').head())"
+    Rscript -e "print(head(arrow::read_parquet('candidates.parquet')))"
 
-## candidate_rankings.parquet
+Diseases are Mondo ids, human genes HGNC ids, protein families PANTHER ids, and species are written `Genus-species`.
 
-For each disease with a phenolog, the human genes its k best phenologs (lowest p-value first) reach. A phenolog
-reaches a human gene through a gene of the model species that carries the phenotype and is an ortholog of it: one
-hit. Every ranking the run made is here, each k with each of two scores. The site shows k = {kneighbs}, {rank_metric}.
-Rows are grouped by ranking, then by disease. Within a disease they keep the pipeline's order: the scored genes,
-strongest first, then the disease's known genes no phenolog reached.
+## candidates.parquet
+
+The gene candidates: every (disease, gene) the ranking scored, best first. The pipeline also lists each disease's
+curated genes its phenologs never reached, without a score. Those are left out here (`known_associations.parquet` has
+every curated pair).
 
 | column | |
 |---|---|
-| `kneighbs` | k, the number of phenologs the ranking draws on |
-| `rank_metric` | `hg` (hypergeometric) or `nb` (naive Bayes) |
-| `disease_id` | Mondo disease |
-| `gene_id` | human gene (HGNC) |
-| `symbol` | gene symbol |
-| `known` | the gene is curated for the disease |
-| `species_hits` | the gene's hits per model species, as `Mus-musculus:3,Danio-rerio:1` |
-| `score` | smaller is stronger. `hg`: hypergeometric p-value of the gene's hits, out of every hit the ranking drew. `nb`: the product, over the gene's hits, of 1 - (the phenolog's overlap / the disease's known genes) x (1 - the phenolog's p-value). Empty for known genes no phenolog reached |
-| `phenotypes` | names of the model phenotypes behind the hits, `;` separated |
+| `disease_id`, `disease_name` | the disease |
+| `gene_id`, `symbol` | the human gene |
 | `family` | the gene's PANTHER family |
+| `score` | smaller is stronger: {score} |
+| `known` | the gene is curated for the disease |
+| `rank` | the gene's place in the disease's ranking, by score. Ties share a place |
+| `global_rank` | the pair's place among every pair of every disease, by score. Ties share a place |
+| `support` | per model species, most phenologs first, as `species:phenologs:of:orthologs:hits`: the disease's phenologs with that species whose phenotype is annotated to an ortholog of the gene, of how many of the disease's phenologs with that species the ranking used, the orthologs that takes, and the (phenolog, ortholog) hits the score counts |
+| `n_species` | model species in `support` |
+| `n_phenologs` | phenologs in `support`, summed over species |
 
-## phenologs_all_tested.parquet
+## phenologs.parquet
 
-Every disease-phenotype pair the run tested, for every model species, by species and then p-value.
+Every significant phenolog, ranked within its disease by p-value.
 
 | column | |
 |---|---|
-| `disease_id`, `disease_name` | Mondo disease |
-| `species` | model species, as `Genus-species` |
+| `disease_id`, `disease_name` | the disease |
+| `species` | the model species |
 | `phenotype_id`, `phenotype_name` | the model species' phenotype |
 | `overlap` | protein families carrying both the disease and the phenotype |
 | `n_disease_orthogroups` | protein families of the disease's genes, counting only families the two species share |
 | `n_phenotype_orthogroups` | protein families of the phenotype's genes, counting only families the two species share |
 | `n_common` | protein families present in both species: the background of the test |
-| `pval` | hypergeometric p-value of the overlap |
-| `significant` | `pval` is at or below the species' cutoff at FDR {fdr} (`fdr_table.tsv`): the pair is a phenolog |
+| `pval` | hypergeometric p-value of the overlap, at or below the species' cutoff |
+| `rank` | the phenolog's place among its disease's phenologs, by p-value |
 
-## phenologs_significant.tsv.gz
+## known_associations.parquet
 
-The phenologs: the rows of `phenologs_all_tested.parquet` with `significant` true, without that column, ordered by
-p-value. One more column, `rank`: the phenolog's place among its disease's phenologs, by p-value.
-
-## fdr_table.tsv
+The curated human gene-disease associations the candidates are measured against.
 
 | column | |
 |---|---|
-| `species` | model species |
-| `fdr` | false discovery rate level |
-| `pvalue_cutoff` | largest p-value still called a phenolog at this FDR |
-| `phenolog_count` | real disease-phenotype comparisons at or below the cutoff |
-| `expected_false_positives` | randomised comparisons at or below the cutoff, per trial (mean over the trials) |
-| `realized_fdr` | expected false positives / phenologs |
-| `n_random_trials` | randomised trials the cutoffs come from |
+| `gene_id`, `symbol` | the human gene |
+| `disease_id`, `disease_name` | the disease |
+| `predicate` | the association's Biolink predicate |
+| `family` | the gene's PANTHER family |
+
+## gene_phenotypes.parquet
+
+| column | |
+|---|---|
+| `species` | the gene's species |
+| `gene_id` | the gene |
+| `phenotype_id`, `phenotype_name` | a phenotype annotated to it |
+
+## human_orthologs.parquet
+
+| column | |
+|---|---|
+| `species` | the model species |
+| `gene_id` | the model species gene |
+| `human_gene_id`, `human_symbol` | its human ortholog |
+
+## additive.parquet
+
+What each protein family adds to a disease's candidates. For each of the disease's top {top_phenologs} phenologs: the
+families carrying that model phenotype that the species shares with humans (the families the phenolog test counts).
+Each (family, phenolog) pair adds (overlap / disease orthogroups) x (1 - p-value), and families are ranked by their sum.
+Each disease keeps its top {top_families} families.
+
+| column | |
+|---|---|
+| `disease_id` | the disease |
+| `family` | the PANTHER family |
+| `family_rank` | the family's place for the disease, by `family_total` |
+| `family_total` | the family's sum over the disease's top phenologs |
+| `phenolog_rank` | the phenolog's place among the disease's phenologs (`rank` in `phenologs.parquet`) |
+| `phenotype_id`, `phenotype_name`, `species` | the phenolog's model phenotype |
+| `score` | what the phenolog adds to the family |
+| `known_symbols` | the family's human genes curated for the disease |
+| `other_symbols` | the family's other human genes |
+
+## diseases.parquet
+
+The diseases with at least one phenolog.
+
+| column | |
+|---|---|
+| `disease_id`, `name` | the disease |
+| `n_known_genes` | its curated genes |
+| `n_phenologs` | its phenologs |
+| `n_species` | model species with one of its phenologs |
+| `best_pval` | its lowest phenolog p-value |
+| `n_candidates` | genes the ranking scored for it |
+| `n_novel_candidates` | of those, genes not curated for it |
+| `n_known_recovered` | of those, genes curated for it |
+| `top_species` | the model species with most of its phenologs |
+| `by_species` | its phenologs per model species, as JSON: `{{"Mus-musculus":12,"Danio-rerio":3}}` |
+
+## genes.parquet
+
+Every gene of every species with a protein family, a phenotype or a curated disease.
+
+| column | |
+|---|---|
+| `species`, `gene_id`, `symbol` | the gene |
+| `family` | its PANTHER family |
+| `n_ortholog_species` | other species of the release the gene has an ortholog in |
+| `n_phenotypes` | phenotypes annotated to it |
+| `n_known_diseases` | diseases it is curated for (human genes only) |
+| `n_predicted_diseases` | diseases whose ranking scored it |
+| `n_novel_diseases` | of those, diseases it is not curated for |
+| `best_rank` | its best place in a disease's ranking |
+| `in_reach` | human genes only: one of its orthologs carries a phenotype the ranking can use, so a disease's ranking can reach it |
+
+## phenotypes.parquet
+
+Every phenotype annotated to a gene, in every species.
+
+| column | |
+|---|---|
+| `species`, `phenotype_id`, `name` | the phenotype |
+| `n_genes` | genes annotated with it |
+| `n_orthogroups` | protein families of those genes |
+| `n_shared_orthogroups` | model species only: of those, the families shared with humans (the ones the phenolog test counts) |
+| `n_known_diseases` | curated diseases of the genes annotated with it (so human phenotypes only) |
+| `n_phenologs` | phenologs with it |
+| `n_diseases` | diseases with such a phenolog |
+| `best_pval` | the lowest p-value among them |
+
+## families.parquet
+
+The PANTHER protein families.
+
+| column | |
+|---|---|
+| `family` | the family |
+| `n_genes`, `n_species` | its genes, and the species they are in |
+| `n_base_genes`, `base_symbols` | its human genes |
+| `n_predicted_diseases` | diseases whose ranking scored one of its genes |
+| `n_novel_diseases` | of those, diseases none of its human genes is curated for |
+| `best_score` | the best score of one of its genes |
+| `n_known_diseases` | diseases one of its human genes is curated for |
+
+## species.parquet
+
+| column | |
+|---|---|
+| `taxon_id`, `species`, `binomial`, `common` | the species |
+| `ontology` | its phenotype ontology |
+| `is_base` | the base species (human) |
+| `color`, `plot_order`, `divergence_mya` | for the site: its colour, its place in lists, and when its lineage split from the human one, in million years (TimeTree) |
+| `n_genes` | its genes in the graph |
+| `n_phenotyped_genes` | of those, genes with a phenotype |
+| `n_ortholog_genes` | of those, genes with an ortholog |
+| `n_orthogroups` | protein families of its genes |
+| `n_phenotypes_annotated` | phenotypes annotated to its genes |
+| `n_phenologs`, `n_diseases`, `n_phenotypes_matched` | its phenologs, the diseases they are with, and its phenotypes in them |
+| `n_candidates`, `n_novel_candidates` | candidate pairs it supports, and of those the ones not curated |
+| `n_common_with_base` | protein families it shares with humans |
+| `n_human_ortholog_genes` | its genes with a human ortholog |
+| `fdr_cutoff` | its p-value cutoff at FDR {fdr} |
+
+## search.parquet
+
+| column | |
+|---|---|
+| `kind` | disease, gene, phenotype, family or species |
+| `id`, `label`, `species` | what it is |
+| `detail` | the line the search box shows under it |
+| `weight` | orders the results |
 """
 
 
-#######################################
-### manifest.json and releases.json ###
+#####################
+### manifest.json ###
 
-# manifest.json lists every file of a release folder with its size, row count, sha256 and what it holds.
-# releases.json lists every published release (its release block and folder), newest first. The site opens a
-# release from it
-
-# What each file of a release folder holds
+# Every file of a release folder with its size, row count, sha256 and what it holds (DESCRIPTIONS)
 DESCRIPTIONS = {
     "overview.json":              "Everything the release page shows: headline numbers, species, FDR table, top lists, graph inputs",
     "phenologs.parquet":          "Every significant phenolog, ranked within its disease by p-value",
@@ -841,11 +944,7 @@ DESCRIPTIONS = {
     "gene_phenotypes.parquet":    "Gene to phenotype annotations of every species",
     "human_orthologs.parquet":    "Ortholog pairs between model species genes and human genes",
     "search.parquet":             "What the search box finds",
-    "downloads/README.md":                    "What every download and column holds",
-    "downloads/candidate_rankings.parquet":   "Every candidate gene ranking the run made (k x rank metric)",
-    "downloads/phenologs_all_tested.parquet": "Every disease-phenotype pair tested, with its p-value and whether it is significant",
-    "downloads/phenologs_significant.tsv.gz": "The significant phenologs, as a tab separated table",
-    "downloads/fdr_table.tsv":                "Each species' p-value cutoff at each FDR level",
+    "README.md":                  "What every table and column holds",
 }
 
 
@@ -865,27 +964,6 @@ def build_manifest(con, outdir):
     with open(os.path.join(outdir, "manifest.json"), "w") as fh:
         json.dump(files, fh, indent=1)
     return files
-
-
-def add_release(root, folder):
-    """
-    Add the release in folder to <root>/releases.json, in place of an older build of it. To add it to the
-    published list, fetch the bucket's releases.json into root before building. Returns the list of releases
-    """
-
-    with open(os.path.join(folder, "overview.json")) as fh:
-        release = dict(json.load(fh)["release"], path=os.path.relpath(folder, root) + "/")
-
-    path = os.path.join(root, "releases.json")
-    releases = []
-    if os.path.isfile(path):
-        with open(path) as fh:
-            releases = [r for r in json.load(fh) if r["path"] != release["path"]]
-    releases = sorted(releases + [release], key=lambda r: r["graph_version"], reverse=True)
-
-    with open(path, "w") as fh:
-        json.dump(releases, fh, indent=1)
-    return releases
 
 
 def count_rows(con, path):

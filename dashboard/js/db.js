@@ -13,9 +13,10 @@ let conn = null;
 const registered = new Map();   // table -> Promise
 
 // Opens ?release=<graph_version> (the newest by default) of ?network=disease|phenotype (disease by default)
-// from releases.json. Returns its overview.json
+// from releases.json. Returns its overview.json. The list is asked for with a query no cache has seen, so a
+// release shows up as soon as it is published (the bucket otherwise serves copies up to an hour old)
 export async function openRelease() {
-  const releases = await getJSON(ROOT + "releases.json");
+  const releases = await getJSON(ROOT + "releases.json?nocache=" + Date.now());
   const want = params.get("release"), network = params.get("network") || "disease";
   const r = releases.find(x => x.prediction_network === network && (!want || x.graph_version === want));
   if (!r) throw new Error(`No ${network} release${want ? " " + want : ""} in ${ROOT}releases.json`);

@@ -62,6 +62,9 @@ $PY phenologs_leave_one_out_xvalidation.py -p "$PROJECT" -c "$CORES" -taxon_id "
 $PY phenologs_xvalidation_ortholog_to_phenotype_ranking.py -p "$PROJECT" -c "$CORES" -taxon_id "$TAXON" -prd "$PRD" -fdr "$FDR" -kneighbs "$K" -rank_metric hg -rank_type gene
 
 echo "== [07] release =="
-$PY 07_build_release.py -p "$PROJECT" -gv 2000-01-01 -pv 2000-01-01 -prd "$PRD" -fdr "$FDR" -kneighbs "$K" -c "$CORES"
+$PY 07_build_release.py -p "$PROJECT" -prd "$PRD" -fdr "$FDR" -kneighbs "$K" -c "$CORES"
+
+echo "== [08] release list (a new one, nothing is fetched) =="
+$PY 08_update_release_list.py -p "$PROJECT" -r none
 
 echo "== DONE -> $PROJECT =="

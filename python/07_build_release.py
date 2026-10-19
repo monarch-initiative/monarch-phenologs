@@ -10,9 +10,8 @@ from phenologs_release_utils import (Run,
                                      support_mismatches,
                                      build_additive,
                                      build_overview,
-                                     build_downloads,
-                                     build_manifest,
-                                     add_release)
+                                     build_readme,
+                                     build_manifest)
 
 
 
@@ -21,15 +20,13 @@ if __name__ == '__main__':
     ################
     ## ARG PARSE ###
     def parse_input_command():
-        parser = argparse.ArgumentParser(description='Builds the release of a finished run: the tables the dashboard reads, the run\'s raw \
-                                                      results as single tables for download, and manifest.json listing every file. \
-                                                      Written to <project_dir>/release/<graph_version>/<prediction_network>/ (laid out \
-                                                      as in the bucket) and added to releases.json there. A rebuild replaces it.')
+        parser = argparse.ArgumentParser(description='Builds the release of a finished run: the tables the dashboard reads (which are also \
+                                                      the downloads), a README on every table and column, and manifest.json listing \
+                                                      every file. Written to <project_dir>/release/<graph_version>/<prediction_network>/, \
+                                                      laid out as in the bucket. The versions come from monarch_kg/versions.json. A \
+                                                      rebuild replaces it. 08_update_release_list.py adds it to the published list.')
 
         parser.add_argument("-p", "--project_dir", help="Top most project directory of a finished run", required=True, type=str)
-        parser.add_argument("-o", "--outdir", help="Releases folder to write to (default: <project_dir>/release)", required=False, type=str, default=None)
-        parser.add_argument("-gv", "--graph_version", help="Monarch KG version of the run (default: a date found in the project path)", required=False, type=str, default=None)
-        parser.add_argument("-pv", "--phenio_version", help="Phenio version of the run", required=False, type=str, default=None)
         parser.add_argument("-base", help="Base species name", required=False, type=str, default="Homo-sapiens")
         parser.add_argument("-prd", "--prediction_network", help="phenotype or disease", required=False, type=str, default="disease")
         parser.add_argument("-fdr", help="FDR level of the phenologs and rankings the dashboard shows", required=False, type=float, default=0.05)
@@ -48,12 +45,10 @@ if __name__ == '__main__':
     ### PROGRAM ###
 
     run = Run(args.project_dir, base=args.base, prediction_network=args.prediction_network, fdr=args.fdr,
-              kneighbs=args.kneighbs, rank_metric=args.rank_metric,
-              graph_version=args.graph_version, phenio_version=args.phenio_version)
+              kneighbs=args.kneighbs, rank_metric=args.rank_metric)
 
     # A rebuild replaces the release, so nothing of an older build is left behind
-    releases_dir = args.outdir or os.path.join(run.project_dir, "release")
-    outdir = os.path.join(releases_dir, run.graph_version, run.prediction_network)
+    outdir = os.path.join(run.project_dir, "release", run.graph_version, run.prediction_network)
     shutil.rmtree(outdir, ignore_errors=True)
     os.makedirs(outdir)
     print("- Building the {} {} release from {}".format(run.graph_version, run.prediction_network, run.project_dir))
@@ -72,10 +67,9 @@ if __name__ == '__main__':
               "disease(s) (p-value ties at the k boundary, broken differently before phenologs were sorted deterministically)".format(pairs, diseases))
     counts["additive"] = build_additive(con, run, outdir, args.top_phenologs, args.top_families)
     build_overview(con, run, outdir, counts)
-    build_downloads(con, run, outdir)
+    build_readme(run, outdir, args.top_phenologs, args.top_families)
 
     for f in build_manifest(con, outdir):
         rows = "{:,} rows".format(f["rows"]) if f["rows"] is not None else ""
-        print("  {:<40} {:>16} {:>8.1f} MB".format(f["path"], rows, f["bytes"] / 1e6))
-    releases = add_release(releases_dir, outdir)
-    print("- Wrote {} ({:.1f} s total). releases.json lists {} release(s)".format(outdir, time.time() - t0, len(releases)))
+        print("  {:<30} {:>16} {:>8.1f} MB".format(f["path"], rows, f["bytes"] / 1e6))
+    print("- Wrote {} ({:.1f} s total)".format(outdir, time.time() - t0))

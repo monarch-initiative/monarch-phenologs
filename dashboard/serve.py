@@ -1,11 +1,15 @@
 """
-Serves the dashboard locally, with a run's releases at /releases/ (where the site looks for them). A plain
-static server with HTTP range support, so the browser reads parquet the way it would from the bucket.
+Serves the dashboard locally, with a run's releases at /releases/ (where the site looks for them) and a
+releases.json listing them. A plain static server with HTTP range support, so the browser reads parquet the
+way it would from the bucket.
 
     python dashboard/serve.py -p path/to/project_dir [--port 8765]
 """
+import io
 import os
 import re
+import glob
+import json
 import argparse
 import http.server
 
@@ -26,6 +30,8 @@ class RangeHandler(http.server.SimpleHTTPRequestHandler):
 
     def send_head(self):
         self.range = None
+        if self.path.split("?")[0] == "/releases/releases.json":
+            return self.release_list()
         header = self.headers.get("Range")
         m = re.match(r"bytes=(\d*)-(\d*)$", header or "")
         path = self.translate_path(self.path)
@@ -45,6 +51,19 @@ class RangeHandler(http.server.SimpleHTTPRequestHandler):
                 fh.seek(start)
                 return fh
         return super().send_head()
+
+    def release_list(self):
+        """ The run's releases, listed the way the published releases.json lists them """
+        entries = []
+        for path in glob.glob(os.path.join(self.releases, "*", "*", "overview.json")):
+            with open(path) as fh:
+                entries.append(dict(json.load(fh)["release"], path=os.path.relpath(os.path.dirname(path), self.releases) + "/"))
+        body = json.dumps(sorted(entries, key=lambda r: r["graph_version"], reverse=True)).encode()
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        return io.BytesIO(body)
 
     def copyfile(self, source, outputfile):
         if self.range is None:
