@@ -38,13 +38,20 @@ The environment is locked (`uv.lock`) to the versions the paper's runs were made
 
 ```
 uv sync --all-groups          # creates .venv from the lock; add --python 3.10 to match the paper exactly
-uv run python python/01_download_and_setup.py -p path/to/project_dir -gv 2026-03-06 -pv 2025-11-14
+uv run python python/01_download_and_setup.py -p path/to/project_dir     # the newest kg release; -gv 2026-03-06 for another
 uv run python -m pytest tests/ -q      # the whole pipeline on two small kg slices, about two minutes
 ```
 
+Step 01 downloads the newest Monarch KG release and the PHENIO it was built with, and writes both versions to
+`monarch_kg/versions.json` for the later steps. After the last ranking, `python/07_build_release.py -p path/to/project_dir`
+writes the release (what the dashboard reads and the bucket holds) to `path/to/project_dir/release/`.
+`RELEASING.md` has every step of a release and how it is published; `dashboard/README.md` has the site.
+
 `tests/run_pipeline.sh` runs every step on a slice with tiny parameters; `PY=.venv/bin/python` selects
 the interpreter. To change a dependency, edit `pyproject.toml`, run `uv lock`, and re-run the tests.
-The Dockerfile installs the same lock into `python:3.10-slim`.
+The Dockerfile installs the same lock into `python:3.10-slim`. GitHub Actions builds it as
+`ghcr.io/monarch-initiative/monarch-phenologs` for every GitHub release (see `RELEASING.md`), and runs the tests on
+every pull request.
 
 ## Methods
 

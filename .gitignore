@@ -142,12 +142,13 @@ dmypy.json
 # Default project dir created by nextflow/modules/01_get_data.nf
 phenologs-from-kg/
 
-# Subdirectories created by python/01_download_and_setup.py
+# Subdirectories created by python/01_download_and_setup.py, and the release python/07_build_release.py writes
 monarch_kg/
 species_data/
 random_trials/
 phenologs_results/
 leave_one_out_xvalidation/
+release/
 
 # Bulk KG / ontology artifacts
 monarch-kg.tar.gz

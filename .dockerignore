@@ -4,9 +4,10 @@ venv/
 env/
 ENV/
 
-# Git
+# Git and GitHub
 .git/
 .gitignore
+.github/
 
 # Python cache
 __pycache__/

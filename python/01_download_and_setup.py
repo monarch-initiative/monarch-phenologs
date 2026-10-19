@@ -1,10 +1,16 @@
 # General imports
 import os
+import re
+import json
 import gzip
 import shutil
 import argparse
 import requests
 import tarfile
+
+# Where Monarch publishes the kg (releases in monarch-kg/, every build, released or not, in monarch-kg-dev/) and phenio
+KG_SITE = "https://data.monarchinitiative.org"
+PHENIO_RELEASES = "https://github.com/monarch-initiative/phenio/releases"
 
 
 def download_file_url(url: str, outdir: str, extract_gz: bool = False, overwrite: bool = False):
@@ -37,17 +43,50 @@ def download_file_url(url: str, outdir: str, extract_gz: bool = False, overwrite
     return filename
 
 
+def find_kg(graph_version: str):
+    """
+    The folder of a monarch kg version and the text of its metadata.yaml. A date Monarch never released
+    (e.g. 2026-03-06) is only in monarch-kg-dev/
+    """
+
+    for folder in ("monarch-kg", "monarch-kg-dev"):
+        url = "{}/{}/{}/".format(KG_SITE, folder, graph_version)
+        r = requests.get(url + "metadata.yaml", timeout=60)
+        if r.status_code == 200:
+            return url, r.text
+        if r.status_code != 404:
+            r.raise_for_status()
+    raise ValueError("- ERROR: No monarch kg {} in {}/monarch-kg/ or {}/monarch-kg-dev/".format(graph_version, KG_SITE, KG_SITE))
+
+
+def kg_versions(metadata: str):
+    """
+    (kg version, phenio version), as dates, from a kg's metadata.yaml. Releases since 2026-05-09 write
+        version: '2026-10-07'  ...  - id: phenio ... version: v2026-10-07   (phenio nested under kg-phenio)
+    and earlier ones
+        kg-version: 2026-03-06  ...  data: phenio: v2025-11-14
+    """
+
+    kg = re.search(r"^(?:kg-)?version: '?([\d-]+)", metadata, re.M)
+    phenio = (re.search(r"^\s+phenio: '?v?([\d-]+)", metadata, re.M) or
+              re.search(r"- id: phenio\n(?:[ \t]+.*\n)*?[ \t]+version: '?v?([\d-]+)", metadata))
+    if kg is None or phenio is None:
+        raise ValueError("- ERROR: Could not read the kg and phenio versions from the kg's metadata.yaml")
+    return kg.group(1), phenio.group(1)
+
+
 if __name__ == '__main__':
     ################
 	## ARG PARSE ###
     def parse_input_command():
         parser = argparse.ArgumentParser(description='Performs phenologs setup steps. Makes relevant directory structures, \
-                                                      downloads monarch kg, and upacks the kg files. Will not overwrite \
-                                                      existing data or monarch-kg data if already exists within specified \
-                                                      projece_dir')
+                                                      downloads monarch kg and the phenio it was built with, and upacks \
+                                                      the kg files. The versions are written to monarch_kg/versions.json \
+                                                      for the later steps. Will not overwrite existing data or monarch-kg \
+                                                      data if already exists within specified projece_dir')
         parser.add_argument("-p", "--project_dir", help="Directory to write files to", required=True, type=str)
-        parser.add_argument("-gv", "--graph_version", help="Version of the monarch knowledge graph to download (e.g., 'latest' or a specific date like '2025-06-19')", required=False, type=str, default="latest")
-        parser.add_argument("-pv", "--phenio_version", help="Version of the phenio relation graph to download. Must be same date or earleir date than monarch kg version (e.g., 'latest' or a specific date like '2025-06-19')", required=False, type=str, default="latest")
+        parser.add_argument("-gv", "--graph_version", help="Version of the monarch knowledge graph to download: 'latest' (the newest release) or a date like '2026-03-06'", required=False, type=str, default="latest")
+        parser.add_argument("-pv", "--phenio_version", help="Phenio version (a date) to use instead of the one the kg was built with. Must be same date or earlier than the kg", required=False, type=str, default=None)
         return parser.parse_args()
 
     args = parse_input_command()
@@ -56,18 +95,11 @@ if __name__ == '__main__':
     ###############
     ### PROGRAM ###
 
-    # Ensure phenio relation graph and monarch kg versions are compatible
-    if (args.graph_version != "latest") and (args.phenio_version != "latest"):
-        if args.phenio_version > args.graph_version:
-            raise ValueError("- ERROR: Specified phenio version {} is more recent than specified monarch kg version {}. Please specify a phenio version that is the same date or earlier than the monarch kg version.".format(args.phenio_version, args.graph_version))
-    
-    elif ((args.phenio_version == "latest") or (args.graph_version == "latest")) and (args.phenio_version != args.graph_version):
-        raise ValueError("- ERROR: One of the specified versions for monarch kg or phenio relation graph is 'latest' while the other is a specific date. Provide two dates, or set both to 'latest'")
-
     # KG download nodes, edges paths, phenio
     kg_dir_path = os.path.join(args.project_dir, "monarch_kg")
     kg_edges_path = os.path.join(args.project_dir, "monarch_kg", "monarch-kg_edges.tsv")
     phenio_path = os.path.join(args.project_dir, "monarch_kg", "phenio-relation-graph.gz")
+    versions_path = os.path.join(args.project_dir, "monarch_kg", "versions.json")
     
 
     # Project top level data directories / structure 
@@ -87,9 +119,40 @@ if __name__ == '__main__':
         os.makedirs(os.path.join(args.project_dir, pdir), exist_ok=True)
 
 
-    # Download and upack monarch-kg
+    # Which kg and phenio the project holds. Settled on the first run and written to monarch_kg/versions.json, where the
+    # later steps read them. A rerun keeps them, so 'latest' moving on never mixes two kgs in one project
+    if os.path.isfile(versions_path):
+        with open(versions_path) as fh:
+            versions = json.load(fh)
+        for given, key in ((args.graph_version, "graph_version"), (args.phenio_version, "phenio_version")):
+            if given not in (None, "latest", versions[key]):
+                raise ValueError("- ERROR: {} already holds {} {}. Use a new project directory for {}".format(args.project_dir, key, versions[key], given))
+
+    # A kg put in place by hand (the test slices). There is nothing to look up, so its versions must be given
+    elif os.path.isfile(kg_edges_path):
+        if args.graph_version == "latest" or args.phenio_version is None:
+            raise ValueError("- ERROR: {} already holds a kg but no versions.json. Give the -gv and -pv it is from".format(kg_dir_path))
+        versions = dict(graph_version=args.graph_version, phenio_version=args.phenio_version, graph_url=None)
+
+    # Looked up: 'latest' is the newest release, and the kg's metadata.yaml names the phenio it was built with
+    else:
+        graph_version = args.graph_version
+        if graph_version == "latest":
+            r = requests.get(KG_SITE + "/monarch-kg/latest/metadata.yaml", timeout=60)
+            r.raise_for_status()
+            graph_version = kg_versions(r.text)[0]
+        graph_url, metadata = find_kg(graph_version)
+        versions = dict(graph_version=graph_version, phenio_version=args.phenio_version or kg_versions(metadata)[1], graph_url=graph_url)
+
+    if versions["phenio_version"] > versions["graph_version"]:
+        raise ValueError("- ERROR: Phenio version {phenio_version} is more recent than monarch kg version {graph_version}. Please specify a phenio version that is the same date or earlier than the monarch kg version.".format(**versions))
+    with open(versions_path, "w") as fh:
+        json.dump(versions, fh, indent=1)
+    print("- Monarch kg {graph_version} and phenio {phenio_version}".format(**versions))
+
+    # Download and upack monarch-kg, from its dated folder (never latest/, which can move on mid download)
     if not os.path.isfile(kg_edges_path):
-        URL = 'https://data.monarchinitiative.org/monarch-kg-dev/{}/monarch-kg.tar.gz'.format(args.graph_version)
+        URL = (versions["graph_url"] or find_kg(versions["graph_version"])[0]) + "monarch-kg.tar.gz"
         download_file_url(URL, kg_dir_path, extract_gz=True, overwrite=False)
         print("- Download and upacking of monarch kg succesfull...")
     else:
@@ -98,11 +161,7 @@ if __name__ == '__main__':
     # Download phenio relation graph (leave gzip format to save space as we can read through it as is).
     # Releases before 2024-12 shipped it as a tarball of the .tsv instead, so that is fetched and gzipped here
     if not os.path.isfile(phenio_path):
-        if args.phenio_version != "latest":
-            URL = 'https://github.com/monarch-initiative/phenio/releases/download/v{}/phenio-relation-graph.gz'.format(args.phenio_version)
-        else:
-            URL = 'https://github.com/monarch-initiative/phenio/releases/latest/download/phenio-relation-graph.gz'
-
+        URL = '{}/download/v{}/phenio-relation-graph.gz'.format(PHENIO_RELEASES, versions["phenio_version"])
         try:
             download_file_url(URL, kg_dir_path, extract_gz=False, overwrite=False)
         except requests.HTTPError:
@@ -116,4 +175,3 @@ if __name__ == '__main__':
         print("- Download of phenio relation graph succesfull...")
     else:
         print("- Skipping phenio relation graph download... File already exists at {}".format(phenio_path))
-        

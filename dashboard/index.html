@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Phenologs</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 16 16%27%3E%3Crect width=%2716%27 height=%2716%27 rx=%273%27 fill=%27%23f0b84a%27/%3E%3C/svg%3E">
+<link rel="stylesheet" href="style.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="#/">
+    <span class="brand-mark"></span>
+    <span class="brand-name">Phenologs</span>
+    <span class="brand-sub" id="brand-release"></span>
+  </a>
+  <nav class="nav">
+    <a href="#/">Release</a>
+    <a href="#/candidates">Candidates</a>
+    <a href="#/browse/diseases">Diseases</a>
+    <a href="#/browse/genes">Genes</a>
+    <a href="#/browse/phenotypes">Phenotypes</a>
+    <a href="#/browse/families">Families</a>
+    <a href="#/browse/species">Species</a>
+  </nav>
+  <form class="search" id="search-form" autocomplete="off">
+    <input id="search-input" type="search" placeholder="Search a disease, gene, phenotype, protein family or species…" aria-label="Search">
+    <div class="suggest" id="search-suggest" hidden></div>
+  </form>
+</header>
+
+<main id="view" class="view"></main>
+
+<footer class="footer">
+  <span id="footer-release"></span>
+  <span>Monarch Initiative · <a href="https://github.com/monarch-initiative/monarch-phenologs">monarch-phenologs</a></span>
+</footer>
+
+<pre id="errors" hidden></pre>
+<script type="module" src="js/app.js"></script>
+</body>
+</html>

@@ -8,9 +8,12 @@
 import os
 import sys
 import csv
+import json
 import gzip
 import shutil
+import importlib
 import subprocess
+import duckdb
 import pytest
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -126,6 +129,65 @@ def test_candidate_files_name_the_species_behind_each_gene(current_run):
                 assert species in names and int(count) > 0
                 seen.add(species)
     assert "Mus-musculus" in seen
+
+
+def test_release_holds_what_the_run_made(current_run):
+    project, _ = current_run
+    with open(os.path.join(project, "monarch_kg", "versions.json")) as fh:
+        assert json.load(fh) == {"graph_version": "2000-01-01", "phenio_version": "2000-01-01", "graph_url": None}
+
+    # 08 started a new list, so it holds this release alone, with the versions that made it
+    with open(os.path.join(project, "release", "releases.json")) as fh:
+        releases = json.load(fh)
+    assert [r["path"] for r in releases] == ["2000-01-01/disease/"]
+    assert releases[0]["phenio_version"] == "2000-01-01" and releases[0]["code_version"]
+
+    # One flat folder: the tables, overview.json, the README and the manifest
+    release = os.path.join(project, "release", "2000-01-01", "disease")
+    with open(os.path.join(release, "manifest.json")) as fh:
+        files = {f["path"]: f["rows"] for f in json.load(fh)}
+    pooled = read_tsv(os.path.join(project, "phenologs_results", "Homo_sapiens_disease_results", "Homo-sapiens_pooled_phenologs_fdr0.05.tsv"))
+    assert files["phenologs.parquet"] == len(pooled) > 0
+    assert files["candidates.parquet"] > 0
+    assert "README.md" in files and "overview.json" in files and not any("/" in f for f in files)
+
+
+def test_release_readme_lists_every_column(current_run):
+    project, _ = current_run
+    release = os.path.join(project, "release", "2000-01-01", "disease")
+    with open(os.path.join(release, "README.md")) as fh:
+        sections = {s.split("\n", 1)[0]: s for s in fh.read().split("\n## ")[1:]}
+    for name in sorted(f for f in os.listdir(release) if f.endswith(".parquet")):
+        columns = [c[0] for c in duckdb.sql("DESCRIBE SELECT * FROM '{}'".format(os.path.join(release, name))).fetchall()]
+        missing = [c for c in columns if "`{}`".format(c) not in sections.get(name, "")]
+        assert not missing, "README.md does not describe {} of {}".format(missing, name)
+
+
+def test_release_list_keeps_the_published_releases(current_run, tmp_path):
+    project, _ = current_run
+    shutil.copytree(os.path.join(project, "release"), tmp_path / "release")
+    published = tmp_path / "published.json"
+    published.write_text(json.dumps([dict(path="2001-01-01/disease/", graph_version="2001-01-01", prediction_network="disease"),
+                                     dict(path="2000-01-01/disease/", graph_version="2000-01-01", prediction_network="disease", built="earlier"),
+                                     dict(path="1999-01-01/disease/", graph_version="1999-01-01", prediction_network="disease")]))
+    subprocess.run([sys.executable, "08_update_release_list.py", "-p", str(tmp_path), "-r", str(published)], cwd=CODE, check=True, capture_output=True)
+
+    # The run's build takes the place of the published one, the others stay, newest first
+    with open(tmp_path / "release" / "releases.json") as fh:
+        releases = json.load(fh)
+    assert [r["path"] for r in releases] == ["2001-01-01/disease/", "2000-01-01/disease/", "1999-01-01/disease/"]
+    assert releases[1]["built"] != "earlier"
+
+
+def test_kg_versions_read_both_metadata_layouts():
+    setup = importlib.import_module("01_download_and_setup")
+
+    # Since 2026-05-09 phenio sits under kg-phenio (whose own version can differ), before that under data
+    current = ("id: monarch-kg\nversion: '2026-10-07'\nsources:\n- id: kg-phenio\n  version: v2026-10-07\n  sources:\n"
+               "  - id: phenio\n    name: PHENIO\n    urls:\n    - https://github.com/monarch-initiative/phenio\n    version: v2026-10-06\n")
+    earlier = "kg-version: 2026-03-06\n\npackages:\n  biolink: 4.3.6\n\ndata:\n  phenio: v2025-11-14\n  alliance: 8.3.0\n"
+    assert setup.kg_versions(current) == ("2026-10-07", "2026-10-06")
+    assert setup.kg_versions(earlier) == ("2026-03-06", "2025-11-14")
 
 
 # ---- the 2024 graph: no type column, empty gene names, no DDPHENO, a nearly empty pombe ---------

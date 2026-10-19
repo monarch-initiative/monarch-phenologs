@@ -1,6 +1,6 @@
 [project]
 name = "monarch-phenologs"
-version = "0.3.0"
+version = "0.4.0"
 description = "Phenologs and cross species gene candidate rankings from the Monarch Knowledge Graph"
 authors = [{ name = "Aaron Odell", email = "aaron@tislab.org" }]
 requires-python = ">=3.10,<3.13"
@@ -15,11 +15,11 @@ dependencies = [
     "pydantic==2.13.3",
     "matplotlib==3.8.4",
     "requests==2.33.1",
+    "duckdb==1.1.1",        # 07_build_release.py
 ]
 
 [dependency-groups]
 dev = ["pytest==8.2.1"]
-dashboard = ["duckdb==1.1.1"]    # dashboard/build_release.py
 
 [tool.uv]
 package = false    # a set of scripts, not an installable package

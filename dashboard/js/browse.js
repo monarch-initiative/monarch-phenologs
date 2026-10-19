@@ -1,0 +1,144 @@
+// Browse pages: every disease / gene / phenotype / family / species as a sortable table
+import { ensure, query, lit } from "./db.js";
+import { state, fmt, esc, speciesChip, speciesOf, route } from "./format.js";
+import { table } from "./table.js";
+import { radar, speciesAxes } from "./radar.js";
+import { RADAR_AXES } from "./species.js";
+import { HELP } from "./common.js";
+
+const num = (key, label, extra = {}) => ({ key, label, num: true, ...extra });
+const p = v => `<span class="mono">${fmt.p(v)}</span>`;
+
+// Columns that only mean something for base species rows, or only for model species rows: blank elsewhere,
+// and sorted after every row they apply to
+const isBase = r => r.species === state.overview.release.base_species;
+const only = (applies, key, label, extra = {}) => num(key, label, {
+  ...extra, format: (v, r) => applies(r) ? fmt.int(v) : "", sortValue: r => applies(r) ? r[key] : null });
+const baseOnly = (...args) => only(isBase, ...args);
+const modelOnly = (...args) => only(r => !isBase(r) && !r.is_base, ...args);
+
+const KINDS = {
+  diseases: {
+    title: "Diseases", sub: "Every human disease with at least one significant phenolog",
+    sql: () => `SELECT * FROM diseases`,
+    columns: [
+      { key: "name", label: "Human disease", format: (v, r) => `<a href="${route.disease(r.disease_id)}">${esc(v)}</a>` },
+      { key: "disease_id", label: "Id", format: v => `<span class="id muted">${esc(v)}</span>` },
+      num("n_known_genes", "Known genes", { help: "Curated genes of the disease in the graph" }), num("n_phenologs", "Phenologs"),
+      num("n_species", "Species", { help: "Model species with at least one phenolog for the disease" }),
+      num("n_known_recovered", "Recovered", { help: "Known genes recovered by the disease's candidate ranking" }),
+      num("n_candidates", "Genes ranked", { help: "Genes the disease's candidate ranking scored, known genes included" }),
+      { key: "top_species", label: "Top species", help: "The species with the most phenologs for the disease", format: v => v ? speciesChip(v) : "" },
+      num("best_pval", "Best phenolog p", { format: p, sortDir: "asc" }),
+    ],
+    sort: "n_phenologs", search: ["name", "disease_id"], placeholder: "Filter by disease name or Mondo id…",
+  },
+  genes: {
+    title: "Genes", sub: "Genes with phenotypes, a curated disease, or a candidate",
+    sql: () => `SELECT * FROM genes WHERE n_phenotypes > 0 OR n_known_diseases > 0 OR n_predicted_diseases > 0`,
+    columns: [
+      { key: "symbol", label: "Gene", format: (v, r) => `<a href="${route.gene(r.gene_id)}">${esc(v)}</a>` },
+      { key: "gene_id", label: "Id", format: v => `<span class="id muted">${esc(v)}</span>` },
+      { key: "species", label: "Species", format: v => speciesChip(v) },
+      { key: "family", label: "Family", format: v => v ? `<a class="mono" href="${route.family(v)}">${esc(v)}</a>` : "" },
+      num("n_ortholog_species", "Species with orthologs", { help: "Other species of this release the gene has an ortholog in" }),
+      num("n_phenotypes", "Phenotypes"), baseOnly("n_known_diseases", "Known diseases", { help: "Curated diseases of the gene (human genes only)" }),
+      baseOnly("n_predicted_diseases", "Ranked for", { help: "Diseases whose candidate ranking scored this gene, known ones included (human genes only)" }),
+      baseOnly("n_novel_diseases", "Novel", { help: "Diseases ranked for that the gene is not known for" }),
+      baseOnly("best_rank", "Best rank", { sortDir: "asc", help: "Best place in any disease's ranking" }),
+    ],
+    sort: "n_predicted_diseases", search: ["symbol", "gene_id", "family"], placeholder: "Filter by gene name or id…",
+    filters: true,
+  },
+  phenotypes: {
+    title: "Phenotypes", sub: "All species phenotypes",
+    sql: () => `SELECT * FROM phenotypes`,
+    columns: [
+      { key: "name", label: "Phenotype", format: (v, r) => `<a href="${route.phenotype(r.phenotype_id)}">${esc(v)}</a>` },
+      { key: "phenotype_id", label: "Id", format: v => `<span class="id muted">${esc(v)}</span>` },
+      { key: "species", label: "Species", format: v => speciesChip(v) },
+      num("n_genes", "Genes"), num("n_orthogroups", "Families", { help: "Every PANTHER family of the annotated genes" }),
+      baseOnly("n_known_diseases", "Known diseases", { help: "Curated diseases of the genes annotated with this phenotype (human phenotypes only)" }),
+      modelOnly("n_diseases", "Phenolog disease associations", { help: "Human diseases this phenotype is a significant phenolog of (model species phenotypes only)" }),
+    ],
+    sort: "n_diseases", search: ["name", "phenotype_id"], placeholder: "Filter by phenotype name or id…",
+    filters: true,
+  },
+  families: {
+    title: "Protein families", sub: "PANTHER families with at least one gene in the release",
+    sql: () => `SELECT * FROM families`,
+    columns: [
+      { key: "family", label: "Family", format: v => `<a class="mono" href="${route.family(v)}">${esc(v)}</a>` },
+      { key: "base_symbols", label: "Human genes", ellipsis: true, format: v => esc(v || "") },
+      num("n_genes", "Genes", { help: "Members in every species of the release" }), num("n_species", "Species"),
+      num("n_known_diseases", "Known diseases", { help: "Diseases with a curated human member" }),
+      num("n_predicted_diseases", "Ranked for", { help: "Diseases whose candidate ranking scored a human member" }),
+      num("n_novel_diseases", "Novel", { help: "Diseases ranked for where no human member is a known gene" }),
+      num("best_score", "Best score", { format: p, sortDir: "asc", help: HELP.score }),
+    ],
+    sort: "n_predicted_diseases", search: ["family", "base_symbols"], placeholder: "Filter by family or human gene…",
+  },
+  species: {
+    title: "Species", sub: "The species of this release",
+    sql: () => `SELECT * FROM species ORDER BY plot_order`,
+    columns: [
+      { key: "binomial", label: "Species", width: "250px", format: (v, r) => `<a href="${route.species(r.species)}"><span class="dot" style="background:${r.color}"></span> <i>${esc(v)}</i></a>
+          <div class="faint nowrap" style="font-size:11.5px">${esc(r.common)}${r.ontology ? " · " + esc(r.ontology) : ""} · <span class="id" style="font-size:11px">${esc(r.taxon_id)}</span></div>` },
+      num("n_genes", "Genes in graph"),
+      num("n_ortholog_genes", "With an ortholog", { help: "Protein-coding genes with a PANTHER ortholog edge to any species of the graph" }),
+      num("n_human_ortholog_genes", "With a human ortholog", { help: "Protein-coding genes with a PANTHER ortholog edge to a human gene" }),
+      num("n_phenotyped_genes", "With phenotypes"), num("n_phenotypes_annotated", "Phenotypes", { help: "Distinct phenotypes the species' genes are annotated with" }),
+      num("n_orthogroups", "Families", { help: "PANTHER families of the species' genes" }),
+      num("n_common_with_base", "Shared with human", { help: "PANTHER families both this species and human carry" }),
+      modelOnly("n_phenologs", "Phenologs"),
+      modelOnly("n_diseases", "Diseases", { help: "Human diseases with at least one phenolog in this species" }),
+      modelOnly("n_novel_candidates", "Candidate pairs", { help: "Novel gene–disease pairs with a supporting phenolog from this species" }),
+      num("fdr_cutoff", "p cutoff", { format: p, help: "Largest phenolog p-value accepted for this species at the release's FDR" }),
+    ],
+    sort: "n_phenologs", search: ["binomial", "common"], placeholder: "Filter by species…", wrapHead: true, before: speciesCards,
+  },
+};
+
+export async function render(el, kind) {
+  const cfg = KINDS[kind];
+  if (!cfg) { el.innerHTML = `<div class="card">Unknown list</div>`; return; }
+  const tableName = kind;
+  await ensure(tableName);
+  const rows = await query(cfg.sql());
+
+  el.innerHTML = `
+    <div class="page-head"><div class="titles"><div class="kicker">Browse</div><h1>${esc(cfg.title)}</h1><div class="muted">${esc(cfg.sub)}</div></div></div>
+    ${cfg.before ? `<div id="before"></div>` : ""}
+    <div class="card" id="list"></div>`;
+  if (cfg.before) cfg.before(el.querySelector("#before"), rows);
+
+  // species filter chips for the big lists
+  let active = null;
+  const speciesPresent = cfg.filters ? state.overview.species.map(s => s.species).filter(s => rows.some(r => r.species === s)) : [];
+  const tools = speciesPresent.length ? `<span class="chips" id="sp-filter">${speciesPresent.map(s => `<span class="chip toggle" data-sp="${s}"><span class="dot" style="background:${speciesOf(s).color}"></span><i>${esc(speciesOf(s).binomial)}</i></span>`).join("")}</span>` : "";
+
+  const t = table(el.querySelector("#list"), rows, cfg.columns, {
+    sortKey: cfg.sort, sortDir: "desc", search: cfg.search, placeholder: cfg.placeholder, wrapHead: cfg.wrapHead, pageSize: 50, tools,
+    onDraw: root => root.querySelectorAll("#sp-filter .chip").forEach(chip => {
+      chip.classList.toggle("off", active != null && active !== chip.dataset.sp);
+      chip.addEventListener("click", () => {
+        active = active === chip.dataset.sp ? null : chip.dataset.sp;
+        t.setRows(active ? rows.filter(r => r.species === active) : rows);
+      });
+    }),
+  });
+}
+
+// The model species as player cards: one radar each, every axis log-scaled against the strongest species
+function speciesCards(el, rows) {
+  const model = rows.filter(r => !r.is_base);
+  el.innerHTML = `<div class="grid player-grid">${model.map(s => `
+    <a class="card player" href="${route.species(s.species)}">
+      <div class="name" style="color:${s.color}">${esc(s.binomial)}</div>
+      <div class="common">${esc(s.common)}${s.ontology ? " · " + esc(s.ontology) : ""}</div>
+      <div class="radar" data-sp="${esc(s.species)}"></div></a>`).join("")}</div>`;
+  el.querySelectorAll(".radar").forEach(div => {
+    const s = model.find(m => m.species === div.dataset.sp);
+    radar(div, speciesAxes(s, model, RADAR_AXES), { size: Math.min(280, div.clientWidth || 280), color: s.color, labels: true });
+  });
+}

@@ -1,5 +1,8 @@
 FROM python:3.10-slim
 
+# ps, which Nextflow's task wrapper needs
+RUN apt-get update && apt-get install -y --no-install-recommends procps && rm -rf /var/lib/apt/lists/*
+
 # The locked environment, installed by uv into the image's python. Nothing is resolved at build
 # time, so the image is exactly what uv.lock says
 COPY --from=ghcr.io/astral-sh/uv:0.6.13 /uv /bin/uv
@@ -13,5 +16,10 @@ RUN uv sync --frozen --all-groups
 #   python /app/python/02_kg_data_extraction.py -p /data
 COPY . .
 ENV PATH="/app/.venv/bin:$PATH"
+
+# The code's version, which 07_build_release.py records in each release. Given by the build:
+#   docker build --build-arg PHENOLOGS_VERSION=$(git describe --tags --long --always --dirty) .
+ARG PHENOLOGS_VERSION=unknown
+ENV PHENOLOGS_VERSION=$PHENOLOGS_VERSION
 
 CMD ["/bin/bash"]
