@@ -1,7 +1,7 @@
 """
 manifest.json: every file of a release folder, with its size, row count, sha256 and what it holds.
-releases.json: the release block of every release folder under the releases folder, newest first. The site
-opens a release from it.
+releases.json: the release block of every published release, with its folder, newest first. The site opens
+a release from it.
 """
 import os
 import json
@@ -50,17 +50,23 @@ def build(con, outdir):
     return files
 
 
-def index(root):
-    """ Write <root>/releases.json from the release folders under root. Returns its list of releases """
+def index(root, folder):
+    """
+    Add the release in folder to <root>/releases.json, in place of an older build of it. To add it to the
+    published list, fetch the bucket's releases.json into root before building. Returns the list of releases
+    """
 
+    with open(os.path.join(folder, "overview.json")) as fh:
+        release = dict(json.load(fh)["release"], path=os.path.relpath(folder, root) + "/")
+
+    path = os.path.join(root, "releases.json")
     releases = []
-    for name in sorted(os.listdir(root), reverse=True):
-        path = os.path.join(root, name, "overview.json")
-        if os.path.isfile(path):
-            with open(path) as fh:
-                releases.append(json.load(fh)["release"])
+    if os.path.isfile(path):
+        with open(path) as fh:
+            releases = [r for r in json.load(fh) if r["path"] != release["path"]]
+    releases = sorted(releases + [release], key=lambda r: r["graph_version"], reverse=True)
 
-    with open(os.path.join(root, "releases.json"), "w") as fh:
+    with open(path, "w") as fh:
         json.dump(releases, fh, indent=1)
     return releases
 

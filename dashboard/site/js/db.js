@@ -2,21 +2,24 @@
 // and stay registered for the rest of the session. All SQL the site runs goes through query().
 import * as duckdb from "https://cdn.jsdelivr.net/npm/@duckdb/duckdb-wasm@1.29.0/+esm";
 
-// Where the releases live: releases/ beside the site (as serve.py serves them), or ?data=<url>
+// Where the releases live: the Monarch data bucket, or releases/ beside the site when it is served locally
+// (serve.py). ?data=<url> points it anywhere else
 const params = new URLSearchParams(location.search);
-const ROOT = (params.get("data") || "releases").replace(/\/?$/, "/");
+const LOCAL = ["localhost", "127.0.0.1"].includes(location.hostname);
+const ROOT = (params.get("data") || (LOCAL ? "releases" : "https://data.monarchinitiative.org/phenologs/alpha")).replace(/\/?$/, "/");
 let folder = null;              // the open release
 let db = null;
 let conn = null;
 const registered = new Map();   // table -> Promise
 
-// Opens ?release=<graph_version>, or the newest release in releases.json. Returns its overview.json
+// Opens ?release=<graph_version> (the newest by default) of ?network=disease|phenotype (disease by default)
+// from releases.json. Returns its overview.json
 export async function openRelease() {
   const releases = await getJSON(ROOT + "releases.json");
-  const want = params.get("release");
-  const r = want ? releases.find(x => x.graph_version === want) : releases[0];
-  if (!r) throw new Error(want ? `No release ${want} in ${ROOT}releases.json` : `No releases in ${ROOT}releases.json`);
-  folder = ROOT + r.graph_version + "/";
+  const want = params.get("release"), network = params.get("network") || "disease";
+  const r = releases.find(x => x.prediction_network === network && (!want || x.graph_version === want));
+  if (!r) throw new Error(`No ${network} release${want ? " " + want : ""} in ${ROOT}releases.json`);
+  folder = ROOT + r.path;
   return getJSON(folder + "overview.json");
 }
 

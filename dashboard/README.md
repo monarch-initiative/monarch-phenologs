@@ -11,15 +11,17 @@ python dashboard/serve.py                                                       
 
 `build_release.py` finds everything under the project directory the pipeline wrote (`species_data/`,
 the phenologs, the FDR table, the candidate rankings). The site serves the FDR, k and rank metric you ask
-for (defaults 0.05, 1000, hg). The graph version is taken from a date in the project path unless given.
-The release is written to `dashboard/releases/<graph_version>/` (`-o` for another releases folder), and
-`releases.json` beside it is refreshed. A rebuild replaces the folder.
+for (defaults 0.05, 1000, hg). The graph version is taken from a date in the project path unless given; with
+neither, the build stops.
+The release is written to `dashboard/releases/<graph_version>/<prediction_network>/` (`-o` for another
+releases folder) and added to `releases.json` there. A rebuild replaces the folder. `--threads` and
+`--memory_limit` cap DuckDB, for a container.
 
 ## Layout
 
 ```
 dashboard/
-  build_release.py       CLI: project dir -> releases/<graph_version>/
+  build_release.py       CLI: project dir -> releases/<graph_version>/<prediction_network>/
   release/
     sources.py           where a run keeps things; DuckDB views over its files; species display details and the tree
     tables.py            one SQL statement per entity table (phenologs, candidates, genes, phenotypes, families, diseases, species, search)
@@ -35,9 +37,11 @@ dashboard/
     js/format.js         formatting, species colours, outbound links (the DisMech hook lives here)
     js/charts/           radar, species tree, additive stacked bars, bar lists, tables (in memory, or paged by query for the 1.5M candidates)
     js/views/            one module per page: overview, candidates, disease, gene, phenotype, family, species, browse, search
-  releases/              built releases (ignored by git)
-    releases.json        every release folder's release block, newest first
-    <graph_version>/     overview.json, manifest.json, the parquet tables below, downloads/
+  releases/              built releases (ignored by git), laid out as in the bucket
+    releases.json        every release's release block and folder, newest first
+    <graph_version>/
+      disease/           overview.json, manifest.json, the parquet tables below, downloads/
+      phenotype/         (later) the same for the phenotype network
 ```
 
 ## Data tables
@@ -73,11 +77,26 @@ and the charts in `js/charts/`. Anything that needs a new column goes in `tables
 
 ## Hosting
 
-The site and the releases are hosted apart: `site/` on any static host (GitHub Pages), the releases folder
-in a bucket. The site reads `releases.json`, opens the newest release (or `?release=<graph_version>`), and
-fetches that release's files. It looks for the releases at `releases/` beside itself; `?data=<url>` points
-it at another releases folder. A release folder never changes once uploaded. When a table's layout
-changes, `SCHEMA` in `overview.py` goes up and the older releases are rebuilt.
+The site and the releases are hosted apart: `site/` on GitHub Pages, the releases in the Monarch data bucket,
+`gs://data-public-monarchinitiative/phenologs/alpha/`, which is public at
+`https://data.monarchinitiative.org/phenologs/alpha/` (CORS open, range requests work, no listing). The site
+reads `releases.json` there, opens the newest disease release (or `?release=<graph_version>`,
+`?network=phenotype`), and fetches that release's files. Served locally it reads `releases/` instead, and
+`?data=<url>` points it at any other releases folder. A release folder never changes once uploaded. When a
+table's layout changes, `SCHEMA` in `overview.py` goes up and the older releases are rebuilt.
+
+Publishing a release. The bucket's `releases.json` is fetched first, so the build adds the new release to the
+published list rather than replacing it (skip the fetch for the very first release):
+
+```
+curl -fsS https://data.monarchinitiative.org/phenologs/alpha/releases.json -o dashboard/releases/releases.json
+python dashboard/build_release.py -p path/to/project_dir --graph_version 2026-03-06 --phenio_version 2025-11-14
+gsutil -m rsync -r dashboard/releases/2026-03-06/disease gs://data-public-monarchinitiative/phenologs/alpha/2026-03-06/disease
+gsutil -h "Cache-Control:no-cache" cp dashboard/releases/releases.json gs://data-public-monarchinitiative/phenologs/alpha/releases.json
+```
+
+Upload the release folder before `releases.json`, so the site never lists a release that is not there yet.
+`no-cache` makes a new release show up at once; the bucket otherwise caches files for an hour.
 
 The parquet files are fetched whole on first use (the largest is 17 MB), so range support is not required;
 `serve.py` has it anyway for when the data layer moves to range reads. Scripts come from jsdelivr

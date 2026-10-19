@@ -86,7 +86,9 @@ class Run:
 
     def _version_from_path(self):
         m = re.search(r"(\d{4}-\d{2}-\d{2})", self.project_dir)
-        return m.group(1) if m else "unknown"
+        if m is None:
+            raise ValueError("No graph version given, and no date in the project path to take it from: {}".format(self.project_dir))
+        return m.group(1)
 
     # -- species -----------------------------------------------------------------------------------
     def species_rows(self):
