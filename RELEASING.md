@@ -2,15 +2,15 @@
 
 There are two kinds of release:
 
-- **Code.** The container image `ghcr.io/monarch-initiative/monarch-phenologs:<version>`, which holds the code
+- **Code.** The container image `ghcr.io/monarch-initiative/monarch-phenologs:<date and time>`, which holds the code
   and its locked environment. It is built from the Actions tab whenever the code changes, which is rarely.
 - **Data.** One release per Monarch KG version and prediction network, made by running the image on that KG and
   published to `gs://data-public-monarchinitiative/phenologs/alpha/<kg version>/<network>/`
   (`https://data.monarchinitiative.org/phenologs/alpha/`).
   - The dashboard (GitHub Pages) lists the data releases from `releases.json` there. A new data release needs no
     site deploy.
-  - Each data release records the KG, PHENIO and code versions that made it, the code as its version and commit
-    (`0.4.0 (1a2b3c4)`).
+  - Each data release records the KG, PHENIO and code versions that made it, the code as the image's tag and
+    commit (`2026-10-19-2315 (1a2b3c4)`).
 
 ## Making a data release
 
@@ -71,11 +71,12 @@ Things to know:
 
 ## Making an image
 
-- **Building.** Actions tab, Build Image, Run workflow. Left empty, the tag is the version in `pyproject.toml`, and
-  `latest` moves to the new image. Bump that version when the code changes.
-- **Trying a branch out.** Run the workflow from that branch under any other tag (e.g. `dev`); `latest` stays put.
-  Running it again under the same tag replaces that image, and old images can be deleted in the package settings.
-- **Pulling.** On the cluster: `apptainer pull docker://ghcr.io/monarch-initiative/monarch-phenologs:0.4.0`.
+- **Building.** Actions tab, Build Image, Run workflow, from any branch. Each build is tagged with its date and time in
+  UTC, e.g. `2026-10-19-2315`; the run's summary shows its tags. Nothing is overwritten and nothing needs bumping.
+- **latest** moves to every build from main.
+- **Trying a branch out.** Give an extra tag (e.g. `dev`) and it moves to the new image too, so a test pipeline can
+  follow `dev` while the release pipeline stays pinned. Old images can be deleted in the package settings.
+- **Pulling.** On the cluster: `apptainer pull docker://ghcr.io/monarch-initiative/monarch-phenologs:2026-10-19-2315`.
   The first image pushed makes the package; set it to public once, in its settings on GitHub.
-- **Pinning.** Data releases are made with a fixed image tag. Moving to new code is a one-line change in the release
-  pipeline's settings.
+- **Pinning.** The release pipeline pins a date tag, which never moves. Moving to new code is a one-line change in its
+  settings.

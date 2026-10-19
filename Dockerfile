@@ -17,9 +17,11 @@ RUN uv sync --frozen --all-groups
 COPY . .
 ENV PATH="/app/.venv/bin:$PATH"
 
-# The commit the image is built from, which 07_build_release.py records with the version in pyproject.toml:
-#   docker build --build-arg PHENOLOGS_COMMIT=$(git rev-parse --short HEAD) .
-ARG PHENOLOGS_COMMIT=unknown
-ENV PHENOLOGS_COMMIT=$PHENOLOGS_COMMIT
+# The image's date tag and the commit it is built from, which 07_build_release.py records in each release. The Build
+# Image workflow sets them; a local build can too:
+#   docker build --build-arg PHENOLOGS_IMAGE=local --build-arg PHENOLOGS_COMMIT=$(git rev-parse --short HEAD) .
+ARG PHENOLOGS_IMAGE=
+ARG PHENOLOGS_COMMIT=
+ENV PHENOLOGS_IMAGE=$PHENOLOGS_IMAGE PHENOLOGS_COMMIT=$PHENOLOGS_COMMIT
 
 CMD ["/bin/bash"]
