@@ -1,6 +1,6 @@
 [project]
 name = "monarch-phenologs"
-version = "0.3.0"
+version = "0.4.0"
 description = "Phenologs and cross species gene candidate rankings from the Monarch Knowledge Graph"
 authors = [{ name = "Aaron Odell", email = "aaron@tislab.org" }]
 requires-python = ">=3.10,<3.13"

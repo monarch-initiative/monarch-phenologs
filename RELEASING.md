@@ -71,7 +71,10 @@ Things to know:
 ## Making a code release
 
 - **Version.** Set it in `pyproject.toml`, merge to main, and publish a GitHub release tagged `v<that version>`.
-  The image workflow builds and pushes `ghcr.io/monarch-initiative/monarch-phenologs:v<version>`.
+  The image workflow (`.github/workflows/image.yml`) builds and pushes
+  `ghcr.io/monarch-initiative/monarch-phenologs:v<version>`, and moves `latest` to it.
+- **Pulling.** On the cluster: `apptainer pull docker://ghcr.io/monarch-initiative/monarch-phenologs:v<version>`.
+  The first image pushed makes the package; set it to public once, in its settings on GitHub.
 - **Iterating.** The same workflow can be run by hand (Actions, then Run workflow) from any branch, under any tag.
   - Pushing a tag again moves it to the new image.
   - Old images can be deleted in the package settings.

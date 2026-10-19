@@ -49,7 +49,9 @@ writes the release (what the dashboard reads and the bucket holds) to `path/to/p
 
 `tests/run_pipeline.sh` runs every step on a slice with tiny parameters; `PY=.venv/bin/python` selects
 the interpreter. To change a dependency, edit `pyproject.toml`, run `uv lock`, and re-run the tests.
-The Dockerfile installs the same lock into `python:3.10-slim`.
+The Dockerfile installs the same lock into `python:3.10-slim`. GitHub Actions builds it as
+`ghcr.io/monarch-initiative/monarch-phenologs` for every GitHub release (see `RELEASING.md`), and runs the tests on
+every pull request.
 
 ## Methods
 

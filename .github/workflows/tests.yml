@@ -1,0 +1,21 @@
+# The whole pipeline on the two kg slices (tests/), for every pull request and every push to main
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    env:
+      UV_PYTHON_DOWNLOADS: never      # the python 3.10 set up below, as in the Dockerfile
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.10"
+      - run: pip install uv==0.6.13
+      - run: uv sync --frozen --all-groups
+      - run: uv run python -m pytest tests/ -q
