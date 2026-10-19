@@ -1,7 +1,7 @@
 // The additive decomposition of a disease's prediction: one bar per protein family, one segment per
 // contributing phenolog (the paper's case study figure, interactive). rows = additive.parquet rows of
 // one disease. Everything is re-sliced client side from the per (family, phenolog) rows.
-import { esc, fmt, speciesOf, shortBinomial, route } from "../format.js";
+import { esc, fmt, speciesOf, shortBinomial, route } from "./format.js";
 import { showTip, moveTip, hideTip } from "./tooltip.js";
 
 const PALETTE = [...d3.schemeTableau10, ...d3.schemeSet3.filter(c => c !== "#d9d9d9" && c !== "#ffffb3")];

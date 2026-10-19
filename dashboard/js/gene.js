@@ -1,9 +1,9 @@
 // One gene. A base species gene: what it is known for, what it is ranked for, its phenotypes, its protein family.
 // A model species gene: its phenotypes, its human orthologs, its protein family
-import { ensure, query, lit } from "../db.js";
-import { state, fmt, esc, speciesOf, speciesChip, supportChips, route, links } from "../format.js";
+import { ensure, query, lit } from "./db.js";
+import { state, fmt, esc, speciesOf, speciesChip, supportChips, route, links } from "./format.js";
 import { pageHead, statRow, card, notFound, legend, nameGrid, PAIR_KEY, HELP, SUPPORT_LABEL, RECOVERY_KEY } from "./common.js";
-import { table } from "../charts/table.js";
+import { table } from "./table.js";
 
 const MEMBERS_SHOWN = 60;    // per species, before "+N more"
 

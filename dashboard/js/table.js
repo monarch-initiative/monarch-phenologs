@@ -4,7 +4,7 @@
 //                                                fetchPage({ sortKey, sortDir, filter, page, pageSize }) -> { rows, total }
 //   columns: [{ key, label, num, format(value, row) -> html, sortValue(row), sortDir: first click, width, help: header tooltip, sortable }]
 //   options: { pageSize, sortKey, sortDir, search: [keys to match], placeholder, tools: html, empty, wrapHead, onDraw(el) }
-import { esc, fmt } from "../format.js";
+import { esc, fmt } from "./format.js";
 
 export function table(el, rows, columns, options = {}) {
   const st = tableState(options);

@@ -1,6 +1,6 @@
 // The species tree of a release: a dated cladogram (divergence from the base species, Mya) with a
 // metric drawn beside each leaf. tree = nested {name, taxon_id, time, children}; species = rows of species.parquet
-import { esc, fmt, speciesOf, route } from "../format.js";
+import { esc, fmt, speciesOf, route } from "./format.js";
 import { showTip, moveTip, hideTip } from "./tooltip.js";
 
 export function speciesTree(el, tree, species, { metric = "n_phenologs", metricLabel = "phenologs", width = 760 } = {}) {

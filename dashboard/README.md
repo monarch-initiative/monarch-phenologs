@@ -1,50 +1,53 @@
 # Phenologs dashboard
 
-A static site over the pipeline's runs: a release at a glance, and every disease, gene, phenotype,
-protein family and species as a page you can search for. There is no server side. A build step turns a
-run's TSVs into a release folder of parquet tables, and the browser queries those with DuckDB-WASM.
+A static site over the pipeline's releases: a release at a glance, and every disease, gene, phenotype, protein
+family and species as a page you can search for. There is no server side. The browser reads a release's parquet
+tables with DuckDB-WASM. Releases are made by the pipeline's last step, `python/07_build_release.py`.
 
 ```
-python dashboard/build_release.py -p path/to/project_dir --phenio_version 2025-11-14   # ~20 s, ~150 MB
-python dashboard/serve.py                                                             # http://localhost:8765
+uv run python python/07_build_release.py -p path/to/project_dir -gv 2026-03-06 -pv 2025-11-14   # ~20 s
+python dashboard/serve.py -p path/to/project_dir                                                  # http://localhost:8765
 ```
-
-`build_release.py` finds everything under the project directory the pipeline wrote (`species_data/`,
-the phenologs, the FDR table, the candidate rankings). The site serves the FDR, k and rank metric you ask
-for (defaults 0.05, 1000, hg). The graph version is taken from a date in the project path unless given; with
-neither, the build stops.
-The release is written to `dashboard/releases/<graph_version>/<prediction_network>/` (`-o` for another
-releases folder) and added to `releases.json` there. A rebuild replaces the folder. `--threads` and
-`--memory_limit` cap DuckDB, for a container.
 
 ## Layout
 
 ```
 dashboard/
-  build_release.py       CLI: project dir -> releases/<graph_version>/<prediction_network>/
-  release/
-    sources.py           where a run keeps things; DuckDB views over its files; species display details and the tree
-    tables.py            one SQL statement per entity table (phenologs, candidates, genes, phenotypes, families, diseases, species, search)
-    additive.py          the Woods 2013 additive decomposition, per disease (what the case study figure shows)
-    overview.py          overview.json: tiles, species stats, FDR table, tree, top lists, graph inputs, known pair funnel
-    downloads.py         the run's raw results as single tables, and a README on their columns
-    manifest.py          manifest.json (every file of a release) and releases.json (every release)
-  serve.py               local static server: site/ at /, releases/ at /releases/, with HTTP range support
-  site/                  HTML, JS and CSS only
-    index.html, style.css
-    js/app.js            hash router, search box
-    js/db.js             DuckDB-WASM: opens a release, fetches its tables on first use
-    js/format.js         formatting, species colours, outbound links (the DisMech hook lives here)
-    js/charts/           radar, species tree, additive stacked bars, bar lists, tables (in memory, or paged by query for the 1.5M candidates)
-    js/views/            one module per page: overview, candidates, disease, gene, phenotype, family, species, browse, search
-  releases/              built releases (ignored by git), laid out as in the bucket
-    releases.json        every release's release block and folder, newest first
-    <graph_version>/
-      disease/           overview.json, manifest.json, the parquet tables below, downloads/
-      phenotype/         (later) the same for the phenotype network
+  index.html, style.css
+  js/
+    app.js           hash router, search box
+    db.js            DuckDB-WASM: opens a release, fetches its tables on first use
+    format.js        formatting, species colours, outbound links (the DisMech hook lives here)
+    common.js        page pieces the pages share
+    overview.js  candidates.js  disease.js  gene.js  phenotype.js  family.js  species.js  browse.js  search.js
+                     one module per page
+    bars.js  radar.js  stacked.js  table.js  tooltip.js  tree.js
+                     charts (tables are in memory, or paged by query for the 1.5M candidates)
+  serve.py           local server: the dashboard, with a run's release/ at /releases/
 ```
 
-## Data tables
+## The release
+
+`07_build_release.py` reads the project directory a run wrote (`species_data/`, the phenologs, the FDR table,
+the candidate rankings) and writes the release next to them, laid out as in the bucket:
+
+```
+<project_dir>/release/
+  releases.json          every release's release block and folder, newest first
+  2026-03-06/
+    disease/             the release, the folder that goes to the bucket
+      overview.json      everything the release page shows
+      manifest.json      every file with its size, rows, sha256 and what it holds
+      *.parquet          the tables below
+      downloads/         the run's raw results as single tables
+```
+
+- **Settings.** The site shows the FDR, k and rank metric given (defaults 0.05, 1000, hg); the downloads hold every ranking the run made.
+- **Graph version.** Taken from a date in the project path unless `-gv` is given; with neither, the build stops.
+- **Rebuilds.** A rebuild replaces the release folder.
+- **Other options.** `-o` writes the releases somewhere else. `-c` and `-m` cap DuckDB's cores and memory, for a container.
+
+The code is `python/phenologs_release_utils.py`. A change in the pipeline's files is a change to the `Run` views there.
 
 | table | one row per | notes |
 |---|---|---|
@@ -60,7 +63,7 @@ dashboard/
 Counts are 32 bit so they arrive in the browser as plain numbers. The tables are also a reasonable
 distribution format on their own: `duckdb` can read them from a bucket URL.
 
-`downloads/` holds the run's raw results, for people who want everything. Its `README.md` describes every column.
+`downloads/` holds the run's raw results, for people who want everything. Their `README.md` describes every column.
 
 | download | one row per | notes |
 |---|---|---|
@@ -71,36 +74,35 @@ distribution format on their own: `duckdb` can read them from a bucket URL.
 
 ## Adding a page or a chart
 
-A view exports `render(el, ...params)` and is wired in `ROUTES` in `app.js`. It asks `db.js` for the tables it
-needs with `ensure(...)`, queries with `query(sql)`, and builds HTML with the helpers in `views/common.js`
-and the charts in `js/charts/`. Anything that needs a new column goes in `tables.py` first.
+A page module exports `render(el, ...params)` and is wired in `ROUTES` in `app.js`. It asks `db.js` for the tables
+it needs with `ensure(...)`, queries with `query(sql)`, and builds HTML with the helpers in `common.js` and the
+charts. Anything that needs a new column goes in the table SQL of `phenologs_release_utils.py` first.
 
 ## Hosting
 
-The site and the releases are hosted apart: `site/` on GitHub Pages, the releases in the Monarch data bucket,
-`gs://data-public-monarchinitiative/phenologs/alpha/`, which is public at
-`https://data.monarchinitiative.org/phenologs/alpha/` (CORS open, range requests work, no listing). The site
-reads `releases.json` there, opens the newest disease release (or `?release=<graph_version>`,
-`?network=phenotype`), and fetches that release's files. Served locally it reads `releases/` instead, and
-`?data=<url>` points it at any other releases folder. A release folder never changes once uploaded. When a
-table's layout changes, `SCHEMA` in `overview.py` goes up and the older releases are rebuilt.
+The dashboard and the releases are hosted apart: this folder on GitHub Pages, the releases in the Monarch data
+bucket, `gs://data-public-monarchinitiative/phenologs/alpha/`. That bucket is public at
+`https://data.monarchinitiative.org/phenologs/alpha/`: CORS is open and range requests work, but it can't be listed.
+- **Which release.** The site reads `releases.json` there and opens the newest disease release, or `?release=<graph_version>` and `?network=phenotype`.
+- **Local data.** Served by `serve.py`, it reads the run's `release/` folder instead. `?data=<url>` points it at any other releases folder.
+- **Release folders never change once uploaded.** When a table's layout changes, `SCHEMA` in `phenologs_release_utils.py` goes up and the older releases are rebuilt.
 
-Publishing a release. The bucket's `releases.json` is fetched first, so the build adds the new release to the
-published list rather than replacing it (skip the fetch for the very first release):
+**Publishing a release.** Fetch the bucket's `releases.json` first, so the build adds the new release to the published
+list rather than replacing it. Skip the fetch for the very first release.
 
 ```
-curl -fsS https://data.monarchinitiative.org/phenologs/alpha/releases.json -o dashboard/releases/releases.json
-python dashboard/build_release.py -p path/to/project_dir --graph_version 2026-03-06 --phenio_version 2025-11-14
-gsutil -m rsync -r dashboard/releases/2026-03-06/disease gs://data-public-monarchinitiative/phenologs/alpha/2026-03-06/disease
-gsutil -h "Cache-Control:no-cache" cp dashboard/releases/releases.json gs://data-public-monarchinitiative/phenologs/alpha/releases.json
+curl -fsS https://data.monarchinitiative.org/phenologs/alpha/releases.json -o path/to/project_dir/release/releases.json
+uv run python python/07_build_release.py -p path/to/project_dir -gv 2026-03-06 -pv 2025-11-14
+gsutil -m rsync -r path/to/project_dir/release/2026-03-06/disease gs://data-public-monarchinitiative/phenologs/alpha/2026-03-06/disease
+gsutil -h "Cache-Control:no-cache" cp path/to/project_dir/release/releases.json gs://data-public-monarchinitiative/phenologs/alpha/releases.json
 ```
 
-Upload the release folder before `releases.json`, so the site never lists a release that is not there yet.
-`no-cache` makes a new release show up at once; the bucket otherwise caches files for an hour.
+- **Order.** Upload the release folder before `releases.json`, so the site never lists a release that is not there yet.
+- **Caching.** `no-cache` makes a new release show up at once; the bucket otherwise caches files for an hour.
 
-The parquet files are fetched whole on first use (the largest is 17 MB), so range support is not required;
-`serve.py` has it anyway for when the data layer moves to range reads. Scripts come from jsdelivr
-(DuckDB-WASM) and cdnjs (D3); fonts from Google Fonts.
+**Fetching.** The parquet files are fetched whole on first use, so range support is not required; the largest is 17 MB. `serve.py` has range support anyway, for when the data layer moves to range reads.
+
+**Outside sources.** Scripts come from jsdelivr (DuckDB-WASM) and cdnjs (D3), and fonts from Google Fonts.
 
 ## Later
 

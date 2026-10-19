@@ -1,10 +1,10 @@
 // One species: what the graph holds for it, its player card, its FDR control, where its phenologs land
-import { ensure, query, lit } from "../db.js";
-import { state, fmt, esc, route, links } from "../format.js";
+import { ensure, query, lit } from "./db.js";
+import { state, fmt, esc, route, links } from "./format.js";
 import { pageHead, statRow, card, notFound, PHENOLOG_HELP, FDR_HELP } from "./common.js";
-import { radar, speciesAxes } from "../charts/radar.js";
-import { barList } from "../charts/bars.js";
-import { table } from "../charts/table.js";
+import { radar, speciesAxes } from "./radar.js";
+import { barList } from "./bars.js";
+import { table } from "./table.js";
 
 export const RADAR_AXES = [
   ["n_phenologs", "Phenologs"],

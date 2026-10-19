@@ -1,7 +1,7 @@
 // The release page: what this month's graph gave us, species by species
-import { state, fmt, esc, speciesOf, shortBinomial, route } from "../format.js";
-import { speciesTree } from "../charts/tree.js";
-import { barList, speciesBars, funnel } from "../charts/bars.js";
+import { state, fmt, esc, speciesOf, shortBinomial, route } from "./format.js";
+import { speciesTree } from "./tree.js";
+import { barList, speciesBars, funnel } from "./bars.js";
 import { FDR_HELP } from "./common.js";
 
 // One card per species statistic: [key, title, what it counts]

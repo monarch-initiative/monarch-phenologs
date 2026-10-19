@@ -1,9 +1,9 @@
 // Every gene-disease pair the candidate ranking scored, known and novel, in one list across all diseases,
 // best score first. 1.5M rows stay in DuckDB; each page, sort and filter is a query
-import { ensure, query, lit } from "../db.js";
-import { state, fmt, esc, supportChips, route } from "../format.js";
+import { ensure, query, lit } from "./db.js";
+import { state, fmt, esc, supportChips, route } from "./format.js";
 import { legend, PAIR_KEY, HELP, SUPPORT_LABEL } from "./common.js";
-import { pagedTable } from "../charts/table.js";
+import { pagedTable } from "./table.js";
 
 const SORTABLE = ["global_rank", "symbol", "disease_name", "rank", "score", "family", "n_phenologs"];
 

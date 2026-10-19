@@ -1,7 +1,7 @@
 // Full search results, grouped by kind, in left-aligned columns. Genes and phenotypes show their species,
 // since the results span every species
-import { ensure, query, lit } from "../db.js";
-import { esc, speciesOf, shortBinomial } from "../format.js";
+import { ensure, query, lit } from "./db.js";
+import { esc, speciesOf, shortBinomial } from "./format.js";
 
 const ORDER = ["disease", "gene", "phenotype", "family", "species"];
 const SHOWN = 80;

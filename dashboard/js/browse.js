@@ -1,8 +1,8 @@
 // Browse pages: every disease / gene / phenotype / family / species as a sortable table
-import { ensure, query, lit } from "../db.js";
-import { state, fmt, esc, speciesChip, speciesOf, route } from "../format.js";
-import { table } from "../charts/table.js";
-import { radar, speciesAxes } from "../charts/radar.js";
+import { ensure, query, lit } from "./db.js";
+import { state, fmt, esc, speciesChip, speciesOf, route } from "./format.js";
+import { table } from "./table.js";
+import { radar, speciesAxes } from "./radar.js";
 import { RADAR_AXES } from "./species.js";
 import { HELP } from "./common.js";
 

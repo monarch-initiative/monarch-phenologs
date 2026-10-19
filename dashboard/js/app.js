@@ -1,15 +1,15 @@
 // Shell: opens the release, routes on the hash, runs the search box. Views live in ./views.
 import { ensure, query, lit, openRelease } from "./db.js";
 import { setOverview, state, esc } from "./format.js";
-import * as overview from "./views/overview.js";
-import * as disease from "./views/disease.js";
-import * as gene from "./views/gene.js";
-import * as phenotype from "./views/phenotype.js";
-import * as family from "./views/family.js";
-import * as species from "./views/species.js";
-import * as browse from "./views/browse.js";
-import * as search from "./views/search.js";
-import * as candidates from "./views/candidates.js";
+import * as overview from "./overview.js";
+import * as disease from "./disease.js";
+import * as gene from "./gene.js";
+import * as phenotype from "./phenotype.js";
+import * as family from "./family.js";
+import * as species from "./species.js";
+import * as browse from "./browse.js";
+import * as search from "./search.js";
+import * as candidates from "./candidates.js";
 
 const ROUTES = [
   [/^#\/?$/, overview.render, ""],

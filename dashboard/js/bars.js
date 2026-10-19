@@ -1,5 +1,5 @@
 // A ranked list with proportional bars. items: [{label, value, href, color, sub}]
-import { esc, fmt } from "../format.js";
+import { esc, fmt } from "./format.js";
 
 export function barList(el, items, { max = null, color = null } = {}) {
   const top = max ?? Math.max(1, ...items.map(d => d.value));

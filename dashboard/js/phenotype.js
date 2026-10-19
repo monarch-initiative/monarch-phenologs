@@ -1,8 +1,8 @@
 // One phenotype: the human diseases it is a phenolog of, and the genes annotated with it
-import { ensure, query, lit } from "../db.js";
-import { state, fmt, esc, speciesChip, route, links } from "../format.js";
+import { ensure, query, lit } from "./db.js";
+import { state, fmt, esc, speciesChip, route, links } from "./format.js";
 import { pageHead, statRow, card, notFound, PHENOLOG_HELP } from "./common.js";
-import { table } from "../charts/table.js";
+import { table } from "./table.js";
 
 const ORTHOLOGS_SHOWN = 4;
 

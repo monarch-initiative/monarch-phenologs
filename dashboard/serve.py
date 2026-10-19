@@ -1,9 +1,8 @@
 """
-Serves dashboard/site locally, with the releases folder at /releases/ (where the site looks for them).
-A plain static server with HTTP range support, so the browser side can read parquet the same way it
-would from a bucket.
+Serves the dashboard locally, with a run's releases at /releases/ (where the site looks for them). A plain
+static server with HTTP range support, so the browser reads parquet the way it would from the bucket.
 
-    python dashboard/serve.py [--port 8765] [--dir dashboard/site] [--releases dashboard/releases]
+    python dashboard/serve.py -p path/to/project_dir [--port 8765]
 """
 import os
 import re
@@ -18,7 +17,7 @@ class RangeHandler(http.server.SimpleHTTPRequestHandler):
                              ".parquet": "application/octet-stream", ".json": "application/json"})
 
     def translate_path(self, path):
-        """ /releases/... is read from the releases folder, everything else from the site """
+        """ /releases/... is read from the run's release folder, everything else from the dashboard """
         site = super().translate_path(path)
         mount = os.path.join(self.directory, "releases")
         if site == mount or site.startswith(mount + os.sep):
@@ -69,12 +68,11 @@ class RangeHandler(http.server.SimpleHTTPRequestHandler):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Serve the phenologs dashboard locally")
+    parser.add_argument("-p", "--project_dir", help="Project directory of a run built with python/07_build_release.py", required=True, type=str)
     parser.add_argument("--port", type=int, default=8765)
-    parser.add_argument("--dir", type=str, default=os.path.join(os.path.dirname(os.path.abspath(__file__)), "site"))
-    parser.add_argument("--releases", type=str, default=os.path.join(os.path.dirname(os.path.abspath(__file__)), "releases"))
     args = parser.parse_args()
 
-    os.chdir(args.dir)
-    RangeHandler.releases = os.path.abspath(args.releases)
-    print("- Serving {} at http://localhost:{}/ and {} at /releases/".format(args.dir, args.port, RangeHandler.releases))
+    RangeHandler.releases = os.path.join(os.path.abspath(args.project_dir), "release")
+    os.chdir(os.path.dirname(os.path.abspath(__file__)))
+    print("- Serving the dashboard at http://localhost:{}/ with the releases in {}".format(args.port, RangeHandler.releases))
     http.server.ThreadingHTTPServer(("", args.port), RangeHandler).serve_forever()

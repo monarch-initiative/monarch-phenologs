@@ -1,8 +1,8 @@
 // One PANTHER protein family: its members across species, and the diseases it is implicated in
-import { ensure, query, lit } from "../db.js";
-import { state, fmt, esc, speciesChip, route, links } from "../format.js";
+import { ensure, query, lit } from "./db.js";
+import { state, fmt, esc, speciesChip, route, links } from "./format.js";
 import { pageHead, statRow, card, notFound, legend, nameGrid, HELP } from "./common.js";
-import { table } from "../charts/table.js";
+import { table } from "./table.js";
 
 const MEMBERS_SHOWN = 150;    // per species, before "+N more"
 

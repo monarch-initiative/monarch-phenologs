@@ -8,9 +8,11 @@
 import os
 import sys
 import csv
+import json
 import gzip
 import shutil
 import subprocess
+import duckdb
 import pytest
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -126,6 +128,25 @@ def test_candidate_files_name_the_species_behind_each_gene(current_run):
                 assert species in names and int(count) > 0
                 seen.add(species)
     assert "Mus-musculus" in seen
+
+
+def test_release_holds_what_the_run_made(current_run):
+    project, _ = current_run
+    with open(os.path.join(project, "release", "releases.json")) as fh:
+        assert [r["path"] for r in json.load(fh)] == ["2000-01-01/disease/"]
+
+    release = os.path.join(project, "release", "2000-01-01", "disease")
+    with open(os.path.join(release, "manifest.json")) as fh:
+        files = {f["path"]: f["rows"] for f in json.load(fh)}
+    pooled = read_tsv(os.path.join(project, "phenologs_results", "Homo_sapiens_disease_results", "Homo-sapiens_pooled_phenologs_fdr0.05.tsv"))
+    assert files["phenologs.parquet"] == files["downloads/phenologs_significant.tsv.gz"] == len(pooled) > 0
+
+    # Every ranking the run made is in the download, and the pairs called significant are the pooled phenologs
+    downloads = os.path.join(release, "downloads")
+    rankings = duckdb.sql("SELECT DISTINCT kneighbs, rank_metric FROM '{}' ORDER BY ALL".format(os.path.join(downloads, "candidate_rankings.parquet")))
+    assert rankings.fetchall() == [(5, "hg"), (5, "nb")]
+    significant = duckdb.sql("SELECT count(*) FILTER (WHERE significant) FROM '{}'".format(os.path.join(downloads, "phenologs_all_tested.parquet")))
+    assert significant.fetchone()[0] == len(pooled)
 
 
 # ---- the 2024 graph: no type column, empty gene names, no DDPHENO, a nearly empty pombe ---------

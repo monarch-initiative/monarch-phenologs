@@ -42,6 +42,10 @@ uv run python python/01_download_and_setup.py -p path/to/project_dir -gv 2026-03
 uv run python -m pytest tests/ -q      # the whole pipeline on two small kg slices, about two minutes
 ```
 
+After the last ranking, `python/07_build_release.py -p path/to/project_dir -gv 2026-03-06 -pv 2025-11-14`
+writes the release (what the dashboard reads and the bucket holds) to `path/to/project_dir/release/`. See
+`dashboard/README.md`.
+
 `tests/run_pipeline.sh` runs every step on a slice with tiny parameters; `PY=.venv/bin/python` selects
 the interpreter. To change a dependency, edit `pyproject.toml`, run `uv lock`, and re-run the tests.
 The Dockerfile installs the same lock into `python:3.10-slim`.

@@ -1,5 +1,5 @@
 // Small HTML builders shared by the entity pages
-import { esc, fmt } from "../format.js";
+import { esc, fmt } from "./format.js";
 
 export function pageHead({ kicker, title, id, idHref, links = [], after = "" }) {
   return `

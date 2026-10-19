@@ -1,9 +1,9 @@
 // One disease: its known genes, its phenologs, the additive decomposition and the candidate ranking
-import { ensure, query, lit } from "../db.js";
-import { state, fmt, esc, speciesOf, speciesChip, supportChips, route, links } from "../format.js";
+import { ensure, query, lit } from "./db.js";
+import { state, fmt, esc, speciesOf, speciesChip, supportChips, route, links } from "./format.js";
 import { pageHead, statRow, card, notFound, legend, nameGrid, PAIR_KEY, HELP, PHENOLOG_HELP, SUPPORT_LABEL, RECOVERY_KEY } from "./common.js";
-import { table } from "../charts/table.js";
-import { additiveChart, ORDERS } from "../charts/stacked.js";
+import { table } from "./table.js";
+import { additiveChart, ORDERS } from "./stacked.js";
 
 export async function render(el, id) {
   await ensure("diseases", "phenologs", "candidates", "additive", "known_associations", "genes");
