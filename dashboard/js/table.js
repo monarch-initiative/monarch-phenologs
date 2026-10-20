@@ -3,8 +3,13 @@
 //   pagedTable(el, columns, fetchPage, options)  rows too many to hold: every page, sort and filter is a query.
 //                                                fetchPage({ sortKey, sortDir, filter, page, pageSize }) -> { rows, total }
 //   columns: [{ key, label, num, format(value, row) -> html, sortValue(row), sortDir: first click, width, help: header tooltip, sortable }]
-//   options: { pageSize, sortKey, sortDir, search: [keys to match], placeholder, tools: html, empty, wrapHead, onDraw(el) }
+//   options: { pageSize, sortKey, sortDir, search: [keys to match], placeholder, tools: html, empty, wrapHead, onDraw(el),
+//              download: file name, for a TSV button saving the rows as filtered and sorted, every field of each row.
+//              A paged table also needs fetchAll({ sortKey, sortDir, filter }) -> rows, up to EXPORT_MAX + 1 of them }
 import { esc, fmt } from "./format.js";
+
+// The most rows a TSV button saves. A paged table holding more says so and points to the release's downloads
+export const EXPORT_MAX = 100000;
 
 export function table(el, rows, columns, options = {}) {
   const st = tableState(options);
@@ -33,7 +38,7 @@ export function table(el, rows, columns, options = {}) {
   function draw() {
     const all = sorted();
     st.page = Math.min(st.page, Math.max(0, Math.ceil(all.length / st.pageSize) - 1));
-    render(el, st, columns, all.slice(st.page * st.pageSize, (st.page + 1) * st.pageSize), all.length, options, draw);
+    render(el, st, columns, all.slice(st.page * st.pageSize, (st.page + 1) * st.pageSize), all.length, options, draw, sorted);
   }
 
   draw();
@@ -47,7 +52,8 @@ export function pagedTable(el, columns, fetchPage, options = {}) {
   async function draw() {
     const mine = ++latest;
     const { rows, total } = await fetchPage({ ...st });
-    if (mine === latest) render(el, st, columns, rows, total, { debounce: 250, ...options }, draw);    // a newer request wins
+    const all = options.fetchAll && (() => options.fetchAll({ ...st }));
+    if (mine === latest) render(el, st, columns, rows, total, { debounce: 250, ...options }, draw, all);    // a newer request wins
   }
 
   draw();
@@ -58,8 +64,8 @@ function tableState(options) {
   return { page: 0, pageSize: options.pageSize || 25, sortKey: options.sortKey || null, sortDir: options.sortDir || "desc", filter: "", timer: null };
 }
 
-// One page of rows, with the header, pager and filter box wired back to redraw()
-function render(el, st, columns, slice, total, options, redraw) {
+// One page of rows, with the header, pager and filter box wired back to redraw(). all() gives every row, for the TSV button
+function render(el, st, columns, slice, total, options, redraw, all) {
   const pages = Math.max(1, Math.ceil(total / st.pageSize));
   const typing = el.contains(document.activeElement) && document.activeElement.matches(".tbl-tools input[type=search]");
 
@@ -78,6 +84,7 @@ function render(el, st, columns, slice, total, options, redraw) {
       ${options.search ? `<input type="search" placeholder="${esc(options.placeholder || "Filter…")}" value="${esc(st.filter)}">` : ""}
       ${options.tools || ""}
       <span class="muted" style="margin-left:auto">${total.toLocaleString("en-US")} rows</span>
+      ${options.download && all ? `<button class="tsv" title="Save these rows as a tab separated file">TSV</button>` : ""}
     </div>
     <div class="tbl-wrap"><table class="tbl ${options.wrapHead ? "wrap-head" : ""}"><thead><tr>${head}</tr></thead>
     <tbody>${body || `<tr><td colspan="${columns.length}" class="empty">${esc(options.empty || "Nothing to show")}</td></tr>`}</tbody></table></div>
@@ -107,5 +114,28 @@ function render(el, st, columns, slice, total, options, redraw) {
     });
     if (typing) { search.focus(); search.setSelectionRange(search.value.length, search.value.length); }
   }
+  const tsv = el.querySelector(".tbl-tools button.tsv");
+  if (tsv) tsv.addEventListener("click", async () => {
+    tsv.disabled = true;
+    const rows = await all();
+    tsv.disabled = false;
+    if (options.fetchAll && rows.length > EXPORT_MAX) {
+      tsv.outerHTML = `<span class="faint">over ${EXPORT_MAX.toLocaleString("en-US")} rows: filter them, or take the whole table from <a href="#/downloads">Downloads</a></span>`;
+      return;
+    }
+    saveTSV(rows, options.download + ".tsv");
+  });
   if (options.onDraw) options.onDraw(el);
+}
+
+// Every field of the rows, in the order the first row has them
+function saveTSV(rows, name) {
+  const keys = rows.length ? Object.keys(rows[0]) : [];
+  const cell = v => v == null ? "" : String(v).replace(/[\t\r\n]+/g, " ");
+  const text = [keys.join("\t"), ...rows.map(r => keys.map(k => cell(r[k])).join("\t"))].join("\n") + "\n";
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([text], { type: "text/tab-separated-values" }));
+  a.download = name.replace(/[^\w.-]+/g, "_");
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 }

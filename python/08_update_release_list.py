@@ -58,11 +58,12 @@ if __name__ == '__main__':
     if not built:
         raise FileNotFoundError("- ERROR: No release folders in {}. Run 07_build_release.py first".format(root))
 
-    # The project's releases take the place of published builds of the same folder. Newest graph first, as the dashboard reads it
+    # The project's releases take the place of published builds of the same folder. Newest graph first, as the dashboard
+    # reads it, and each graph's networks in name order
     published = read_release_list(args.releases_json)
     paths = {r["path"] for r in published}
     releases = [r for r in published if r["path"] not in {b["path"] for b in built}] + built
-    releases = sorted(releases, key=lambda r: r["graph_version"], reverse=True)
+    releases = sorted(sorted(releases, key=lambda r: r["prediction_network"]), key=lambda r: r["graph_version"], reverse=True)
 
     out_path = os.path.join(root, "releases.json")
     with open(out_path, "w") as fh:

@@ -1,5 +1,5 @@
 // Small HTML builders shared by the entity pages
-import { esc, fmt } from "./format.js";
+import { state, esc, fmt } from "./format.js";
 
 export function pageHead({ kicker, title, id, idHref, links = [], after = "" }) {
   return `
@@ -37,37 +37,40 @@ export function legend(items) {
     `<span class="key-item"><span class="sw" style="background:${color}"></span>${esc(label)}</span>`).join("")}</span>`;
 }
 
-// Whether a known pair was recovered, for the known disease and known gene grids (each page adds a third key)
-export const RECOVERY_KEY = [["var(--accent)", "known gene–disease pair recovered"], ["var(--text)", "gene–disease pair not recovered by associated phenologs"]];
+// Whether a known pair was recovered, for the known term and known gene grids (each page adds a third key)
+export const recoveryKey = () => [["var(--accent)", `known ${state.net.pair} pair recovered`],
+                                  ["var(--text)", `${state.net.pair} pair not recovered by associated phenologs`]];
 
-// The two kinds of gene-disease pair every ranking shows
-export const PAIR_KEY = [["var(--accent)", "known gene–disease pair"], ["var(--accent-2)", "novel candidate pair"]];
+// The two kinds of gene-term pair every ranking shows
+export const pairKey = () => [["var(--accent)", `known ${state.net.pair} pair`], ["var(--accent-2)", "novel candidate pair"]];
 
 // The column every candidate table shares, and its header tooltip below
-export const SUPPORT_LABEL = "Species phenologs supporting this gene–disease pair";
+export const supportLabel = () => `Species phenologs supporting this ${state.net.pair} pair`;
 
 // Header tooltips for the columns every candidate table shares
 export const HELP = {
-  score: "The candidate ranking's hypergeometric p-value: how unlikely this many phenotype annotations of the gene's orthologs are " +
-         "among the disease's nearest phenologs. Smaller ranks higher. A ranking score, not a corrected significance level",
-  support: "x/y: x of the disease's y phenologs in that species are phenotypes of an ortholog of this gene",
-  rank: "Place in the disease's ranking by score (ties share a place), out of every gene it scored, known genes included",
+  get score() {
+    return "The candidate ranking's hypergeometric p-value: how unlikely this many phenotype annotations of the gene's orthologs are " +
+           `among the ${state.net.term}'s nearest phenologs. Smaller ranks higher. A ranking score, not a corrected significance level`;
+  },
+  get support() { return `x/y: x of the ${state.net.term}'s y phenologs in that species are phenotypes of an ortholog of this gene`; },
+  get rank() { return `Place in the ${state.net.term}'s ranking by score (ties share a place), out of every gene it scored, known genes included`; },
 };
 
 // Header tooltips for the FDR tables (release and species pages)
 export const FDR_HELP = {
   cutoff: "Largest p-value still called a phenolog at this FDR",
-  phenologs: "Real disease–phenotype comparisons at or below the cutoff",
+  get phenologs() { return `Real ${state.net.phenolog} comparisons at or below the cutoff`; },
   expected: "Randomised comparisons at or below the cutoff, per trial (mean over the trials)",
   realised: "Expected false positives / phenologs",
 };
 
-// Header tooltips for the phenolog tables (disease, phenotype and species pages)
+// Header tooltips for the phenolog tables (term, phenotype and species pages)
 export const PHENOLOG_HELP = {
-  rank: "Place among the disease's phenologs, by p-value",
-  overlap: "Protein families carrying both the disease and the phenotype",
-  n_disease_orthogroups: "Protein families of the disease's genes, counting only families the two species share",
-  n_phenotype_orthogroups: "Protein families of the phenotype's genes, counting only families the two species share",
+  get rank() { return `Place among the ${state.net.term}'s phenologs, by p-value`; },
+  get overlap() { return `Protein families carrying both the ${state.net.term} and the ${state.net.model}`; },
+  get n_term_orthogroups() { return `Protein families of the ${state.net.term}'s genes, counting only families the two species share`; },
+  get n_phenotype_orthogroups() { return `Protein families of the ${state.net.model}'s genes, counting only families the two species share`; },
   n_common: "Protein families present in both species: the background of the test",
   pval: "Hypergeometric p-value of the overlap; a phenolog is significant at or below its species' FDR cutoff",
 };
