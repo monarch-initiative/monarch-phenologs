@@ -15,7 +15,16 @@ import pandas as pd
 from phenologs_utils import species_plot_order
 
 # The layout of a release folder. Bump it when a table or file changes, and rebuild the older releases with it
-SCHEMA = 1
+SCHEMA = 2
+
+# A release holds one prediction network, named for the human side of its phenologs: diseases or human phenotypes.
+# Tables and columns call them terms in both (term_id, terms.parquet, n_known_terms); these are the words for the README
+TERM_WORDS = {"disease": dict(term="disease", terms="diseases", humans="Human diseases", pair="gene-disease", ontology="Mondo"),
+              "phenotype": dict(term="human phenotype", terms="human phenotypes", humans="Human phenotypes", pair="gene-phenotype", ontology="HPO")}
+
+# Candidates a release keeps per term, best first (0 keeps every one). A human phenotype's ranking scores thousands
+# of genes, so a phenotype release keeps the top of each
+TOP_CANDIDATES = {"disease": 0, "phenotype": 100}
 
 
 ########################################################################
@@ -67,13 +76,15 @@ class Run:
     """ One pipeline run (a project directory) and the parameter set the dashboard is built from """
 
     def __init__(self, project_dir, base="Homo-sapiens", prediction_network="disease", fdr=0.05,
-                 kneighbs=1000, rank_metric="hg"):
+                 kneighbs=1000, rank_metric="hg", top_candidates=0):
         self.project_dir = os.path.abspath(project_dir)
         self.base = base
         self.prediction_network = prediction_network
+        self.words = TERM_WORDS[prediction_network]
         self.fdr = fdr
         self.kneighbs = kneighbs
         self.rank_metric = rank_metric
+        self.top_candidates = top_candidates or None        # None keeps every candidate
 
         # The kg and phenio versions 01_download_and_setup.py settled on
         versions_path = os.path.join(self.project_dir, "monarch_kg", "versions.json")
@@ -93,8 +104,9 @@ class Run:
         self.candidates_dir = os.path.join(self.results_dir, "{}_gene_to_{}_candidates_fdr{}_{}kneighbs_{}".format(
             base.replace("-", "_"), prediction_network, fdr, kneighbs, rank_metric))
         self.species_table = os.path.join(self.species_data, "species_information_table.tsv")
+        self.known_table = os.path.join(self.species_data, "{}_gene_to_{}.tsv".format(base, prediction_network))
 
-        for path in (self.species_table, self.pooled, self.fdr_table, self.candidates_dir):
+        for path in (self.species_table, self.pooled, self.fdr_table, self.candidates_dir, self.known_table):
             if not os.path.exists(path):
                 raise FileNotFoundError("Expected pipeline output missing: {}".format(path))
 
@@ -208,13 +220,13 @@ class Run:
 
         con.execute("""
             CREATE VIEW pooled AS
-            SELECT "Species A Phenotype ID"              AS disease_id,
-                   "Species A Phenotype Name"            AS disease_name,
+            SELECT "Species A Phenotype ID"              AS term_id,
+                   "Species A Phenotype Name"            AS term_name,
                    split_part("X Species Comparison", ',', 2) AS species,
                    "Species B Phenotype ID"              AS phenotype_id,
                    "Species B Phenotype Name"            AS phenotype_name,
                    "Overlap Count"::INTEGER              AS overlap,
-                   "Ortholog Count A"::INTEGER           AS n_disease_orthogroups,
+                   "Ortholog Count A"::INTEGER           AS n_term_orthogroups,
                    "Ortholog Count B"::INTEGER           AS n_phenotype_orthogroups,
                    "Common Ortholog Count"::INTEGER      AS n_common,
                    hg_pval::DOUBLE                       AS pval
@@ -227,15 +239,16 @@ class Run:
                    realized_fdr::DOUBLE AS realized_fdr, n_random_trials::INTEGER AS n_random_trials
             FROM {}""".format(read_tsv_sql(self.fdr_table)))
 
-        # The candidate ranking the release serves, one file per disease. After the genes it scored, the pipeline
-        # lists the disease's known genes no phenolog reached, with no score
+        # The candidate ranking the release serves, one file per term, named for its id (MONDO-0000107_<name>,
+        # HP-0001249_<name>). After the genes it scored, the pipeline lists the term's known genes no phenolog
+        # reached, with no score
         cand_types = "{'Gene':'VARCHAR','Gene_name':'VARCHAR','Association_exists':'BOOLEAN','XSpecies_occurence':'VARCHAR'," \
                      "'p-value':'DOUBLE','XSpecies_phenotypes':'VARCHAR','Protein_family_id':'VARCHAR'}"
         con.execute("""
             CREATE VIEW cand_raw AS
-            SELECT 'MONDO:' || regexp_extract(filename, 'MONDO-(\\d+)_', 1) AS disease_id,
+            SELECT replace(regexp_extract(filename, '([A-Za-z]+-[0-9]+)_[^/]*$', 1), '-', ':') AS term_id,
                    Gene AS gene_id, Gene_name AS symbol, Association_exists AS known, XSpecies_occurence AS species_hits,
-                   "p-value" AS score, XSpecies_phenotypes AS phenotypes, Protein_family_id AS family
+                   "p-value" AS score, Protein_family_id AS family
             FROM {}""".format(read_tsv_sql(os.path.join(self.candidates_dir, "*.tsv"), filename="true", types=cand_types)))
 
         con.execute("""
@@ -262,10 +275,12 @@ class Run:
             SELECT DISTINCT g.species, g.gene_id, g.phenotype_id
             FROM g2p g JOIN common_families c ON c.species = g.species AND c.family = g.family""")
 
+        # The base species' curated gene to term edges, its gene_to_disease or gene_to_phenotype table: what known means
         con.execute("""
-            CREATE VIEW g2d AS
-            SELECT gene AS gene_id, gene_name AS symbol, predicate, disease AS disease_id, disease_name, nullif(ortholog_id, '') AS family
-            FROM {}""".format(read_tsv_sql(os.path.join(sd, "{}_gene_to_disease.tsv".format(self.base)), all_varchar="true")))
+            CREATE VIEW known AS
+            SELECT gene AS gene_id, gene_name AS symbol, predicate, {prd} AS term_id, {prd}_name AS term_name,
+                   nullif(ortholog_id, '') AS family
+            FROM {table}""".format(prd=self.prediction_network, table=read_tsv_sql(self.known_table, all_varchar="true")))
 
         con.execute("CREATE VIEW edges AS SELECT * FROM {}".format(
             read_tsv_sql(os.path.join(sd, "ortholog_edges.tsv"), all_varchar="true")))
@@ -282,7 +297,7 @@ class Run:
             FROM (SELECT gene_a AS gene_id, gene_a_name AS symbol FROM edges
                   UNION ALL SELECT gene_b, gene_b_name FROM edges
                   UNION ALL SELECT gene_id, symbol FROM g2p
-                  UNION ALL SELECT gene_id, symbol FROM g2d)
+                  UNION ALL SELECT gene_id, symbol FROM known)
             WHERE symbol IS NOT NULL AND symbol <> ''
             GROUP BY gene_id""")
         return con
@@ -295,68 +310,75 @@ class Run:
 # then written out as parquet. Counts are 32 bit so they arrive in the browser as plain numbers
 
 # Built in this order. Later tables may refer to earlier ones. Internal ones are steps on the way, not written out
-TABLES = ["phenologs", "human_orthologs", "support", "candidates", "genes", "known_associations", "gene_phenotypes",
-          "phenotypes", "families", "diseases", "species", "search"]
-INTERNAL = {"support"}
+TABLES = ["phenologs", "human_orthologs", "scored", "support", "candidates", "genes", "known_associations", "gene_phenotypes",
+          "phenotypes", "families", "terms", "species", "search"]
+INTERNAL = {"scored", "support"}
 
 
 def table_sql(name, run):
     base = run.base
+    kept = "rank <= {}".format(run.top_candidates) if run.top_candidates else "true"
     return {
-        # Every significant phenolog of the run, ranked within its disease by p-value
+        # Every significant phenolog of the run, ranked within its term by p-value
         "phenologs": """
-            SELECT p.*, row_number() OVER (PARTITION BY disease_id ORDER BY pval, species, phenotype_id)::INTEGER AS rank
+            SELECT p.*, row_number() OVER (PARTITION BY term_id ORDER BY pval, species, phenotype_id)::INTEGER AS rank
             FROM pooled p""",
 
-        # How a disease's k nearest phenologs reach each base species gene, per model species: the phenologs whose
-        # phenotype is annotated to an ortholog of the gene, how many orthologs that takes, and the (phenolog,
-        # ortholog) hits the hg score counts (n_hits is the pipeline's XSpecies_occurence). n_used is how many of
-        # the disease's phenologs with that species the ranking used
+        # Every (term, gene) the ranking scored, ranked within its term by score (ties share a place). The pipeline
+        # also appends the term's known genes its phenologs never reached, with no p-value. Those are not candidates
+        # and are left out (known_associations still has them)
+        "scored": """
+            SELECT term_id, gene_id, symbol, family, score, known, species_hits,
+                   rank() OVER (PARTITION BY term_id ORDER BY score)::INTEGER AS rank
+            FROM cand_raw WHERE score IS NOT NULL""",
+
+        # How a term's k nearest phenologs reach each candidate the release keeps, per model species: the phenologs
+        # whose phenotype is annotated to an ortholog of the gene, how many orthologs that takes, and the (phenolog,
+        # ortholog) hits the hg score counts (n_hits is the pipeline's XSpecies_occurence). n_used is how many of the
+        # term's phenologs with that species the ranking used
         "support": """
-            WITH topk AS (SELECT disease_id, species, phenotype_id FROM phenologs WHERE rank <= {k}),
-            used AS (SELECT disease_id, species, count(*) AS n FROM topk GROUP BY disease_id, species),
-            hits AS (SELECT t.disease_id, t.species, t.phenotype_id, g.gene_id AS ortholog_id, o.human_gene_id AS gene_id
-                     FROM topk t
-                     JOIN ranking_g2p g ON g.species = t.species AND g.phenotype_id = t.phenotype_id
-                     JOIN human_orthologs o ON o.species = g.species AND o.gene_id = g.gene_id)
-            SELECT h.disease_id, h.gene_id, h.species,
+            WITH kept AS (SELECT term_id, gene_id FROM scored WHERE {kept}),
+            topk AS (SELECT term_id, species, phenotype_id FROM phenologs WHERE rank <= {k}),
+            used AS (SELECT term_id, species, count(*) AS n FROM topk GROUP BY term_id, species),
+            hits AS (SELECT t.term_id, t.species, t.phenotype_id, g.gene_id AS ortholog_id, k.gene_id
+                     FROM kept k
+                     JOIN human_orthologs o ON o.human_gene_id = k.gene_id
+                     JOIN ranking_g2p g ON g.species = o.species AND g.gene_id = o.gene_id
+                     JOIN topk t ON t.term_id = k.term_id AND t.species = g.species AND t.phenotype_id = g.phenotype_id)
+            SELECT h.term_id, h.gene_id, h.species,
                    count(DISTINCT h.phenotype_id)::INTEGER AS n_phenologs, any_value(u.n)::INTEGER AS n_used,
                    count(DISTINCT h.ortholog_id)::INTEGER AS n_orthologs, count(*)::INTEGER AS n_hits
-            FROM hits h JOIN used u USING (disease_id, species)
-            GROUP BY h.disease_id, h.gene_id, h.species""",
+            FROM hits h JOIN used u USING (term_id, species)
+            GROUP BY h.term_id, h.gene_id, h.species""",
 
-        # Every candidate gene the ranking scored, ranked within its disease by score (ties share a place).
-        # One row per (disease, gene). The pipeline also appends the disease's known genes its phenologs never
-        # reached, with no p-value. Those are not candidates and are left out here (known_associations still has them).
-        # support is "species:phenologs:of the disease's:orthologs:hits" per species, most phenologs first.
-        # global_rank places every pair, known or novel, in one list across all diseases by score (ties share a rank)
+        # The candidates the release keeps: every scored gene of a disease, a human phenotype's best (run.top_candidates,
+        # with ties at the last place). One row per (term, gene). support is "species:phenologs:of the term's:orthologs:hits"
+        # per species, most phenologs first. global_rank places every kept pair, known or novel, in one list across all
+        # terms by score (ties share a rank)
         "candidates": """
-            WITH c AS (
-                SELECT disease_id, gene_id, symbol, family, score, known,
-                       rank() OVER (PARTITION BY disease_id ORDER BY score)::INTEGER AS rank
-                FROM cand_raw WHERE score IS NOT NULL),
+            WITH c AS (SELECT term_id, gene_id, symbol, family, score, known, rank FROM scored WHERE {kept}),
             s AS (
-                SELECT disease_id, gene_id,
+                SELECT term_id, gene_id,
                        string_agg(format('{{}}:{{}}:{{}}:{{}}:{{}}', species, n_phenologs, n_used, n_orthologs, n_hits), ','
                                   ORDER BY n_phenologs DESC, species) AS support,
                        count(*) AS n_species, sum(n_phenologs) AS n_phenologs
-                FROM support GROUP BY disease_id, gene_id),
-            names AS (SELECT disease_id, any_value(disease_name) AS disease_name FROM pooled GROUP BY disease_id)
+                FROM support GROUP BY term_id, gene_id),
+            names AS (SELECT term_id, any_value(term_name) AS term_name FROM pooled GROUP BY term_id)
             SELECT c.*, coalesce(s.support, '') AS support, coalesce(s.n_species, 0)::INTEGER AS n_species,
-                   coalesce(s.n_phenologs, 0)::INTEGER AS n_phenologs, n.disease_name,
+                   coalesce(s.n_phenologs, 0)::INTEGER AS n_phenologs, n.term_name,
                    rank() OVER (ORDER BY c.score)::INTEGER AS global_rank
-            FROM c LEFT JOIN s USING (disease_id, gene_id) LEFT JOIN names n USING (disease_id)
-            ORDER BY c.score, c.disease_id, c.symbol""",
+            FROM c LEFT JOIN s USING (term_id, gene_id) LEFT JOIN names n USING (term_id)
+            ORDER BY c.score, c.term_id, c.symbol""",
 
-        # Every gene of every species in the run that has a protein family, a phenotype or a curated disease.
+        # Every gene of every species in the run that has a protein family, a phenotype or a curated term.
         # n_ortholog_species counts the other species of the run the gene has an ortholog edge to. in_reach (base
-        # species genes only): one of its orthologs carries a phenotype the ranking can use, so a disease's
+        # species genes only): one of its orthologs carries a phenotype the ranking can use, so a term's
         # ranking can reach it at all
         "genes": """
             WITH base AS (
                 SELECT species, gene_id, max(family) AS family
                 FROM (SELECT species, gene_id, family FROM g2o UNION ALL SELECT species, gene_id, NULL FROM g2p
-                      UNION ALL SELECT '{base}', gene_id, family FROM g2d)
+                      UNION ALL SELECT '{base}', gene_id, family FROM known)
                 GROUP BY species, gene_id),
             reach AS (SELECT DISTINCT o.human_gene_id AS gene_id
                       FROM ranking_g2p g JOIN human_orthologs o ON o.species = g.species AND o.gene_id = g.gene_id),
@@ -364,15 +386,15 @@ def table_sql(name, run):
                    FROM (SELECT gene_a AS gene_id, taxon_b AS taxon FROM edges UNION SELECT gene_b, taxon_a FROM edges) o
                    JOIN species_info s ON s.taxon_id = o.taxon GROUP BY o.gene_id),
             np AS (SELECT gene_id, count(DISTINCT phenotype_id) AS n FROM g2p GROUP BY gene_id),
-            nk AS (SELECT gene_id, count(DISTINCT disease_id) AS n FROM g2d GROUP BY gene_id),
-            pr AS (SELECT gene_id, count(DISTINCT disease_id) AS n, count(DISTINCT disease_id) FILTER (WHERE NOT known) AS novel, min(rank) AS best_rank
+            nk AS (SELECT gene_id, count(DISTINCT term_id) AS n FROM known GROUP BY gene_id),
+            pr AS (SELECT gene_id, count(DISTINCT term_id) AS n, count(DISTINCT term_id) FILTER (WHERE NOT known) AS novel, min(rank) AS best_rank
                    FROM candidates GROUP BY gene_id)
             SELECT b.species, b.gene_id, coalesce(n.symbol, b.gene_id) AS symbol, b.family,
                    coalesce(os.n, 0)::INTEGER AS n_ortholog_species,
                    coalesce(np.n, 0)::INTEGER AS n_phenotypes,
-                   coalesce(nk.n, 0)::INTEGER AS n_known_diseases,
-                   coalesce(pr.n, 0)::INTEGER AS n_predicted_diseases,
-                   coalesce(pr.novel, 0)::INTEGER AS n_novel_diseases,
+                   coalesce(nk.n, 0)::INTEGER AS n_known_terms,
+                   coalesce(pr.n, 0)::INTEGER AS n_predicted_terms,
+                   coalesce(pr.novel, 0)::INTEGER AS n_novel_terms,
                    pr.best_rank::INTEGER AS best_rank,
                    CASE WHEN b.species = '{base}' THEN b.gene_id IN (SELECT gene_id FROM reach) END AS in_reach
             FROM base b
@@ -388,17 +410,19 @@ def table_sql(name, run):
             FROM pairs p JOIN species_info s ON s.taxon_id = p.taxon LEFT JOIN gene_names n ON n.gene_id = p.human_gene_id
             ORDER BY s.species, p.gene_id, human_symbol""",
 
-        # The base species' curated gene to disease associations the predictions are measured against
+        # The base species' curated gene to term associations the predictions are measured against, with the gene's
+        # place and score in the term's ranking when the ranking scored it, kept or not
         "known_associations": """
-            SELECT DISTINCT gene_id, symbol, disease_id, disease_name, predicate, family FROM g2d""",
+            SELECT DISTINCT k.gene_id, k.symbol, k.term_id, k.term_name, k.predicate, k.family, s.rank, s.score
+            FROM known k LEFT JOIN scored s ON s.term_id = k.term_id AND s.gene_id = k.gene_id""",
 
         # Gene to phenotype annotations of every species (what a phenotype's gene list and a gene's phenotype list show)
         "gene_phenotypes": """
             SELECT DISTINCT species, gene_id, phenotype_id, phenotype_name FROM g2p""",
 
         # Every annotated phenotype of every species, with how often it turns up as a phenolog.
-        # n_known_diseases counts the curated diseases of the genes annotated with the phenotype. Curated gene to
-        # disease associations are the base species' only, so model organism phenotypes have none
+        # n_known_terms counts the curated terms of the genes annotated with the phenotype. Curated gene to
+        # term associations are the base species' only, so model organism phenotypes have none
         "phenotypes": """
             WITH ann AS (
                 SELECT g.species, g.phenotype_id, any_value(g.phenotype_name) AS name,
@@ -407,68 +431,69 @@ def table_sql(name, run):
                 FROM g2p g LEFT JOIN common_families c ON c.species = g.species AND c.family = g.family
                 GROUP BY g.species, g.phenotype_id),
             kd AS (
-                SELECT p.species, p.phenotype_id, count(DISTINCT d.disease_id) AS n
-                FROM g2p p JOIN g2d d USING (gene_id) GROUP BY p.species, p.phenotype_id),
+                SELECT p.species, p.phenotype_id, count(DISTINCT d.term_id) AS n
+                FROM g2p p JOIN known d USING (gene_id) GROUP BY p.species, p.phenotype_id),
             ph AS (
-                SELECT species, phenotype_id, count(*) AS n_phenologs, count(DISTINCT disease_id) AS n_diseases, min(pval) AS best_pval
+                SELECT species, phenotype_id, count(*) AS n_phenologs, count(DISTINCT term_id) AS n_terms, min(pval) AS best_pval
                 FROM phenologs GROUP BY species, phenotype_id)
             SELECT a.species, a.phenotype_id, a.name, a.n_genes::INTEGER AS n_genes, a.n_orthogroups::INTEGER AS n_orthogroups,
                    a.n_shared_orthogroups::INTEGER AS n_shared_orthogroups,
-                   coalesce(kd.n, 0)::INTEGER AS n_known_diseases,
-                   coalesce(ph.n_phenologs, 0)::INTEGER AS n_phenologs, coalesce(ph.n_diseases, 0)::INTEGER AS n_diseases, ph.best_pval
+                   coalesce(kd.n, 0)::INTEGER AS n_known_terms,
+                   coalesce(ph.n_phenologs, 0)::INTEGER AS n_phenologs, coalesce(ph.n_terms, 0)::INTEGER AS n_terms, ph.best_pval
             FROM ann a LEFT JOIN kd USING (species, phenotype_id) LEFT JOIN ph USING (species, phenotype_id)""",
 
-        # PANTHER families: who is in them, and what they predict. A disease the family is ranked for is novel
-        # for the family when none of its base species genes is curated for that disease
+        # PANTHER families: who is in them, and what they predict. A term the family is ranked for is novel
+        # for the family when none of its base species genes is curated for that term
         "families": """
             WITH fam AS (SELECT family, species, gene_id FROM genes WHERE family IS NOT NULL),
             hum AS (SELECT family, string_agg(symbol, ', ' ORDER BY symbol) AS human_symbols, count(*) AS n
                     FROM genes WHERE species = '{base}' AND family IS NOT NULL GROUP BY family),
-            kpairs AS (SELECT DISTINCT family, disease_id FROM g2d WHERE family IS NOT NULL),
-            pr AS (SELECT c.family, count(DISTINCT c.disease_id) AS n, min(c.score) AS best_score,
-                          count(DISTINCT c.disease_id) FILTER (WHERE k.disease_id IS NULL) AS novel
-                   FROM candidates c LEFT JOIN kpairs k ON k.family = c.family AND k.disease_id = c.disease_id
+            kpairs AS (SELECT DISTINCT family, term_id FROM known WHERE family IS NOT NULL),
+            pr AS (SELECT c.family, count(DISTINCT c.term_id) AS n, min(c.score) AS best_score,
+                          count(DISTINCT c.term_id) FILTER (WHERE k.term_id IS NULL) AS novel
+                   FROM candidates c LEFT JOIN kpairs k ON k.family = c.family AND k.term_id = c.term_id
                    GROUP BY c.family),
             kn AS (SELECT family, count(*) AS n FROM kpairs GROUP BY family)
             SELECT f.family, count(*)::INTEGER AS n_genes, count(DISTINCT f.species)::INTEGER AS n_species,
                    coalesce(any_value(hum.n), 0)::INTEGER AS n_base_genes, any_value(hum.human_symbols) AS base_symbols,
-                   coalesce(any_value(pr.n), 0)::INTEGER AS n_predicted_diseases, coalesce(any_value(pr.novel), 0)::INTEGER AS n_novel_diseases,
-                   any_value(pr.best_score) AS best_score, coalesce(any_value(kn.n), 0)::INTEGER AS n_known_diseases
+                   coalesce(any_value(pr.n), 0)::INTEGER AS n_predicted_terms, coalesce(any_value(pr.novel), 0)::INTEGER AS n_novel_terms,
+                   any_value(pr.best_score) AS best_score, coalesce(any_value(kn.n), 0)::INTEGER AS n_known_terms
             FROM fam f LEFT JOIN hum USING (family) LEFT JOIN pr USING (family) LEFT JOIN kn USING (family)
             GROUP BY f.family""",
 
-        # The base species' diseases that have at least one phenolog
-        "diseases": """
-            WITH bysp AS (SELECT disease_id, species, count(*) AS n FROM phenologs GROUP BY disease_id, species),
+        # The base species' terms that have at least one phenolog. The candidate counts are over the whole
+        # ranking, also where the release keeps only the top of it
+        "terms": """
+            WITH bysp AS (SELECT term_id, species, count(*) AS n FROM phenologs GROUP BY term_id, species),
             bysp_json AS (              -- ties go to the species first in plot order
-                SELECT b.disease_id, '{{' || string_agg(format('"{{}}":{{}}', b.species, b.n), ',' ORDER BY b.n DESC, s.plot_order) || '}}' AS by_species,
+                SELECT b.term_id, '{{' || string_agg(format('"{{}}":{{}}', b.species, b.n), ',' ORDER BY b.n DESC, s.plot_order) || '}}' AS by_species,
                        first(b.species ORDER BY b.n DESC, s.plot_order) AS top_species
-                FROM bysp b JOIN species_info s USING (species) GROUP BY b.disease_id),
-            ph AS (SELECT disease_id, any_value(disease_name) AS name, count(*) AS n_phenologs, count(DISTINCT species) AS n_species, min(pval) AS best_pval
-                   FROM phenologs GROUP BY disease_id),
-            kn AS (SELECT disease_id, count(DISTINCT gene_id) AS n FROM g2d GROUP BY disease_id),
-            cd AS (SELECT disease_id, count(*) AS n, count(*) FILTER (WHERE NOT known) AS novel, count(*) FILTER (WHERE known) AS recovered
-                   FROM candidates GROUP BY disease_id)
-            SELECT ph.disease_id, ph.name, coalesce(kn.n, 0)::INTEGER AS n_known_genes, ph.n_phenologs::INTEGER AS n_phenologs,
+                FROM bysp b JOIN species_info s USING (species) GROUP BY b.term_id),
+            ph AS (SELECT term_id, any_value(term_name) AS name, count(*) AS n_phenologs, count(DISTINCT species) AS n_species, min(pval) AS best_pval
+                   FROM phenologs GROUP BY term_id),
+            kn AS (SELECT term_id, count(DISTINCT gene_id) AS n FROM known GROUP BY term_id),
+            cd AS (SELECT term_id, count(*) AS n, count(*) FILTER (WHERE NOT known) AS novel, count(*) FILTER (WHERE known) AS recovered
+                   FROM scored GROUP BY term_id)
+            SELECT ph.term_id, ph.name, coalesce(kn.n, 0)::INTEGER AS n_known_genes, ph.n_phenologs::INTEGER AS n_phenologs,
                    ph.n_species::INTEGER AS n_species, ph.best_pval,
                    coalesce(cd.n, 0)::INTEGER AS n_candidates, coalesce(cd.novel, 0)::INTEGER AS n_novel_candidates,
                    coalesce(cd.recovered, 0)::INTEGER AS n_known_recovered, bj.top_species, bj.by_species
-            FROM ph LEFT JOIN kn USING (disease_id) LEFT JOIN cd USING (disease_id) LEFT JOIN bysp_json bj USING (disease_id)""",
+            FROM ph LEFT JOIN kn USING (term_id) LEFT JOIN cd USING (term_id) LEFT JOIN bysp_json bj USING (term_id)""",
 
         # The species of the run with everything the release page and the species pages show. n_phenotypes_annotated
         # counts every phenotype the species' genes carry (the species table's "Unique phenotypes" only counts those
         # on genes with an ortholog)
         "species": """
-            WITH ph AS (SELECT species, count(*) AS n_phenologs, count(DISTINCT disease_id) AS n_diseases, count(DISTINCT phenotype_id) AS n_phenotypes_matched
+            WITH ph AS (SELECT species, count(*) AS n_phenologs, count(DISTINCT term_id) AS n_terms, count(DISTINCT phenotype_id) AS n_phenotypes_matched
                         FROM phenologs GROUP BY species),
             cs AS (SELECT s.species, count(*) AS n_candidates, count(*) FILTER (WHERE NOT c.known) AS n_novel
-                   FROM support s JOIN candidates c USING (disease_id, gene_id) GROUP BY s.species),
+                   FROM support s JOIN candidates c USING (term_id, gene_id) GROUP BY s.species),
             cc AS (SELECT species_b AS species, n_common FROM common_counts WHERE species_a = '{base}'),
             ho AS (SELECT species, count(DISTINCT gene_id) AS n FROM human_orthologs GROUP BY species),
             fd AS (SELECT species, pvalue_cutoff, phenolog_count FROM fdr_table WHERE fdr = {fdr}),
             pa AS (SELECT species, count(DISTINCT phenotype_id) AS n FROM g2p GROUP BY species)
             SELECT i.*, coalesce(pa.n, 0)::INTEGER AS n_phenotypes_annotated,
-                   coalesce(ph.n_phenologs, 0)::INTEGER AS n_phenologs, coalesce(ph.n_diseases, 0)::INTEGER AS n_diseases,
+                   coalesce(ph.n_phenologs, 0)::INTEGER AS n_phenologs, coalesce(ph.n_terms, 0)::INTEGER AS n_terms,
                    coalesce(ph.n_phenotypes_matched, 0)::INTEGER AS n_phenotypes_matched,
                    coalesce(cs.n_candidates, 0)::INTEGER AS n_candidates, coalesce(cs.n_novel, 0)::INTEGER AS n_novel_candidates,
                    cc.n_common::INTEGER AS n_common_with_base, ho.n::INTEGER AS n_human_ortholog_genes, fd.pvalue_cutoff AS fdr_cutoff
@@ -476,27 +501,27 @@ def table_sql(name, run):
             LEFT JOIN ph USING (species) LEFT JOIN cs USING (species) LEFT JOIN cc USING (species)
             LEFT JOIN ho USING (species) LEFT JOIN fd USING (species) LEFT JOIN pa USING (species)""",
 
-        # One row per thing the search box can find
+        # One row per thing the search box can find. A human phenotype that is a term of the release is found as the term
         "search": """
-            SELECT 'disease' AS kind, disease_id AS id, name AS label, NULL AS species,
+            SELECT 'term' AS kind, term_id AS id, name AS label, NULL AS species,
                    format('{{:,}} phenologs · {{:,}} known genes', n_phenologs, n_known_genes) AS detail, n_phenologs::INTEGER AS weight
-            FROM diseases
+            FROM terms
             UNION ALL
             SELECT 'gene', gene_id, symbol, species, replace(species, '-', ' ') || coalesce(' · ' || family, ''),
-                   (n_predicted_diseases + 10 * n_known_diseases + n_phenotypes)::INTEGER
-            FROM genes WHERE n_phenotypes > 0 OR n_known_diseases > 0 OR n_predicted_diseases > 0
+                   (n_predicted_terms + 10 * n_known_terms + n_phenotypes)::INTEGER
+            FROM genes WHERE n_phenotypes > 0 OR n_known_terms > 0 OR n_predicted_terms > 0
             UNION ALL
             SELECT 'phenotype', phenotype_id, name, species,
                    CASE WHEN species = '{base}' THEN format('{{}} · {{:,}} genes', replace(species, '-', ' '), n_genes)
                         ELSE format('{{}} · {{:,}} phenologs', replace(species, '-', ' '), n_phenologs) END,
                    n_phenologs::INTEGER
-            FROM phenotypes
+            FROM phenotypes WHERE NOT (species = '{base}' AND phenotype_id IN (SELECT term_id FROM terms))
             UNION ALL
-            SELECT 'family', family, family, NULL, coalesce(base_symbols, ''), n_predicted_diseases::INTEGER
+            SELECT 'family', family, family, NULL, coalesce(base_symbols, ''), n_predicted_terms::INTEGER
             FROM families
             UNION ALL
             SELECT 'species', species, binomial, species, common, 1000000 FROM species""",
-    }[name].format(base=base, fdr=run.fdr, k=run.kneighbs)
+    }[name].format(base=base, fdr=run.fdr, k=run.kneighbs, kept=kept)
 
 
 def build_tables(con, run, outdir):
@@ -512,16 +537,16 @@ def build_tables(con, run, outdir):
 
 def support_mismatches(con):
     """
-    (pairs, diseases) whose support hits differ from the pipeline's XSpecies_occurence. Runs from before
-    phenologs were sorted deterministically can break p-value ties at the k boundary another way
+    (pairs, terms) among the kept candidates whose support hits differ from the pipeline's XSpecies_occurence. Runs
+    from before phenologs were sorted deterministically can break p-value ties at the k boundary another way
     """
 
     return con.execute("""
-        WITH occ AS (SELECT disease_id, gene_id, split_part(item, ':', 1) AS species, split_part(item, ':', 2)::INTEGER AS n_hits
-                     FROM (SELECT disease_id, gene_id, unnest(string_split(species_hits, ',')) AS item
-                           FROM cand_raw WHERE score IS NOT NULL AND species_hits <> ''))
-        SELECT count(DISTINCT (disease_id, gene_id)), count(DISTINCT disease_id)
-        FROM occ FULL JOIN support s USING (disease_id, gene_id, species)
+        WITH occ AS (SELECT term_id, gene_id, split_part(item, ':', 1) AS species, split_part(item, ':', 2)::INTEGER AS n_hits
+                     FROM (SELECT term_id, gene_id, unnest(string_split(species_hits, ',')) AS item
+                           FROM scored SEMI JOIN candidates USING (term_id, gene_id) WHERE species_hits <> ''))
+        SELECT count(DISTINCT (term_id, gene_id)), count(DISTINCT term_id)
+        FROM occ FULL JOIN support s USING (term_id, gene_id, species)
         WHERE occ.n_hits IS DISTINCT FROM s.n_hits""").fetchone()
 
 
@@ -531,50 +556,50 @@ def write_parquet(con, name, outdir):
     return con.execute("SELECT count(*) FROM {}".format(name)).fetchone()[0]
 
 
-################################################################
-### The additive decomposition behind a disease's candidates ###
+#############################################################
+### The additive decomposition behind a term's candidates ###
 
-# For each disease: its top phenologs by p-value; for each phenolog, the protein families carrying that model
+# For each term: its top phenologs by p-value; for each phenolog, the protein families carrying that model
 # phenotype that the species shares with the base species (the families the phenolog test counts). Each (family,
-# phenolog) pair contributes (overlap / disease orthogroups) * (1 - p), and families are ranked by their sum. One row
-# per (disease, family, phenolog) is kept, so the page can re-slice by species or a smaller k. Needs the phenologs,
+# phenolog) pair contributes (overlap / term orthogroups) * (1 - p), and families are ranked by their sum. One row
+# per (term, family, phenolog) is kept, so the page can re-slice by species or a smaller k. Needs the phenologs,
 # genes and known_associations tables
 
 def build_additive(con, run, outdir, top_phenologs=20, top_families=40):
     con.execute("""
         CREATE TABLE additive AS
         WITH top_ph AS (
-            SELECT disease_id, phenotype_id, phenotype_name, species, overlap, n_disease_orthogroups, pval, rank
+            SELECT term_id, phenotype_id, phenotype_name, species, overlap, n_term_orthogroups, pval, rank
             FROM phenologs WHERE rank <= {top_phenologs}),
         phen_fam AS (                       -- the protein families carrying each model phenotype, shared with the base species
             SELECT DISTINCT p.species, p.phenotype_id, o.family
             FROM g2p p JOIN g2o o ON o.species = p.species AND o.gene_id = p.gene_id
             JOIN common_families c ON c.species = o.species AND c.family = o.family),
         contrib AS (
-            SELECT t.disease_id, f.family, t.rank AS phenolog_rank, t.phenotype_id, t.phenotype_name, t.species,
-                   (t.overlap::DOUBLE / t.n_disease_orthogroups) * (1 - t.pval) AS score
+            SELECT t.term_id, f.family, t.rank AS phenolog_rank, t.phenotype_id, t.phenotype_name, t.species,
+                   (t.overlap::DOUBLE / t.n_term_orthogroups) * (1 - t.pval) AS score
             FROM top_ph t JOIN phen_fam f ON f.species = t.species AND f.phenotype_id = t.phenotype_id),
         fam_tot AS (                        -- summed as decimals, so the totals and the order of tied families are the same every build
-            SELECT disease_id, family, sum(score::DECIMAL(38, 18))::DOUBLE AS family_total,
-                   row_number() OVER (PARTITION BY disease_id ORDER BY sum(score::DECIMAL(38, 18)) DESC, family)::INTEGER AS family_rank
-            FROM contrib GROUP BY disease_id, family),
-        base_genes AS (                     -- the base species' genes of each family, split by whether the disease already knows them
-            SELECT ft.disease_id, ft.family,
+            SELECT term_id, family, sum(score::DECIMAL(38, 18))::DOUBLE AS family_total,
+                   row_number() OVER (PARTITION BY term_id ORDER BY sum(score::DECIMAL(38, 18)) DESC, family)::INTEGER AS family_rank
+            FROM contrib GROUP BY term_id, family),
+        base_genes AS (                     -- the base species' genes of each family, split by whether the term already knows them
+            SELECT ft.term_id, ft.family,
                    string_agg(g.symbol, ', ' ORDER BY g.symbol) FILTER (WHERE k.gene_id IS NOT NULL) AS known_symbols,
                    string_agg(g.symbol, ', ' ORDER BY g.symbol) FILTER (WHERE k.gene_id IS NULL)     AS other_symbols
             FROM fam_tot ft
             JOIN genes g ON g.family = ft.family AND g.species = '{base}'
-            LEFT JOIN known_associations k ON k.gene_id = g.gene_id AND k.disease_id = ft.disease_id
+            LEFT JOIN (SELECT DISTINCT gene_id, term_id FROM known_associations) k ON k.gene_id = g.gene_id AND k.term_id = ft.term_id
             WHERE ft.family_rank <= {top_families}
-            GROUP BY ft.disease_id, ft.family)
-        SELECT c.disease_id, c.family, ft.family_rank, ft.family_total, c.phenolog_rank::INTEGER AS phenolog_rank,
+            GROUP BY ft.term_id, ft.family)
+        SELECT c.term_id, c.family, ft.family_rank, ft.family_total, c.phenolog_rank::INTEGER AS phenolog_rank,
                c.phenotype_id, c.phenotype_name, c.species, c.score,
                bg.known_symbols, bg.other_symbols
         FROM contrib c
-        JOIN fam_tot ft USING (disease_id, family)
-        LEFT JOIN base_genes bg USING (disease_id, family)
+        JOIN fam_tot ft USING (term_id, family)
+        LEFT JOIN base_genes bg USING (term_id, family)
         WHERE ft.family_rank <= {top_families}
-        ORDER BY c.disease_id, ft.family_rank, c.phenolog_rank
+        ORDER BY c.term_id, ft.family_rank, c.phenolog_rank
     """.format(top_phenologs=top_phenologs, top_families=top_families, base=run.base))
     return write_parquet(con, "additive", outdir)
 
@@ -584,7 +609,7 @@ def build_additive(con, run, outdir, top_phenologs=20, top_families=40):
 
 # Headline tiles, per species stats (the metric cards and the tree), the FDR table, common ortholog counts between
 # species, the top lists, and what the graph gave the pipeline (every taxon's extraction counts and how far the
-# curated disease genes get). Needs the tables above
+# curated term genes get). Needs the tables above
 
 def rows(con, query):
     cur = con.execute(query)
@@ -600,9 +625,10 @@ def build_overview(con, run, outdir, table_counts):
 
     funnel = known_funnel(con)
     tiles = rows(con, """
-        SELECT (SELECT count(*) FROM diseases)                                   AS diseases,
+        SELECT (SELECT count(*) FROM terms)                                      AS terms,
                (SELECT count(*) FROM phenologs)                                  AS phenologs,
                (SELECT count(DISTINCT (species, phenotype_id)) FROM phenologs)   AS model_phenotypes,
+               (SELECT count(*) FROM scored)                                     AS scored_pairs,
                (SELECT count(*) FROM candidates)                                 AS candidate_pairs,
                (SELECT count(*) FROM candidates WHERE NOT known)                 AS novel_pairs,
                (SELECT count(DISTINCT gene_id) FROM candidates WHERE NOT known)  AS candidate_genes,
@@ -611,16 +637,16 @@ def build_overview(con, run, outdir, table_counts):
     tiles.update(known_recovered=funnel["recovered"], known_pairs=funnel["curated"], known_in_reach=funnel["in_reach"])
 
     top = {
-        "diseases": rows(con, """SELECT disease_id AS id, name AS label, n_phenologs AS value, n_species, n_novel_candidates, top_species
-                                 FROM diseases ORDER BY n_phenologs DESC, name LIMIT 15"""),
-        # Phenotypes carried by a single gene match every disease that gene is tied to, so the list is
+        "terms": rows(con, """SELECT term_id AS id, name AS label, n_phenologs AS value, n_species, n_novel_candidates, top_species
+                              FROM terms ORDER BY n_phenologs DESC, name LIMIT 15"""),
+        # Phenotypes carried by a single gene match every term that gene is tied to, so the list is
         # kept to phenotypes with a few protein families behind them
-        "phenotypes": rows(con, """SELECT phenotype_id AS id, name AS label, species, n_phenologs AS value, n_diseases, n_orthogroups
+        "phenotypes": rows(con, """SELECT phenotype_id AS id, name AS label, species, n_phenologs AS value, n_terms, n_orthogroups
                                    FROM phenotypes WHERE n_phenologs > 0 AND n_orthogroups >= 5 ORDER BY n_phenologs DESC, name LIMIT 15"""),
-        "genes": rows(con, """SELECT gene_id AS id, symbol AS label, family, n_predicted_diseases AS value, n_novel_diseases, n_known_diseases
-                              FROM genes WHERE species = '{}' ORDER BY n_predicted_diseases DESC, symbol LIMIT 15""".format(base)),
-        "families": rows(con, """SELECT family AS id, family AS label, base_symbols, n_predicted_diseases AS value, n_known_diseases, n_species
-                                 FROM families ORDER BY n_predicted_diseases DESC, family LIMIT 15"""),
+        "genes": rows(con, """SELECT gene_id AS id, symbol AS label, family, n_predicted_terms AS value, n_novel_terms, n_known_terms
+                              FROM genes WHERE species = '{}' ORDER BY n_predicted_terms DESC, symbol LIMIT 15""".format(base)),
+        "families": rows(con, """SELECT family AS id, family AS label, base_symbols, n_predicted_terms AS value, n_known_terms, n_species
+                                 FROM families ORDER BY n_predicted_terms DESC, family LIMIT 15"""),
     }
 
     out = {
@@ -633,6 +659,7 @@ def build_overview(con, run, outdir, table_counts):
                     "base_species": base,
                     "prediction_network": run.prediction_network,
                     "fdr": run.fdr, "kneighbs": run.kneighbs, "rank_metric": run.rank_metric,
+                    "top_candidates": run.top_candidates,
                     "table_rows": table_counts},
         "tiles": tiles,
         "species": species,
@@ -651,31 +678,30 @@ def build_overview(con, run, outdir, table_counts):
 
 def known_funnel(con):
     """
-    How far the base species' curated gene-disease pairs (and their diseases) get. Each step keeps the
-    pairs of the step before: the gene has an ortholog in a model species of the run, one of those orthologs
-    carries a phenotype the ranking can use (only then can any disease's ranking reach the gene), the disease
-    has a significant phenolog (the pair is within reach: it can be recovered), and the gene is in the disease's
-    candidate ranking (recovered, in-sample)
+    How far the base species' curated gene-term pairs (and their terms) get. Each step keeps the pairs of the
+    step before: the gene has an ortholog in a model species of the run, one of those orthologs carries a
+    phenotype the ranking can use (only then can any term's ranking reach the gene), the term has a significant
+    phenolog (the pair is within reach: it can be recovered), and the term's ranking scored the gene (recovered,
+    in-sample; anywhere in the ranking, also where the release keeps only the top of it)
     """
 
     return rows(con, """
-        WITH pairs AS (SELECT DISTINCT gene_id, disease_id FROM known_associations),
-        f AS (SELECT p.disease_id,
+        WITH pairs AS (SELECT gene_id, term_id, bool_or(rank IS NOT NULL) AS recovered FROM known_associations GROUP BY gene_id, term_id),
+        f AS (SELECT p.term_id, p.recovered,
                      p.gene_id IN (SELECT human_gene_id FROM human_orthologs) AS has_ortholog,
                      p.gene_id IN (SELECT gene_id FROM genes WHERE in_reach) AS gene_in_reach,
-                     p.disease_id IN (SELECT disease_id FROM diseases) AS has_phenolog,
-                     (p.disease_id, p.gene_id) IN (SELECT (disease_id, gene_id) FROM candidates WHERE known) AS recovered
+                     p.term_id IN (SELECT term_id FROM terms) AS has_phenolog
               FROM pairs p)
         SELECT count(*) AS curated,
                count(*) FILTER (WHERE has_ortholog) AS has_ortholog,
                count(*) FILTER (WHERE gene_in_reach) AS gene_in_reach,
                count(*) FILTER (WHERE gene_in_reach AND has_phenolog) AS in_reach,
                count(*) FILTER (WHERE recovered) AS recovered,
-               count(DISTINCT disease_id) AS diseases,
-               count(DISTINCT disease_id) FILTER (WHERE has_ortholog) AS diseases_ortholog,
-               count(DISTINCT disease_id) FILTER (WHERE gene_in_reach) AS diseases_gene_in_reach,
-               count(DISTINCT disease_id) FILTER (WHERE gene_in_reach AND has_phenolog) AS diseases_in_reach,
-               count(DISTINCT disease_id) FILTER (WHERE recovered) AS diseases_recovered
+               count(DISTINCT term_id) AS terms,
+               count(DISTINCT term_id) FILTER (WHERE has_ortholog) AS terms_ortholog,
+               count(DISTINCT term_id) FILTER (WHERE gene_in_reach) AS terms_gene_in_reach,
+               count(DISTINCT term_id) FILTER (WHERE gene_in_reach AND has_phenolog) AS terms_in_reach,
+               count(DISTINCT term_id) FILTER (WHERE recovered) AS terms_recovered
         FROM f""")[0]
 
 
@@ -710,36 +736,46 @@ def _json_default(value):
 def build_readme(run, outdir, top_phenologs=20, top_families=40):
     """ Write <outdir>/README.md """
 
+    words = dict(run.words, Term=run.words["term"].capitalize(), Terms=run.words["terms"].capitalize())
+    kept = KEPT.format(top=run.top_candidates, **words) if run.top_candidates else ""
     with open(os.path.join(outdir, "README.md"), "w") as fh:
         fh.write(RELEASE_README.format(graph_version=run.graph_version, phenio_version=run.phenio_version, code_version=code_version(),
                                        fdr=run.fdr, kneighbs=run.kneighbs, metric=METRICS[run.rank_metric][0],
-                                       score=METRICS[run.rank_metric][1], top_phenologs=top_phenologs, top_families=top_families))
+                                       score=METRICS[run.rank_metric][1], top_phenologs=top_phenologs, top_families=top_families,
+                                       kept=kept, **words))
 
 
 # Each rank metric's name, and what its score is
 METRICS = {"hg": ("hypergeometric", "the hypergeometric p-value of the gene's hits, out of every hit the ranking drew"),
-           "nb": ("naive Bayes", "the product, over the gene's hits, of 1 - (the phenolog's overlap / the disease's known genes) x "
+           "nb": ("naive Bayes", "the product, over the gene's hits, of 1 - (the phenolog's overlap / the term's known genes) x "
                                  "(1 - the phenolog's p-value)")}
 
-RELEASE_README = """# Phenologs from Monarch KG {graph_version}
+# Said where a release keeps only the top of each ranking
+KEPT = """ This release keeps each {term}'s best {top} candidates, with any ties at the last place; `n_candidates` in
+`terms.parquet` counts every gene its ranking scored."""
+
+RELEASE_README = """# {Term} phenologs from Monarch KG {graph_version}
 
 Phenologs and gene candidates computed from Monarch KG {graph_version} (PHENIO {phenio_version}) by monarch-phenologs
 {code_version} (https://github.com/monarch-initiative/monarch-phenologs).
 
-Human diseases are compared with the phenotypes of each model species through the PANTHER protein families of their
-genes. A disease and a phenotype whose families overlap more than chance make a phenolog: each species' p-value cutoff
-is set from randomised trials at an FDR of {fdr} (`fdr` in `overview.json`). Each disease's {kneighbs:,} most significant
-phenologs then rank the human genes they point to as candidates for the disease, by the {metric} score.
+{humans} are compared with the phenotypes of each model species through the PANTHER protein families of their
+genes. A {term} and a model phenotype whose families overlap more than chance make a phenolog: each species' p-value
+cutoff is set from randomised trials at an FDR of {fdr} (`fdr` in `overview.json`). Each {term}'s {kneighbs:,} most
+significant phenologs then rank the human genes they point to as candidates for the {term}, by the {metric} score.
+
+The tables call the {terms} terms (`term_id`, `terms.parquet`, `n_known_terms`), the same names a disease release and a
+human phenotype release use.
 
 | file | one row per |
 |---|---|
-| `candidates.parquet` | (disease, gene) the ranking scored: the gene candidates |
+| `candidates.parquet` | ({term}, gene) the ranking scored: the gene candidates |
 | `phenologs.parquet` | significant phenolog |
-| `known_associations.parquet` | curated human gene-disease association |
+| `known_associations.parquet` | curated human {pair} association |
 | `gene_phenotypes.parquet` | gene-phenotype annotation, every species |
 | `human_orthologs.parquet` | (model species gene, human gene) ortholog pair |
-| `additive.parquet` | (disease, protein family, phenolog), for each disease's top {top_phenologs} phenologs and top {top_families} families |
-| `diseases.parquet`, `genes.parquet`, `phenotypes.parquet`, `families.parquet`, `species.parquet` | disease, gene, phenotype, protein family, species, with their counts |
+| `additive.parquet` | ({term}, protein family, phenolog), for each {term}'s top {top_phenologs} phenologs and top {top_families} families |
+| `terms.parquet`, `genes.parquet`, `phenotypes.parquet`, `families.parquet`, `species.parquet` | {term}, gene, phenotype, protein family, species, with their counts |
 | `search.parquet` | thing the site's search box finds |
 
 `overview.json` holds what the site's release page shows; its `release` block has the versions and settings.
@@ -751,53 +787,54 @@ The tables open in DuckDB, Python and R:
     python -c "import pandas as pd; print(pd.read_parquet('candidates.parquet').head())"
     Rscript -e "print(head(arrow::read_parquet('candidates.parquet')))"
 
-Diseases are Mondo ids, human genes HGNC ids, protein families PANTHER ids, and species are written `Genus-species`.
+{Terms} are {ontology} ids, human genes HGNC ids, protein families PANTHER ids, and species are written `Genus-species`.
 
 ## candidates.parquet
 
-The gene candidates: every (disease, gene) the ranking scored, best first. The pipeline also lists each disease's
+The gene candidates: every ({term}, gene) the ranking scored, best first.{kept} The pipeline also lists each {term}'s
 curated genes its phenologs never reached, without a score. Those are left out here (`known_associations.parquet` has
 every curated pair).
 
 | column | |
 |---|---|
-| `disease_id`, `disease_name` | the disease |
+| `term_id`, `term_name` | the {term} |
 | `gene_id`, `symbol` | the human gene |
 | `family` | the gene's PANTHER family |
 | `score` | smaller is stronger: {score} |
-| `known` | the gene is curated for the disease |
-| `rank` | the gene's place in the disease's ranking, by score. Ties share a place |
-| `global_rank` | the pair's place among every pair of every disease, by score. Ties share a place |
-| `support` | per model species, most phenologs first, as `species:phenologs:of:orthologs:hits`: the disease's phenologs with that species whose phenotype is annotated to an ortholog of the gene, of how many of the disease's phenologs with that species the ranking used, the orthologs that takes, and the (phenolog, ortholog) hits the score counts |
+| `known` | the gene is curated for the {term} |
+| `rank` | the gene's place in the {term}'s ranking, by score. Ties share a place |
+| `global_rank` | the pair's place among every pair in this table, by score. Ties share a place |
+| `support` | per model species, most phenologs first, as `species:phenologs:of:orthologs:hits`: the {term}'s phenologs with that species whose phenotype is annotated to an ortholog of the gene, of how many of the {term}'s phenologs with that species the ranking used, the orthologs that takes, and the (phenolog, ortholog) hits the score counts |
 | `n_species` | model species in `support` |
 | `n_phenologs` | phenologs in `support`, summed over species |
 
 ## phenologs.parquet
 
-Every significant phenolog, ranked within its disease by p-value.
+Every significant phenolog, ranked within its {term} by p-value.
 
 | column | |
 |---|---|
-| `disease_id`, `disease_name` | the disease |
+| `term_id`, `term_name` | the {term} |
 | `species` | the model species |
 | `phenotype_id`, `phenotype_name` | the model species' phenotype |
-| `overlap` | protein families carrying both the disease and the phenotype |
-| `n_disease_orthogroups` | protein families of the disease's genes, counting only families the two species share |
-| `n_phenotype_orthogroups` | protein families of the phenotype's genes, counting only families the two species share |
+| `overlap` | protein families carrying both the {term} and the model phenotype |
+| `n_term_orthogroups` | protein families of the {term}'s genes, counting only families the two species share |
+| `n_phenotype_orthogroups` | protein families of the model phenotype's genes, counting only families the two species share |
 | `n_common` | protein families present in both species: the background of the test |
 | `pval` | hypergeometric p-value of the overlap, at or below the species' cutoff |
-| `rank` | the phenolog's place among its disease's phenologs, by p-value |
+| `rank` | the phenolog's place among its {term}'s phenologs, by p-value |
 
 ## known_associations.parquet
 
-The curated human gene-disease associations the candidates are measured against.
+The curated human {pair} associations the candidates are measured against.
 
 | column | |
 |---|---|
 | `gene_id`, `symbol` | the human gene |
-| `disease_id`, `disease_name` | the disease |
+| `term_id`, `term_name` | the {term} |
 | `predicate` | the association's Biolink predicate |
 | `family` | the gene's PANTHER family |
+| `rank`, `score` | the gene's place and score in the {term}'s ranking, empty when the ranking did not score it |
 
 ## gene_phenotypes.parquet
 
@@ -817,35 +854,35 @@ The curated human gene-disease associations the candidates are measured against.
 
 ## additive.parquet
 
-What each protein family adds to a disease's candidates. For each of the disease's top {top_phenologs} phenologs: the
+What each protein family adds to a {term}'s candidates. For each of the {term}'s top {top_phenologs} phenologs: the
 families carrying that model phenotype that the species shares with humans (the families the phenolog test counts).
-Each (family, phenolog) pair adds (overlap / disease orthogroups) x (1 - p-value), and families are ranked by their sum.
-Each disease keeps its top {top_families} families.
+Each (family, phenolog) pair adds (overlap / {term} orthogroups) x (1 - p-value), and families are ranked by their sum.
+Each {term} keeps its top {top_families} families.
 
 | column | |
 |---|---|
-| `disease_id` | the disease |
+| `term_id` | the {term} |
 | `family` | the PANTHER family |
-| `family_rank` | the family's place for the disease, by `family_total` |
-| `family_total` | the family's sum over the disease's top phenologs |
-| `phenolog_rank` | the phenolog's place among the disease's phenologs (`rank` in `phenologs.parquet`) |
+| `family_rank` | the family's place for the {term}, by `family_total` |
+| `family_total` | the family's sum over the {term}'s top phenologs |
+| `phenolog_rank` | the phenolog's place among the {term}'s phenologs (`rank` in `phenologs.parquet`) |
 | `phenotype_id`, `phenotype_name`, `species` | the phenolog's model phenotype |
 | `score` | what the phenolog adds to the family |
-| `known_symbols` | the family's human genes curated for the disease |
+| `known_symbols` | the family's human genes curated for the {term} |
 | `other_symbols` | the family's other human genes |
 
-## diseases.parquet
+## terms.parquet
 
-The diseases with at least one phenolog.
+The {terms} with at least one phenolog.
 
 | column | |
 |---|---|
-| `disease_id`, `name` | the disease |
+| `term_id`, `name` | the {term} |
 | `n_known_genes` | its curated genes |
 | `n_phenologs` | its phenologs |
 | `n_species` | model species with one of its phenologs |
 | `best_pval` | its lowest phenolog p-value |
-| `n_candidates` | genes the ranking scored for it |
+| `n_candidates` | genes its ranking scored |
 | `n_novel_candidates` | of those, genes not curated for it |
 | `n_known_recovered` | of those, genes curated for it |
 | `top_species` | the model species with most of its phenologs |
@@ -853,7 +890,7 @@ The diseases with at least one phenolog.
 
 ## genes.parquet
 
-Every gene of every species with a protein family, a phenotype or a curated disease.
+Every gene of every species with a protein family, a phenotype or a curated {term}.
 
 | column | |
 |---|---|
@@ -861,11 +898,11 @@ Every gene of every species with a protein family, a phenotype or a curated dise
 | `family` | its PANTHER family |
 | `n_ortholog_species` | other species of the release the gene has an ortholog in |
 | `n_phenotypes` | phenotypes annotated to it |
-| `n_known_diseases` | diseases it is curated for (human genes only) |
-| `n_predicted_diseases` | diseases whose ranking scored it |
-| `n_novel_diseases` | of those, diseases it is not curated for |
-| `best_rank` | its best place in a disease's ranking |
-| `in_reach` | human genes only: one of its orthologs carries a phenotype the ranking can use, so a disease's ranking can reach it |
+| `n_known_terms` | {terms} it is curated for (human genes only) |
+| `n_predicted_terms` | {terms} whose candidates here include it |
+| `n_novel_terms` | of those, {terms} it is not curated for |
+| `best_rank` | its best place in a {term}'s ranking |
+| `in_reach` | human genes only: one of its orthologs carries a phenotype the ranking can use, so a {term}'s ranking can reach it |
 
 ## phenotypes.parquet
 
@@ -877,9 +914,9 @@ Every phenotype annotated to a gene, in every species.
 | `n_genes` | genes annotated with it |
 | `n_orthogroups` | protein families of those genes |
 | `n_shared_orthogroups` | model species only: of those, the families shared with humans (the ones the phenolog test counts) |
-| `n_known_diseases` | curated diseases of the genes annotated with it (so human phenotypes only) |
+| `n_known_terms` | curated {terms} of the genes annotated with it (so human phenotypes only) |
 | `n_phenologs` | phenologs with it |
-| `n_diseases` | diseases with such a phenolog |
+| `n_terms` | {terms} with such a phenolog |
 | `best_pval` | the lowest p-value among them |
 
 ## families.parquet
@@ -891,10 +928,10 @@ The PANTHER protein families.
 | `family` | the family |
 | `n_genes`, `n_species` | its genes, and the species they are in |
 | `n_base_genes`, `base_symbols` | its human genes |
-| `n_predicted_diseases` | diseases whose ranking scored one of its genes |
-| `n_novel_diseases` | of those, diseases none of its human genes is curated for |
+| `n_predicted_terms` | {terms} whose candidates here include one of its genes |
+| `n_novel_terms` | of those, {terms} none of its human genes is curated for |
 | `best_score` | the best score of one of its genes |
-| `n_known_diseases` | diseases one of its human genes is curated for |
+| `n_known_terms` | {terms} one of its human genes is curated for |
 
 ## species.parquet
 
@@ -909,8 +946,8 @@ The PANTHER protein families.
 | `n_ortholog_genes` | of those, genes with an ortholog |
 | `n_orthogroups` | protein families of its genes |
 | `n_phenotypes_annotated` | phenotypes annotated to its genes |
-| `n_phenologs`, `n_diseases`, `n_phenotypes_matched` | its phenologs, the diseases they are with, and its phenotypes in them |
-| `n_candidates`, `n_novel_candidates` | candidate pairs it supports, and of those the ones not curated |
+| `n_phenologs`, `n_terms`, `n_phenotypes_matched` | its phenologs, the {terms} they are with, and its phenotypes in them |
+| `n_candidates`, `n_novel_candidates` | candidate pairs here it supports, and of those the ones not curated |
 | `n_common_with_base` | protein families it shares with humans |
 | `n_human_ortholog_genes` | its genes with a human ortholog |
 | `fdr_cutoff` | its p-value cutoff at FDR {fdr} |
@@ -919,7 +956,7 @@ The PANTHER protein families.
 
 | column | |
 |---|---|
-| `kind` | disease, gene, phenotype, family or species |
+| `kind` | term, gene, phenotype, family or species |
 | `id`, `label`, `species` | what it is |
 | `detail` | the line the search box shows under it |
 | `weight` | orders the results |
@@ -932,15 +969,15 @@ The PANTHER protein families.
 # Every file of a release folder with its size, row count, sha256 and what it holds (DESCRIPTIONS)
 DESCRIPTIONS = {
     "overview.json":              "Everything the release page shows: headline numbers, species, FDR table, top lists, graph inputs",
-    "phenologs.parquet":          "Every significant phenolog, ranked within its disease by p-value",
-    "candidates.parquet":         "Every (disease, gene) the site's ranking scored: rank, score, known flag and support per species",
-    "additive.parquet":           "Per disease, each protein family's score from each of its top phenologs",
-    "diseases.parquet":           "The human diseases with a phenolog, with their counts",
-    "genes.parquet":              "Every gene with a protein family, a phenotype or a known disease, with its counts",
+    "phenologs.parquet":          "Every significant phenolog, ranked within its {term} by p-value",
+    "candidates.parquet":         "The gene candidates of each {term}: rank, score, known flag and support per species",
+    "additive.parquet":           "Per {term}, each protein family's score from each of its top phenologs",
+    "terms.parquet":              "The {terms} with a phenolog, with their counts",
+    "genes.parquet":              "Every gene with a protein family, a phenotype or a known {term}, with its counts",
     "phenotypes.parquet":         "Every annotated phenotype of every species, with its counts",
-    "families.parquet":           "The PANTHER protein families: their genes and the diseases they are ranked for",
+    "families.parquet":           "The PANTHER protein families: their genes and the {terms} they are ranked for",
     "species.parquet":            "The species of the run, with their counts",
-    "known_associations.parquet": "The curated human gene-disease associations",
+    "known_associations.parquet": "The curated human {pair} associations",
     "gene_phenotypes.parquet":    "Gene to phenotype annotations of every species",
     "human_orthologs.parquet":    "Ortholog pairs between model species genes and human genes",
     "search.parquet":             "What the search box finds",
@@ -948,7 +985,7 @@ DESCRIPTIONS = {
 }
 
 
-def build_manifest(con, outdir):
+def build_manifest(con, run, outdir):
     """ Write <outdir>/manifest.json. Returns its list of files """
 
     files = []
@@ -959,7 +996,7 @@ def build_manifest(con, outdir):
             path = os.path.join(folder, name)
             rel = os.path.relpath(path, outdir)
             files.append(dict(path=rel, bytes=os.path.getsize(path), rows=count_rows(con, path), sha256=sha256(path),
-                              description=DESCRIPTIONS.get(rel, "")))
+                              description=DESCRIPTIONS.get(rel, "").format(**run.words)))
 
     with open(os.path.join(outdir, "manifest.json"), "w") as fh:
         json.dump(files, fh, indent=1)

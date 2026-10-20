@@ -1,7 +1,7 @@
-// The additive decomposition of a disease's prediction: one bar per protein family, one segment per
+// The additive decomposition of a term's prediction: one bar per protein family, one segment per
 // contributing phenolog (the paper's case study figure, interactive). rows = additive.parquet rows of
-// one disease. Everything is re-sliced client side from the per (family, phenolog) rows.
-import { esc, fmt, speciesOf, shortBinomial, route } from "./format.js";
+// one disease or human phenotype. Everything is re-sliced client side from the per (family, phenolog) rows.
+import { state, esc, fmt, speciesOf, shortBinomial, route } from "./format.js";
 import { showTip, moveTip, hideTip } from "./tooltip.js";
 
 const PALETTE = [...d3.schemeTableau10, ...d3.schemeSet3.filter(c => c !== "#d9d9d9" && c !== "#ffffb3")];
@@ -53,7 +53,7 @@ export function additiveChart(el, rows, opts = {}) {
   g.append("g").selectAll("line").data(x.ticks(6)).join("line").attr("class", "gridline")
     .attr("x1", d => x(d)).attr("x2", d => x(d)).attr("y1", 0).attr("y2", families.length * rowH);
   svg.append("text").attr("x", mLeft + x.range()[1] / 2).attr("y", height - 2).attr("text-anchor", "middle")
-    .attr("font-size", 11).attr("fill", "#8b97a8").text("additive score: Σ (shared families / disease families) × (1 − p) over the family's phenologs");
+    .attr("font-size", 11).attr("fill", "#8b97a8").text(`additive score: Σ (shared families / ${state.net.term} families) × (1 − p) over the family's phenologs`);
 
   const fam = g.selectAll("g.fam").data(families).join("g").attr("class", "fam")
     .attr("transform", (f, i) => `translate(0,${i * rowH})`);

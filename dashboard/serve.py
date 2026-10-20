@@ -94,4 +94,5 @@ if __name__ == "__main__":
     RangeHandler.releases = os.path.join(os.path.abspath(args.project_dir), "release")
     os.chdir(os.path.dirname(os.path.abspath(__file__)))
     print("- Serving the dashboard at http://localhost:{}/ with the releases in {}".format(args.port, RangeHandler.releases))
+    http.server.ThreadingHTTPServer.request_queue_size = 64     # the browser asks for every module at once; the default 5 drops some
     http.server.ThreadingHTTPServer(("", args.port), RangeHandler).serve_forever()

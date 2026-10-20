@@ -1885,13 +1885,13 @@ class OrthologToPhenotypeCalculations(BaseModel):
         human_orth_df = pd.read_csv(species_dict[str(t_id)].gene_to_ortholog_path, sep='\t')
         human_orth_map = {k:v for k,v in zip(human_orth_df["gene"], human_orth_df["ortholog_id"])}
 
-        # Grab human disease name info
-        g2d = pd.read_csv(species_dict[str(t_id)].gene_to_disease_path, sep='\t')
-        disease_name_map = {d_id:dname for d_id,dname in zip(g2d["disease"], g2d["disease_name"])}
+        # Grab human disease (or phenotype) name info, from the same gene_to_{disease|phenotype} table as above
+        disease_name_map = {d_id:dname for d_id,dname in zip(gene_to_df[self.prediction_network], 
+                                                             gene_to_df["{}_name".format(self.prediction_network)])}
 
         # Map each disease to associated genes (and add in gene names where there exists no ortholog available in the graph )
         disease2gene_map = {}
-        for g_id,g_name,d_id in zip(g2d["gene"], g2d["gene_name"], g2d["disease"]):
+        for g_id,g_name,d_id in zip(gene_to_df["gene"], gene_to_df["gene_name"], gene_to_df[self.prediction_network]):
             if d_id not in disease2gene_map:
                 disease2gene_map.update({d_id:{}})
             disease2gene_map[d_id].update({g_id:None})

@@ -1,15 +1,15 @@
-// The release page: what this month's graph gave us, species by species
+// The release page of one network: what this month's graph gave us, species by species
 import { state, fmt, esc, speciesOf, shortBinomial, route } from "./format.js";
 import { speciesTree } from "./tree.js";
 import { barList, speciesBars, funnel } from "./bars.js";
 import { FDR_HELP } from "./common.js";
 
 // One card per species statistic: [key, title, what it counts]
-const METRICS = [
-  ["n_phenologs", "Phenologs", "significant disease–phenotype pairs"],
-  ["n_diseases", "Diseases", "human diseases with at least one phenolog"],
-  ["n_phenotypes_matched", "Phenotypes with diseases", "model phenotypes in at least one phenolog"],
-  ["n_novel_candidates", "Candidate pairs", "novel gene–disease pairs with a supporting phenolog from this species"],
+const metricDefs = net => [
+  ["n_phenologs", "Phenologs", `significant ${net.phenolog} pairs`],
+  ["n_terms", net.Terms, `${net.humans.toLowerCase()} with at least one phenolog`],
+  ["n_phenotypes_matched", net.key === "disease" ? "Phenotypes with diseases" : "Phenotypes matched", "model phenotypes in at least one phenolog"],
+  ["n_novel_candidates", "Candidate pairs", `novel ${net.pair} pairs with a supporting phenolog from this species`],
   ["n_phenotyped_genes", "Genes with phenotypes", "genes with at least one phenotype annotation"],
   ["n_common_with_base", "Families shared with human", "PANTHER families both species carry"],
 ];
@@ -25,48 +25,52 @@ const INPUT_COLUMNS = [
   ["n_g2p_edges", "Phenotype annotations", "Gene–phenotype edges"],
 ];
 
-const TREE_METRICS = {
+const treeMetricDefs = net => ({
   n_phenologs: "phenologs",
-  n_diseases: "diseases with a phenolog",
+  n_terms: `${net.terms} with a phenolog`,
   n_phenotyped_genes: "genes with phenotypes",
   n_phenotypes_annotated: "annotated phenotypes",
   n_common_with_base: "protein families shared with human",
   n_novel_candidates: "novel candidate pairs supported",
-};
+});
 
 export async function render(el) {
-  const ov = state.overview, r = ov.release, t = ov.tiles;
+  const ov = state.overview, r = ov.release, t = ov.tiles, net = state.net;
   const base = ov.species.find(s => s.is_base);
   const model = ov.species.filter(s => !s.is_base);
   const trials = ov.fdr.length ? ov.fdr[0].n_random_trials : "";
+  const METRICS = metricDefs(net), TREE_METRICS = treeMetricDefs(net);
+  const kept = r.top_candidates ? ` (the best ${fmt.int(r.top_candidates)} of each ${net.term} are kept: ${fmt.int(t.candidate_pairs)} pairs)` : "";
 
   el.innerHTML = `
     <section class="hero">
       <div class="card">
-        <div class="kicker">Release</div>
+        <div class="kicker">${esc(net.title)}</div>
         <h1>Phenologs from the Monarch KG <span class="mono" style="color:var(--accent)">${esc(r.graph_version)}</span></h1>
-        <p class="lede">Orthologous phenotypes between <i>${esc(base.binomial)}</i> diseases and the phenotypes of
+        <p class="lede">Orthologous phenotypes between <i>${esc(base.binomial)}</i> ${net.key === "disease" ? "diseases" : "phenotypes"} and the phenotypes of
           ${model.length} model species, and the gene candidates they imply. Overlap is measured on PANTHER protein
           families, each species' p-value cutoff is set from ${fmt.int(trials)} randomised trials at an FDR of ${r.fdr}, and candidates are
-          ranked by the ${r.rank_metric === "hg" ? "hypergeometric" : "naive Bayes"} score over each disease's ${fmt.int(r.kneighbs)} most significant phenologs.</p>
+          ranked by the ${r.rank_metric === "hg" ? "hypergeometric" : "naive Bayes"} score over each ${net.term}'s ${fmt.int(r.kneighbs)} most significant phenologs.
+          ${r.top_candidates ? `This release keeps each ${net.term}'s best ${fmt.int(r.top_candidates)} candidates.` : ""}</p>
         <div class="meta">
           <span>graph <b>${esc(r.graph_version)}</b></span>
           ${r.phenio_version ? `<span>phenio <b>${esc(r.phenio_version)}</b></span>` : ""}
           <span>fdr <b>${r.fdr}</b></span><span>k <b>${r.kneighbs}</b></span><span>metric <b>${esc(r.rank_metric)}</b></span>
+          ${r.top_candidates ? `<span>kept <b>top ${r.top_candidates}</b></span>` : ""}
           ${r.code_version ? `<span>code <b>${esc(r.code_version)}</b></span>` : ""}
           <span>built <b>${esc(r.built)}</b></span>
         </div>
       </div>
       <div class="tiles">
-        ${tile(t.diseases, "diseases with phenologs", { cls: "accent", help: "Human diseases with at least one significant phenolog" })}
-        ${tile(t.phenologs, "significant phenologs", { cls: "accent", help: "Disease–phenotype pairs at or below their species' FDR cutoff" })}
-        ${tile(t.model_phenotypes, "model phenotypes with diseases", { help: "Model species phenotypes in at least one phenolog (a term used by two species counts twice)" })}
+        ${tile(t.terms, `${net.terms} with phenologs`, { cls: "accent", help: `${net.humans} with at least one significant phenolog` })}
+        ${tile(t.phenologs, "significant phenologs", { cls: "accent", help: `${cap(net.phenolog)} pairs at or below their species' FDR cutoff` })}
+        ${tile(t.model_phenotypes, `model phenotypes with ${net.terms}`, { help: "Model species phenotypes in at least one phenolog (a term used by two species counts twice)" })}
         ${tile(t.model_species, "model species", { help: "Species besides human taking part in this release" })}
-        ${tile(t.known_recovered, `known gene–disease pairs recovered (${fmt.pct(t.known_recovered / t.known_in_reach)} within reach, ${fmt.pct(t.known_recovered / t.known_pairs)} overall)`,
-               { target: "pipeline", help: "Known pairs whose gene is in the disease's candidate ranking. Within reach: out of the pairs whose gene has an ortholog with phenotypes and whose disease has a phenolog. Overall: out of every curated pair. Click for each step" })}
-        ${tile(t.candidate_genes, "genes with one or more candidate disease associations", { help: "Human genes ranked for at least one disease they are not known for" })}
-        ${tile(t.families_implicated, "protein families with a ranked gene", { help: "PANTHER families with a human gene in at least one disease's ranking" })}
-        ${tile(t.candidate_pairs, "ranked gene–disease pairs", { help: "Every (disease, gene) pair the ranking scored, known pairs included" })}
+        ${tile(t.known_recovered, `known ${net.pair} pairs recovered (${fmt.pct(t.known_recovered / t.known_in_reach)} within reach, ${fmt.pct(t.known_recovered / t.known_pairs)} overall)`,
+               { target: "pipeline", help: `Known pairs whose gene is in the ${net.term}'s candidate ranking. Within reach: out of the pairs whose gene has an ortholog with phenotypes and whose ${net.term} has a phenolog. Overall: out of every curated pair. Click for each step` })}
+        ${tile(t.candidate_genes, `genes with one or more candidate ${net.term} associations`, { help: `Human genes ranked for at least one ${net.term} they are not known for${r.top_candidates ? `, within its best ${r.top_candidates}` : ""}` })}
+        ${tile(t.families_implicated, "protein families with a ranked gene", { help: `PANTHER families with a human gene in at least one ${net.term}'s ranking${r.top_candidates ? `, within its best ${r.top_candidates}` : ""}` })}
+        ${tile(t.scored_pairs, `ranked ${net.pair} pairs`, { help: `Every (${net.term}, gene) pair the ranking scored, known pairs included${kept}` })}
       </div>
     </section>
 
@@ -92,19 +96,19 @@ export async function render(el) {
     </section>
 
     <section class="section grid cols-2">
-      ${listCard("Diseases with the most phenologs", "top-diseases", "#/browse/diseases")}
-      ${listCard("Model phenotypes matching the most diseases", "top-phenotypes", "#/browse/phenotypes", "phenotypes carried by at least 5 protein families")}
-      ${listCard("Human genes ranked for the most diseases", "top-genes", "#/browse/genes")}
-      ${listCard("Protein families ranked for the most diseases", "top-families", "#/browse/families")}
+      ${listCard(`${net.Terms} with the most phenologs`, "top-terms", `#/browse/${net.browse}`)}
+      ${listCard(`Model phenotypes matching the most ${net.terms}`, "top-phenotypes", "#/browse/phenotypes", "phenotypes carried by at least 5 protein families")}
+      ${listCard(`Human genes ranked for the most ${net.terms}`, "top-genes", "#/browse/genes")}
+      ${listCard(`Protein families ranked for the most ${net.terms}`, "top-families", "#/browse/families")}
     </section>
 
     <section class="section" id="pipeline">
-      <div class="card-head"><h2>From graph to phenologs</h2><span class="sub">what the knowledge graph gave the pipeline, and how far its curated disease genes get</span></div>
+      <div class="card-head"><h2>From graph to phenologs</h2><span class="sub">what the knowledge graph gave the pipeline, and how far its curated ${net.term} genes get</span></div>
       <div class="card"><div class="card-head"><h2>Species in the graph</h2><span class="sub">the pipeline's species table · a species takes part when enough of its genes have both a phenotype and an ortholog</span></div>
         <div id="inputs"></div></div>
       <div class="grid cols-2" style="margin-top:16px">
-        <div class="card"><div class="card-head"><h2>Known gene–disease pairs</h2><span class="sub">curated for ${esc(base.binomial)} · % of the step above</span></div><div id="funnel-pairs"></div></div>
-        <div class="card"><div class="card-head"><h2>Diseases with a known gene</h2><span class="sub">and how far they get · % of the step above</span></div><div id="funnel-diseases"></div></div>
+        <div class="card"><div class="card-head"><h2>Known ${net.pair} pairs</h2><span class="sub">curated for ${esc(base.binomial)} · % of the step above</span></div><div id="funnel-pairs"></div></div>
+        <div class="card"><div class="card-head"><h2>${net.Terms} with a known gene</h2><span class="sub">and how far they get · % of the step above</span></div><div id="funnel-terms"></div></div>
       </div>
     </section>`;
 
@@ -143,32 +147,34 @@ export async function render(el) {
     { label: "curated in the graph", n: k.curated },
     { label: "gene has an ortholog in a model species", n: k.has_ortholog },
     { label: "gene has ≥ 1 ortholog annotated with a phenotype", n: k.gene_in_reach },
-    { label: "disease has a significant phenolog <span class=\"faint\">(within reach)</span>", n: k.in_reach },
-    { label: "gene–disease pairs recovered by phenologs method", n: k.recovered },
+    { label: `${net.term} has a significant phenolog <span class="faint">(within reach)</span>`, n: k.in_reach },
+    { label: `${net.pair} pairs recovered by phenologs method`, n: k.recovered },
   ], { foot: `recovered: ${share(k.recovered, k.in_reach)} of pairs within reach · ${share(k.recovered, k.curated)} overall` });
-  funnel(el.querySelector("#funnel-diseases"), [
-    { label: "diseases with a curated gene", n: k.diseases },
-    { label: "with a gene that has an ortholog in a model species", n: k.diseases_ortholog },
-    { label: "with a gene that has ≥ 1 ortholog annotated with a phenotype", n: k.diseases_gene_in_reach },
-    { label: "with a significant phenolog <span class=\"faint\">(within reach)</span>", n: k.diseases_in_reach },
-    { label: "with a known gene recovered", n: k.diseases_recovered },
+  funnel(el.querySelector("#funnel-terms"), [
+    { label: `${net.terms} with a curated gene`, n: k.terms },
+    { label: "with a gene that has an ortholog in a model species", n: k.terms_ortholog },
+    { label: "with a gene that has ≥ 1 ortholog annotated with a phenotype", n: k.terms_gene_in_reach },
+    { label: "with a significant phenolog <span class=\"faint\">(within reach)</span>", n: k.terms_in_reach },
+    { label: "with a known gene recovered", n: k.terms_recovered },
   ], { color: "var(--accent-2)",
-       foot: `with a known gene recovered: ${share(k.diseases_recovered, k.diseases_in_reach)} of diseases within reach · ${share(k.diseases_recovered, k.diseases)} overall` });
+       foot: `with a known gene recovered: ${share(k.terms_recovered, k.terms_in_reach)} of ${net.terms} within reach · ${share(k.terms_recovered, k.terms)} overall` });
   el.querySelectorAll(".tile[data-target]").forEach(tl => tl.addEventListener("click", () => {
     document.getElementById(tl.dataset.target).scrollIntoView({ behavior: "smooth" });
   }));
 
   // top lists
   const top = ov.top;
-  barList(el.querySelector("#top-diseases"), top.diseases.map(d => ({ label: d.label, value: d.value, href: route.disease(d.id), sub: `${d.n_species} species`, color: speciesOf(d.top_species).color })));
+  barList(el.querySelector("#top-terms"), top.terms.map(d => ({ label: d.label, value: d.value, href: route.term(d.id), sub: `${d.n_species} species`, color: speciesOf(d.top_species).color })));
   barList(el.querySelector("#top-phenotypes"), top.phenotypes.map(d => ({ label: d.label, value: d.value, href: route.phenotype(d.id), sub: `<i>${esc(speciesOf(d.species).binomial)}</i>`, color: speciesOf(d.species).color })));
-  barList(el.querySelector("#top-genes"), top.genes.map(d => ({ label: d.label, value: d.value, href: route.gene(d.id), sub: `${d.n_known_diseases} known disease${d.n_known_diseases === 1 ? "" : "s"} · ${esc(d.family || "")}` })));
+  barList(el.querySelector("#top-genes"), top.genes.map(d => ({ label: d.label, value: d.value, href: route.gene(d.id), sub: `${d.n_known_terms} known ${d.n_known_terms === 1 ? net.term : net.terms} · ${esc(d.family || "")}` })));
   barList(el.querySelector("#top-families"), top.families.map(d => {
     const genes = (d.base_symbols || "").split(", ").filter(Boolean);
     return { label: d.label, value: d.value, href: route.family(d.id),
              sub: esc(genes.slice(0, 3).join(", ")) + (genes.length > 3 ? ` <span class="faint">+${genes.length - 3}</span>` : "") };
   }));
 }
+
+const cap = s => s[0].toUpperCase() + s.slice(1);
 
 function tile(n, label, { cls = "", target = "", help = "" } = {}) {
   return `<div class="tile ${cls} ${target ? "link" : ""}" ${target ? `data-target="${target}"` : ""} ${help ? `title="${esc(help)}"` : ""}>

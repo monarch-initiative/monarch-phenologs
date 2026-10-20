@@ -1,13 +1,14 @@
-// One phenotype: the human diseases it is a phenolog of, and the genes annotated with it
-import { ensure, query, lit } from "./db.js";
-import { state, fmt, esc, speciesChip, route, links } from "./format.js";
+// One phenotype: the human diseases or phenotypes it is a phenolog of, and the genes annotated with it
+import { ensure, query, lit, releaseList, openEntry } from "./db.js";
+import { state, fmt, esc, speciesChip, route, links, networkHref, NETWORKS } from "./format.js";
 import { pageHead, statRow, card, notFound, PHENOLOG_HELP } from "./common.js";
 import { table } from "./table.js";
 
 const ORTHOLOGS_SHOWN = 4;
 
 export async function render(el, id) {
-  await ensure("phenotypes", "phenologs", "gene_phenotypes", "genes", "human_orthologs");
+  const net = state.net;
+  await ensure("phenotypes", "phenologs", "gene_phenotypes", "genes", "human_orthologs", "terms");
   const rows = await query(`SELECT * FROM phenotypes WHERE phenotype_id = ${lit(id)} ORDER BY n_phenologs DESC`);
   if (!rows.length) { el.innerHTML = notFound("phenotype", id); return; }
   const p = rows[0];
@@ -15,8 +16,11 @@ export async function render(el, id) {
   const several = rows.length > 1;                        // an MP term can belong to mouse and rat; species columns only then
   const model = rows.some(r => r.species !== base);
 
+  // a human phenotype with phenologs in a phenotype release has its own page
+  if (!model && (await query(`SELECT 1 FROM terms WHERE term_id = ${lit(id)}`)).length) { location.replace(route.term(id)); return; }
+
   const [phen, genes] = await Promise.all([
-    query(`SELECT rank, species, disease_id, disease_name, overlap, n_disease_orthogroups, n_phenotype_orthogroups, n_common, pval
+    query(`SELECT rank, species, term_id, term_name, overlap, n_term_orthogroups, n_phenotype_orthogroups, n_common, pval
            FROM phenologs WHERE phenotype_id = ${lit(id)} ORDER BY pval`),
     query(`SELECT gp.species, gp.gene_id, coalesce(g.symbol, gp.gene_id) AS symbol, g.family,
                   string_agg(ho.human_symbol || '|' || ho.human_gene_id, ',' ORDER BY ho.human_symbol) AS human
@@ -32,26 +36,26 @@ export async function render(el, id) {
                  links: [{ label: "Monarch", href: links.monarch(p.phenotype_id) }],
                  after: `<div class="chips" style="align-self:center">${rows.map(r => speciesChip(r.species)).join("")}</div>` })}
     ${rows.map(r => statRow([[`<i>${esc(r.species.replace(/-/g, " "))}</i>`, "species"], [r.n_genes, "genes annotated"], [r.n_orthogroups, "protein families"],
-                             ...(r.species === base ? [[r.n_known_diseases, "known diseases of these genes"]]
-                                                    : [[r.n_shared_orthogroups, "families shared with human"], [r.n_diseases, "human disease phenologs"],
-                                                       [fmt.p(r.best_pval), "best p"]])])).join("")}
-    ${model ? "" : `<p class="muted" style="margin:-6px 0 16px">Phenologs in this release compare human diseases, not human phenotypes, with the model species' phenotypes.</p>`}
+                             ...(r.species !== base ? [[r.n_shared_orthogroups, "families shared with human"], [r.n_terms, `${net.human.toLowerCase()} phenologs`],
+                                                       [fmt.p(r.best_pval), "best p"]]
+                                 : net.key === "disease" ? [[r.n_known_terms, "known diseases of these genes"]] : [])])).join("")}
+    ${model ? "" : `<p class="muted" style="margin:-6px 0 16px">${humanNote(id)}</p>`}
     <div class="grid" style="grid-template-columns:1fr; gap:16px">
-      ${model ? card("Phenologs", "phens", { sub: "human diseases whose protein families overlap this phenotype's more than chance" }) : ""}
+      ${model ? card("Phenologs", "phens", { sub: `${net.humans.toLowerCase()} whose protein families overlap this phenotype's more than chance` }) : ""}
       ${card("Genes annotated", "genes", { sub: model ? "the genes carrying this phenotype, and so the protein families behind every phenolog above" : "the genes carrying this phenotype" })}
     </div>`;
 
   if (model) {
     table(el.querySelector("#phens"), phen, [
-      { key: "disease_name", label: "Human diseases", format: (v, r) => `<a href="${route.disease(r.disease_id)}">${esc(v)}</a> <span class="id faint">${esc(r.disease_id)}</span>` },
+      { key: "term_name", label: net.humans, format: (v, r) => `<a href="${route.term(r.term_id)}">${esc(v)}</a> <span class="id faint">${esc(r.term_id)}</span>` },
       ...(several ? [{ key: "species", label: "Species", format: v => speciesChip(v) }] : []),
-      { key: "rank", label: "Phenolog rank in disease", num: true, sortDir: "asc", help: PHENOLOG_HELP.rank },
+      { key: "rank", label: `Phenolog rank in ${net.term}`, num: true, sortDir: "asc", help: PHENOLOG_HELP.rank },
       { key: "overlap", label: "Shared families", num: true, help: PHENOLOG_HELP.overlap },
-      { key: "n_disease_orthogroups", label: "Disease families", num: true, help: PHENOLOG_HELP.n_disease_orthogroups },
+      { key: "n_term_orthogroups", label: `${net.Term} families`, num: true, help: PHENOLOG_HELP.n_term_orthogroups },
       { key: "n_phenotype_orthogroups", label: "Phenotype families", num: true, help: PHENOLOG_HELP.n_phenotype_orthogroups },
       { key: "pval", label: "p", num: true, sortDir: "asc", help: PHENOLOG_HELP.pval, format: v => `<span class="mono">${fmt.p(v)}</span>` },
-    ], { sortKey: "pval", sortDir: "asc", search: ["disease_name", "disease_id"], placeholder: "Filter by disease name or Mondo id…",
-         empty: "Not a significant phenolog of any disease", wrapHead: true });
+    ], { sortKey: "pval", sortDir: "asc", search: ["term_name", "term_id"], placeholder: `Filter by ${net.term} name or ${net.ontology} id…`,
+         empty: `Not a significant phenolog of any ${net.term}`, wrapHead: true, download: `${p.phenotype_id}_phenologs` });
   }
 
   table(el.querySelector("#genes"), genes, [
@@ -60,7 +64,16 @@ export async function render(el, id) {
     { key: "family", label: "Family", format: v => v ? `<a class="mono" href="${route.family(v)}">${esc(v)}</a>` : `<span class="faint">none</span>` },
     ...(model ? [{ key: "human", label: "Human ortholog(s)", format: orthologLinks, sortValue: r => r.human ? r.human.toLowerCase() : null }] : []),
   ], { sortKey: "symbol", sortDir: "asc", search: ["symbol", "family", "gene_id", "human"],
-       placeholder: model ? "Filter by gene, family or human ortholog…" : "Filter by gene or family…" });
+       placeholder: model ? "Filter by gene, family or human ortholog…" : "Filter by gene or family…", download: `${p.phenotype_id}_genes` });
+}
+
+// A human phenotype's page says where its phenologs are: a disease release compares diseases instead, and in a
+// phenotype release this one has none
+function humanNote(id) {
+  if (state.net.key === "phenotype") return "No significant phenologs for this human phenotype in this release.";
+  const other = releaseList().find(r => r.prediction_network === "phenotype" && r.graph_version === openEntry().graph_version);
+  return "Phenologs in this release compare human diseases, not human phenotypes, with the model species' phenotypes." +
+    (other ? ` <a href="${networkHref("phenotype", `#/${NETWORKS.phenotype.route}/${id}`)}">This phenotype's own phenologs</a> are in the phenotype release.` : "");
 }
 
 // "SYMBOL|ID,SYMBOL|ID" --> links to the human genes

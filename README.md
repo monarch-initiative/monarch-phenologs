@@ -43,8 +43,9 @@ uv run python -m pytest tests/ -q      # the whole pipeline on two small kg slic
 ```
 
 Step 01 downloads the newest Monarch KG release and the PHENIO it was built with, and writes both versions to
-`monarch_kg/versions.json` for the later steps. After the last ranking, `python/07_build_release.py -p path/to/project_dir`
-writes the release (what the dashboard reads and the bucket holds) to `path/to/project_dir/release/`.
+`monarch_kg/versions.json` for the later steps. Steps 03 to 06 run once per prediction network, disease and phenotype.
+After the last ranking, `python/07_build_release.py -p path/to/project_dir -prd <network>` writes that network's
+release (what the dashboard reads and the bucket holds) to `path/to/project_dir/release/`.
 `RELEASING.md` has every step of a release and how it is published; `dashboard/README.md` has the site.
 
 `tests/run_pipeline.sh` runs every step on a slice with tiny parameters; `PY=.venv/bin/python` selects
