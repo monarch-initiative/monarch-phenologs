@@ -1,9 +1,10 @@
-# End to end checks on the kg slices under test_data/. Each slice runs through the whole python
-# pipeline once (session scoped), then the tests read what it wrote.
+# End to end checks on the kg slices under test_data/. Each slice runs through the python pipeline once (session
+# scoped), then the tests read what it wrote. The current slice runs every step of both networks; the legacy one, whose
+# differences are in the kg, runs the disease network's steps to its release.
 #
 #   python -m pytest tests/ -x -q
 #
-# Slow but small: ten random trials and five leave one out families per slice.
+# Small: ten random trials and five leave one out families.
 
 import os
 import sys
@@ -27,8 +28,8 @@ CURRENT = os.path.join(REPO, "test_data", "kg_2026-03-06")
 LEGACY = os.path.join(REPO, "test_data", "kg_2024-03-07")
 
 
-def run_pipeline(slice_dir, project_dir, *extra):
-    env = dict(os.environ, PY=sys.executable)
+def run_pipeline(slice_dir, project_dir, *extra, quick=False):
+    env = dict(os.environ, PY=sys.executable, QUICK="1" if quick else "0")
     cmd = [os.path.join(HERE, "run_pipeline.sh"), slice_dir, project_dir] + list(extra)
     res = subprocess.run(cmd, env=env, capture_output=True, text=True)
     if res.returncode != 0:
@@ -46,7 +47,7 @@ def current_run(tmp_path_factory):
 @pytest.fixture(scope="session")
 def legacy_run(tmp_path_factory):
     project = str(tmp_path_factory.mktemp("legacy"))
-    log = run_pipeline(LEGACY, project)
+    log = run_pipeline(LEGACY, project, quick=True)
     return project, log
 
 

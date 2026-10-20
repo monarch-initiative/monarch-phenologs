@@ -5,7 +5,8 @@
 #   tests/run_pipeline.sh <slice_dir> <project_dir> [extra args for 02_kg_data_extraction.py]
 #
 # slice_dir holds a monarch_kg/ directory (see tests/build_test_kg.py). Outputs land in project_dir.
-# PY selects the interpreter (default: python on PATH).
+# PY selects the interpreter (default: python on PATH). QUICK=1 runs only the disease network's steps to its release,
+# without the species ablation, leave one out and the phenotype network.
 set -euo pipefail
 
 SLICE="$(cd "$1" && pwd)"
@@ -24,6 +25,7 @@ FDR=0.05
 K="${K:-5}"
 LOO_MAX="${LOO_MAX:-5}"
 TOP="${TOP:-3}"
+QUICK="${QUICK:-0}"
 
 mkdir -p "$PROJECT/monarch_kg"
 for f in monarch-kg_nodes.tsv monarch-kg_edges.tsv; do
@@ -38,6 +40,19 @@ $PY 01_download_and_setup.py -p "$PROJECT" -gv 2000-01-01 -pv 2000-01-01
 
 echo "== [02] extraction =="
 $PY 02_kg_data_extraction.py -p "$PROJECT" "$@"
+
+# The two networks share only 01 and 02, so the phenotype network's steps run beside the disease network's
+if [[ "$QUICK" != 1 ]]; then
+    (
+        echo "== phenotype network: [03] to [06] and the candidates =="
+        $PY 03_compute_phenologs_randomized_trials.py -p "$PROJECT" -n "$N_TRIALS" -c "$CORES" -taxon_id "$TAXON" -prd phenotype -seed "$SEED"
+        $PY 04_compute_phenologs.py -p "$PROJECT" -c "$CORES" -taxon_id "$TAXON" -prd phenotype
+        $PY 05_compute_phenologs_fdr_data.py -p "$PROJECT" -taxon_id "$TAXON" -prd phenotype
+        $PY 06_phenologs_compute_ortholog_to_phenotype_rankings.py -p "$PROJECT" -taxon_id "$TAXON" -prd phenotype -fdr "$FDR" -kneighbs "$K" -rank_metric hg -rank_type gene
+        $PY phenologs_disease_gene_candidate_rankings.py -p "$PROJECT" -taxon_id "$TAXON" -prd phenotype -fdr "$FDR" -kneighbs "$K" -rank_metric hg
+    ) &
+    PHENOTYPE_STEPS=$!
+fi
 
 echo "== [03] $N_TRIALS random trials =="
 $PY 03_compute_phenologs_randomized_trials.py -p "$PROJECT" -n "$N_TRIALS" -c "$CORES" -taxon_id "$TAXON" -prd "$PRD" -seed "$SEED"
@@ -55,23 +70,22 @@ for M in nb hg; do
     $PY phenologs_disease_gene_candidate_rankings.py -p "$PROJECT" -taxon_id "$TAXON" -prd "$PRD" -fdr "$FDR" -kneighbs "$K" -rank_metric "$M"
 done
 
-echo "== [06] protein family ranking, mouse only (species ablation path) =="
-$PY 06_phenologs_compute_ortholog_to_phenotype_rankings.py -p "$PROJECT" -taxon_id "$TAXON" -prd "$PRD" -fdr "$FDR" -kneighbs "$K" -rank_metric hg -rank_type protein_family -xtaxon_ids 10090
+if [[ "$QUICK" != 1 ]]; then
+    echo "== [06] protein family ranking, mouse only (species ablation path) =="
+    $PY 06_phenologs_compute_ortholog_to_phenotype_rankings.py -p "$PROJECT" -taxon_id "$TAXON" -prd "$PRD" -fdr "$FDR" -kneighbs "$K" -rank_metric hg -rank_type protein_family -xtaxon_ids 10090
 
-echo "== leave one out ($LOO_MAX families) =="
-$PY phenologs_leave_one_out_xvalidation.py -p "$PROJECT" -c "$CORES" -taxon_id "$TAXON" -prd "$PRD" -fdr "$FDR" -max_orthologs "$LOO_MAX"
-$PY phenologs_xvalidation_ortholog_to_phenotype_ranking.py -p "$PROJECT" -c "$CORES" -taxon_id "$TAXON" -prd "$PRD" -fdr "$FDR" -kneighbs "$K" -rank_metric hg -rank_type gene
+    echo "== leave one out ($LOO_MAX families) =="
+    $PY phenologs_leave_one_out_xvalidation.py -p "$PROJECT" -c "$CORES" -taxon_id "$TAXON" -prd "$PRD" -fdr "$FDR" -max_orthologs "$LOO_MAX"
+    $PY phenologs_xvalidation_ortholog_to_phenotype_ranking.py -p "$PROJECT" -c "$CORES" -taxon_id "$TAXON" -prd "$PRD" -fdr "$FDR" -kneighbs "$K" -rank_metric hg -rank_type gene
 
-echo "== phenotype network: [03] to [06] and the candidates =="
-$PY 03_compute_phenologs_randomized_trials.py -p "$PROJECT" -n "$N_TRIALS" -c "$CORES" -taxon_id "$TAXON" -prd phenotype -seed "$SEED"
-$PY 04_compute_phenologs.py -p "$PROJECT" -c "$CORES" -taxon_id "$TAXON" -prd phenotype
-$PY 05_compute_phenologs_fdr_data.py -p "$PROJECT" -taxon_id "$TAXON" -prd phenotype
-$PY 06_phenologs_compute_ortholog_to_phenotype_rankings.py -p "$PROJECT" -taxon_id "$TAXON" -prd phenotype -fdr "$FDR" -kneighbs "$K" -rank_metric hg -rank_type gene
-$PY phenologs_disease_gene_candidate_rankings.py -p "$PROJECT" -taxon_id "$TAXON" -prd phenotype -fdr "$FDR" -kneighbs "$K" -rank_metric hg
+    wait "$PHENOTYPE_STEPS"
+fi
 
 echo "== [07] releases (the phenotype one keeps each human phenotype's top $TOP candidates) =="
 $PY 07_build_release.py -p "$PROJECT" -prd "$PRD" -fdr "$FDR" -kneighbs "$K" -c "$CORES"
-$PY 07_build_release.py -p "$PROJECT" -prd phenotype -fdr "$FDR" -kneighbs "$K" -c "$CORES" -top_candidates "$TOP"
+if [[ "$QUICK" != 1 ]]; then
+    $PY 07_build_release.py -p "$PROJECT" -prd phenotype -fdr "$FDR" -kneighbs "$K" -c "$CORES" -top_candidates "$TOP"
+fi
 
 echo "== [08] release list (a new one, nothing is fetched) =="
 $PY 08_update_release_list.py -p "$PROJECT" -r none

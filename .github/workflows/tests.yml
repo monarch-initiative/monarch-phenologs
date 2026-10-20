@@ -1,11 +1,14 @@
-# The whole pipeline on the two kg slices (tests/), for every pull request and every push to main, or from the Actions tab
+# The whole pipeline on the two kg slices (tests/), for every pull request (again on each push to it, stopping the run
+# of the push before), or from the Actions tab
 name: Test
 
 on:
-  push:
-    branches: [main]
   pull_request:
   workflow_dispatch:
+
+concurrency:
+  group: test-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   tests:
