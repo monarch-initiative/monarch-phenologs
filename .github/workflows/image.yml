@@ -49,6 +49,7 @@ jobs:
           context: .
           platforms: linux/amd64,linux/arm64
           push: true
+          provenance: false           # no build-record attestations, which ghcr lists as extra untagged versions
           tags: ${{ steps.v.outputs.tags }}
           build-args: |
             PHENOLOGS_IMAGE=${{ steps.v.outputs.stamp }}
