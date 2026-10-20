@@ -49,8 +49,20 @@ jobs:
           context: .
           platforms: linux/amd64,linux/arm64
           push: true
+          provenance: false           # no build-record attestations, which ghcr lists as extra untagged versions
           tags: ${{ steps.v.outputs.tags }}
           build-args: |
             PHENOLOGS_IMAGE=${{ steps.v.outputs.stamp }}
             PHENOLOGS_COMMIT=${{ steps.v.outputs.commit }}
           labels: org.opencontainers.image.source=https://github.com/monarch-initiative/monarch-phenologs
+      - name: Size
+        env:
+          STAMP: ${{ steps.v.outputs.stamp }}
+        run: |
+          # Each platform's download size (its compressed layers), on the run's summary page
+          docker buildx imagetools inspect "$IMAGE:$STAMP" --raw |
+            jq -r '.manifests[] | select(.platform.architecture != "unknown") | "\(.platform.os)/\(.platform.architecture) \(.digest)"' |
+            while read -r platform digest; do
+              bytes=$(docker buildx imagetools inspect "$IMAGE@$digest" --raw | jq '[.layers[].size] | add')
+              echo "$platform: $((bytes / 1000000)) MB to download" >> "$GITHUB_STEP_SUMMARY"
+            done
