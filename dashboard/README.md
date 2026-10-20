@@ -18,7 +18,7 @@ python dashboard/serve.py -p path/to/project_dir                                
 dashboard/
   index.html, style.css
   js/
-    app.js           hash router, network switch, search box
+    app.js           hash router, top bar (a row of pages per network), search box
     db.js            DuckDB-WASM: opens a release, fetches its tables on first use
     format.js        formatting, the open network's words, species colours, outbound links (the DisMech hook lives here)
     common.js        page pieces the pages share
@@ -43,7 +43,8 @@ and the candidate ranking.
       overview.json      everything the release page shows; its release block has the versions and settings
       README.md          what every table and column holds
       manifest.json      every file with its size, rows, sha256 and what it holds
-      *.parquet          the tables below, which are also the downloads
+      *.parquet          the tables below. The two the Downloads page lists are named for the network:
+                         disease-phenologs.parquet and gene-disease-candidates.parquet here
     phenotype/           the same files for the phenotype network
   releases.json          the published list with this run's releases in it, written by 08_update_release_list.py
 ```
@@ -64,8 +65,8 @@ The code is `python/phenologs_release_utils.py`. A change in the pipeline's file
 
 | table | one row per | notes |
 |---|---|---|
-| `phenologs` | significant phenolog | ranked within its term by p |
-| `candidates` | (term, gene) the release keeps | rank within the term and global rank across all terms, ties sharing a place; score, known flag, and support: per species, the term's phenologs that are phenotypes of an ortholog of the gene, of how many, through how many orthologs, and the (phenolog, ortholog) hits the score counts (the pipeline's `XSpecies_occurence`). The pipeline also appends a term's known genes its phenologs never reached, without a p-value; those are left out |
+| `phenologs` (`<network>-phenologs.parquet`) | significant phenolog | ranked within its term by p |
+| `candidates` (`gene-<network>-candidates.parquet`) | (term, gene) the release keeps | rank within the term and global rank across all terms, ties sharing a place; score, known flag, and support: per species, the term's phenologs that are phenotypes of an ortholog of the gene, of how many, through how many orthologs, and the (phenolog, ortholog) hits the score counts (the pipeline's `XSpecies_occurence`). The pipeline also appends a term's known genes its phenologs never reached, without a p-value; those are left out |
 | `human_orthologs` | (model gene, human gene) | ortholog edges from the run's species to the base species |
 | `additive` | (term, family, phenolog) | top 20 phenologs x top 40 families per term; the page re-slices by k, species and order |
 | `terms`, `genes`, `phenotypes`, `families`, `species` | entity | counts the pages and browse lists show. `genes.in_reach`: a base species gene one of whose orthologs carries a phenotype the ranking can use |
@@ -74,9 +75,10 @@ The code is `python/phenologs_release_utils.py`. A change in the pipeline's file
 | `search` | searchable thing | kind, id, label, detail, weight |
 
 - **Counts.** Counts are 32 bit, so they arrive in the browser as plain numbers.
-- **Downloads.** The tables are also the downloads, listed on the site's Downloads page with one-liners that read
-  them in place. `README.md` in each release describes every column (a test checks that none is missing). Tables on
-  the pages have a TSV button for the rows shown, as filtered and sorted.
+- **Downloads.** The site's Downloads page lists each network's phenologs and candidates and its `README.md`, with a
+  DuckDB command per file that downloads it as TSV. `README.md` describes every column of every table in the release
+  (a test checks that none is missing). Tables on the pages have a TSV button for the rows shown, as filtered and
+  sorted.
 
 ## Adding a page or a chart
 
@@ -92,8 +94,8 @@ data bucket, `gs://data-public-monarchinitiative/phenologs/alpha/`, which is pub
 `https://data.monarchinitiative.org/phenologs/alpha/`. CORS is open and range requests work, but the bucket can't be
 listed, so `releases.json` lists the releases.
 - **Which release.** The site reads `releases.json` there and opens the newest KG version, or
-  `?release=<graph_version>`. Its landing page shows both networks; the rest of the site shows one, the disease
-  network or `?network=phenotype`, switched in the top bar. It asks for the list past any cache, so a new release
+  `?release=<graph_version>`. Its landing page and Downloads cover both networks; the rest of the site shows one,
+  the disease network or `?network=phenotype`. The top bar has a row of pages for each. It asks for the list past any cache, so a new release
   shows at once, and says so when there is none yet.
 - **Local data.** Served by `serve.py`, the site reads the run's `release/` folder instead, and `serve.py` lists the
   releases found there. `?data=<url>` points the site at any other releases folder.

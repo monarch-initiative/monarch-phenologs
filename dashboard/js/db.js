@@ -12,6 +12,9 @@ export const ROOT = (params.get("data") || (LOCAL ? "releases" : BUCKET)).replac
 // The release layout this site reads (SCHEMA in python/phenologs_release_utils.py)
 const SCHEMA = 2;
 
+// The two tables meant for download carry their network in the file name (FILE_NAMES in python/phenologs_release_utils.py)
+const FILE_NAMES = { phenologs: "{prd}-phenologs", candidates: "gene-{prd}-candidates" };
+
 let releases = [];              // releases.json: every published release, newest first
 let open = null;                // the open release's entry in it
 const overviews = new Map();    // path -> Promise of overview.json
@@ -57,9 +60,14 @@ export function overviewOf(entry) {
   return overviews.get(entry.path);
 }
 
-// The address of a file of the open release
-export function fileURL(name) {
-  return new URL(ROOT + open.path + name, location.href).href;
+// The address of a file of a release (the open one by default)
+export function fileURL(name, entry = open) {
+  return new URL(ROOT + entry.path + name, location.href).href;
+}
+
+// The file a table is in
+export function fileOf(table, entry = open) {
+  return (FILE_NAMES[table] || table).replace("{prd}", entry.prediction_network) + ".parquet";
 }
 
 export async function getJSON(url) {
@@ -80,7 +88,7 @@ async function init() {
   return conn;
 }
 
-// Make the release's <table>.parquet queryable as <table>. Fetched whole once
+// Make the release's file of a table queryable as that table. Fetched whole once
 export function ensure(...tables) {
   return Promise.all(tables.map(t => {
     if (!registered.has(t)) registered.set(t, register(t));
@@ -90,8 +98,8 @@ export function ensure(...tables) {
 
 async function register(table) {
   await init();
-  const res = await fetch(ROOT + open.path + table + ".parquet");
-  if (!res.ok) throw new Error(`Could not load ${table}.parquet (${res.status})`);
+  const res = await fetch(ROOT + open.path + fileOf(table));
+  if (!res.ok) throw new Error(`Could not load ${fileOf(table)} (${res.status})`);
   await db.registerFileBuffer(table + ".parquet", new Uint8Array(await res.arrayBuffer()));
   await conn.query(`CREATE VIEW ${table} AS SELECT * FROM parquet_scan('${table}.parquet')`);
 }

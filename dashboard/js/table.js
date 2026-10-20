@@ -119,7 +119,7 @@ function render(el, st, columns, slice, total, options, redraw, all) {
     tsv.disabled = true;
     const rows = await all();
     tsv.disabled = false;
-    if (rows.length > EXPORT_MAX) {
+    if (options.fetchAll && rows.length > EXPORT_MAX) {
       tsv.outerHTML = `<span class="faint">over ${EXPORT_MAX.toLocaleString("en-US")} rows: filter them, or take the whole table from <a href="#/downloads">Downloads</a></span>`;
       return;
     }

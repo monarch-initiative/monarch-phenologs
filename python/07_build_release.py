@@ -75,5 +75,5 @@ if __name__ == '__main__':
 
     for f in build_manifest(con, run, outdir):
         rows = "{:,} rows".format(f["rows"]) if f["rows"] is not None else ""
-        print("  {:<30} {:>16} {:>8.1f} MB".format(f["path"], rows, f["bytes"] / 1e6))
+        print("  {:<34} {:>16} {:>8.1f} MB".format(f["path"], rows, f["bytes"] / 1e6))
     print("- Wrote {} ({:.1f} s total)".format(outdir, time.time() - t0))

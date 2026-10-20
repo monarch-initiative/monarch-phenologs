@@ -1,4 +1,4 @@
-// Shell: opens the release, routes on the hash, runs the network switch and the search box. Pages live in their own modules.
+// Shell: opens the release, routes on the hash, runs the top bar and the search box. Pages live in their own modules.
 import { ensure, query, lit, openRelease, releaseList, openEntry, NoRelease } from "./db.js";
 import { setOverview, state, esc, NETWORKS, networkHref } from "./format.js";
 import * as landing from "./landing.js";
@@ -48,13 +48,12 @@ async function navigate() {
   const m = hash.match(NETWORK_PAGE);
   const wanted = m && (m[1].startsWith("disease") ? "disease" : "phenotype");
   if (wanted && wanted !== state.net.key) { location.replace(networkHref(wanted, hash)); return; }
-  networkSwitch(hash);
+  markNav(hash);
 
   for (const [pattern, render] of ROUTES) {
     const m = hash.match(pattern);
     if (!m) continue;
     const params = m.slice(1).map(decodeURIComponent);
-    document.querySelectorAll(".nav a").forEach(a => a.classList.toggle("active", a.getAttribute("href") === hash.split("/").slice(0, 3).join("/")));
     view.innerHTML = `<div class="loading">Loading…</div>`;
     window.scrollTo(0, 0);
     try {
@@ -68,20 +67,37 @@ async function navigate() {
   view.innerHTML = `<div class="card"><h3>Not found</h3><p class="muted">${esc(hash)}</p></div>`;
 }
 
-// The disease / phenotype switch: this page in the other network's release of the same KG version. A disease or
-// human phenotype page has no counterpart there, so it leads to that release's page
-function networkSwitch(hash) {
+// ---- top bar: a row per network with its pages, in columns both rows share ------------------
+// The open network's links stay in this page. The other's reload into that network's release of the same KG
+// version, and are dimmed when there is none
+const PAGES = net => [["Release", "#/release"], ["Candidates", "#/candidates"], [net.Terms, `#/browse/${net.browse}`], ["Genes", "#/browse/genes"],
+                      ["Phenotypes", "#/browse/phenotypes"], ["Families", "#/browse/families"], ["Species", "#/browse/species"]];
+
+function networkRows() {
   const version = openEntry().graph_version;
-  document.querySelectorAll("#net-switch a").forEach(a => {
-    const net = NETWORKS[a.dataset.net];
+  document.getElementById("nets").innerHTML = Object.values(NETWORKS).map(net => {
     const exists = releaseList().some(r => r.graph_version === version && r.prediction_network === net.key);
-    const here = net.key === state.net.key;
-    a.classList.toggle("active", here);
-    a.classList.toggle("off", !exists);
-    a.title = exists ? `${net.title}: ${net.humans.toLowerCase()} against the phenotypes of each model species` : `No ${net.key} release for Monarch KG ${version}`;
-    const target = /^#\/(disease|human-phenotype)\//.test(hash) ? "#/release" : hash.match(NETWORK_PAGE) ? `#/browse/${net.browse}` : hash;
-    if (here || !exists) a.removeAttribute("href"); else a.href = networkHref(net.key, target);
+    const href = hash => !exists ? "" : `href="${net.key === state.net.key ? hash : networkHref(net.key, hash)}"`;
+    const title = exists ? `${net.humans} against the phenotypes of each model species` : `No ${net.key} release for Monarch KG ${version}`;
+    return `<div class="net-row${exists ? "" : " off"}" data-net="${net.key}"><span class="net-label" title="${esc(title)}">${esc(net.title)}</span>` +
+      PAGES(net).map(([label, hash]) => `<a ${href(hash)} data-hash="${hash}">${esc(label)}</a>`).join("") + `</div>`;
+  }).join("");
+}
+
+// The open page's network row, and its section there (a gene's page is under Genes). The landing page and
+// Downloads cover both networks
+const SECTION = { gene: "genes", phenotype: "phenotypes", family: "families", species: "species", disease: "diseases", "human-phenotype": "human-phenotypes" };
+
+function markNav(hash) {
+  const parts = hash.split("/");
+  const page = SECTION[parts[1]] ? `#/browse/${SECTION[parts[1]]}` : parts.slice(0, 3).join("/");
+  const shared = /^#\/?(downloads)?$/.test(hash);
+  document.querySelectorAll(".net-row").forEach(row => {
+    const here = !shared && row.dataset.net === state.net.key;
+    row.classList.toggle("here", here);
+    row.querySelectorAll("a").forEach(a => a.classList.toggle("active", here && a.dataset.hash === page));
   });
+  document.getElementById("nav-downloads").classList.toggle("active", hash === "#/downloads");
 }
 
 // ---- search box: typeahead over the search table ---------------------------------------------
@@ -154,11 +170,9 @@ async function boot() {
   setOverview(ov);
   const r = ov.release, net = state.net;
   document.getElementById("brand-release").textContent = `kg ${r.graph_version}`;
-  const terms = document.getElementById("nav-terms");
-  terms.href = `#/browse/${net.browse}`;
-  terms.textContent = net.Terms;
+  document.getElementById("nav-downloads").hidden = false;
+  networkRows();
   document.getElementById("search-input").placeholder = `Search a ${net.term}, gene, phenotype, protein family or species…`;
-  document.getElementById("net-switch").hidden = false;
   document.getElementById("footer-release").textContent =
     `Monarch KG ${r.graph_version}${r.phenio_version ? " · phenio " + r.phenio_version : ""} · ${net.title.toLowerCase()} · FDR ${r.fdr} · ` +
     `${r.rank_metric === "hg" ? "hypergeometric" : "naive Bayes"} ranking over each ${net.term}'s ${Number(r.kneighbs).toLocaleString("en-US")} nearest phenologs · built ${r.built}`;

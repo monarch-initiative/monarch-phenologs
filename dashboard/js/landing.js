@@ -62,7 +62,7 @@ function networkCard(key, ov) {
       <div class="net-foot">
         <span class="faint">fdr ${r.fdr} · k ${fmt.int(r.kneighbs)} · ${esc(r.rank_metric)}${r.top_candidates ? ` · best ${fmt.int(r.top_candidates)} candidates kept per ${esc(net.term)}` : ""}
           · built ${esc(r.built)}${r.code_version ? ` · code ${esc(r.code_version)}` : ""}</span>
-        <span class="go"><a href="${networkHref(key, "#/downloads")}">Downloads</a><a class="btn" href="${networkHref(key, "#/release")}">Open ${esc(net.title.toLowerCase())} →</a></span>
+        <span class="go"><a class="btn" href="${networkHref(key, "#/release")}">Open ${esc(net.title.toLowerCase())} →</a></span>
       </div>
     </div>`;
 }

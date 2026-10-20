@@ -148,8 +148,8 @@ def test_release_holds_what_the_run_made(current_run):
         with open(os.path.join(release, "manifest.json")) as fh:
             files = {f["path"]: f["rows"] for f in json.load(fh)}
         pooled = read_tsv(os.path.join(project, "phenologs_results", "Homo_sapiens_{}_results".format(network), "Homo-sapiens_pooled_phenologs_fdr0.05.tsv"))
-        assert files["phenologs.parquet"] == len(pooled) > 0
-        assert files["candidates.parquet"] > 0
+        assert files["{}-phenologs.parquet".format(network)] == len(pooled) > 0
+        assert files["gene-{}-candidates.parquet".format(network)] > 0
         assert "README.md" in files and "overview.json" in files and not any("/" in f for f in files)
 
 
@@ -177,8 +177,8 @@ def test_phenotype_release_keeps_the_top_of_each_ranking(current_run):
 
     # Human phenotypes, named for their HP ids, each with its best 3 (more only when tied at the last place)
     assert sql("SELECT count(*) FROM '@terms.parquet' WHERE NOT starts_with(term_id, 'HP:')") == (0,)
-    assert sql("SELECT max(rank) FROM '@candidates.parquet'") == (3,)
-    kept, scored = sql("SELECT count(*), (SELECT sum(n_candidates) FROM '@terms.parquet') FROM '@candidates.parquet'")
+    assert sql("SELECT max(rank) FROM '@gene-phenotype-candidates.parquet'") == (3,)
+    kept, scored = sql("SELECT count(*), (SELECT sum(n_candidates) FROM '@terms.parquet') FROM '@gene-phenotype-candidates.parquet'")
     assert 0 < kept < scored == overview["tiles"]["scored_pairs"]
 
     # A known gene keeps its place in the whole ranking, kept or not, and recovery counts all of them

@@ -314,6 +314,16 @@ TABLES = ["phenologs", "human_orthologs", "scored", "support", "candidates", "ge
           "phenotypes", "families", "terms", "species", "search"]
 INTERNAL = {"scored", "support"}
 
+# The two tables meant for download carry their network in the file name, so the four files of a KG version keep
+# apart once downloaded: disease-phenologs.parquet, gene-disease-candidates.parquet and the phenotype pair. The site
+# reads them by these names (FILE_NAMES in dashboard/js/db.js)
+FILE_NAMES = {"phenologs": "{prd}-phenologs", "candidates": "gene-{prd}-candidates"}
+
+
+def file_name(name, prd):
+    """ The file of table name in a release of the prd network """
+    return FILE_NAMES.get(name, name).format(prd=prd) + ".parquet"
+
 
 def table_sql(name, run):
     base = run.base
@@ -531,7 +541,7 @@ def build_tables(con, run, outdir):
     for name in TABLES:
         con.execute("CREATE TABLE {} AS {}".format(name, table_sql(name, run)))
         if name not in INTERNAL:
-            counts[name] = write_parquet(con, name, outdir)
+            counts[name] = write_parquet(con, run, name, outdir)
     return counts
 
 
@@ -550,8 +560,8 @@ def support_mismatches(con):
         WHERE occ.n_hits IS DISTINCT FROM s.n_hits""").fetchone()
 
 
-def write_parquet(con, name, outdir):
-    path = os.path.join(outdir, name + ".parquet")
+def write_parquet(con, run, name, outdir):
+    path = os.path.join(outdir, file_name(name, run.prediction_network))
     con.execute("COPY {} TO '{}' (FORMAT PARQUET, COMPRESSION ZSTD)".format(name, path))
     return con.execute("SELECT count(*) FROM {}".format(name)).fetchone()[0]
 
@@ -601,7 +611,7 @@ def build_additive(con, run, outdir, top_phenologs=20, top_families=40):
         WHERE ft.family_rank <= {top_families}
         ORDER BY c.term_id, ft.family_rank, c.phenolog_rank
     """.format(top_phenologs=top_phenologs, top_families=top_families, base=run.base))
-    return write_parquet(con, "additive", outdir)
+    return write_parquet(con, run, "additive", outdir)
 
 
 #####################################################################################
@@ -742,7 +752,7 @@ def build_readme(run, outdir, top_phenologs=20, top_families=40):
         fh.write(RELEASE_README.format(graph_version=run.graph_version, phenio_version=run.phenio_version, code_version=code_version(),
                                        fdr=run.fdr, kneighbs=run.kneighbs, metric=METRICS[run.rank_metric][0],
                                        score=METRICS[run.rank_metric][1], top_phenologs=top_phenologs, top_families=top_families,
-                                       kept=kept, **words))
+                                       kept=kept, prd=run.prediction_network, **words))
 
 
 # Each rank metric's name, and what its score is
@@ -765,12 +775,13 @@ cutoff is set from randomised trials at an FDR of {fdr} (`fdr` in `overview.json
 significant phenologs then rank the human genes they point to as candidates for the {term}, by the {metric} score.
 
 The tables call the {terms} terms (`term_id`, `terms.parquet`, `n_known_terms`), the same names a disease release and a
-human phenotype release use.
+human phenotype release use. Only the phenologs and candidates files are named for the network, so the four files of a
+KG version keep apart once downloaded.
 
 | file | one row per |
 |---|---|
-| `candidates.parquet` | ({term}, gene) the ranking scored: the gene candidates |
-| `phenologs.parquet` | significant phenolog |
+| `gene-{prd}-candidates.parquet` | ({term}, gene) the ranking scored: the gene candidates |
+| `{prd}-phenologs.parquet` | significant phenolog |
 | `known_associations.parquet` | curated human {pair} association |
 | `gene_phenotypes.parquet` | gene-phenotype annotation, every species |
 | `human_orthologs.parquet` | (model species gene, human gene) ortholog pair |
@@ -783,13 +794,13 @@ human phenotype release use.
 
 The tables open in DuckDB, Python and R:
 
-    duckdb -c "SELECT * FROM 'candidates.parquet' WHERE NOT known ORDER BY global_rank LIMIT 10"
-    python -c "import pandas as pd; print(pd.read_parquet('candidates.parquet').head())"
-    Rscript -e "print(head(arrow::read_parquet('candidates.parquet')))"
+    duckdb -c "SELECT * FROM 'gene-{prd}-candidates.parquet' WHERE NOT known ORDER BY global_rank LIMIT 10"
+    python -c "import pandas as pd; print(pd.read_parquet('gene-{prd}-candidates.parquet').head())"
+    Rscript -e "print(head(arrow::read_parquet('gene-{prd}-candidates.parquet')))"
 
 {Terms} are {ontology} ids, human genes HGNC ids, protein families PANTHER ids, and species are written `Genus-species`.
 
-## candidates.parquet
+## gene-{prd}-candidates.parquet
 
 The gene candidates: every ({term}, gene) the ranking scored, best first.{kept} The pipeline also lists each {term}'s
 curated genes its phenologs never reached, without a score. Those are left out here (`known_associations.parquet` has
@@ -808,7 +819,7 @@ every curated pair).
 | `n_species` | model species in `support` |
 | `n_phenologs` | phenologs in `support`, summed over species |
 
-## phenologs.parquet
+## {prd}-phenologs.parquet
 
 Every significant phenolog, ranked within its {term} by p-value.
 
@@ -865,7 +876,7 @@ Each {term} keeps its top {top_families} families.
 | `family` | the PANTHER family |
 | `family_rank` | the family's place for the {term}, by `family_total` |
 | `family_total` | the family's sum over the {term}'s top phenologs |
-| `phenolog_rank` | the phenolog's place among the {term}'s phenologs (`rank` in `phenologs.parquet`) |
+| `phenolog_rank` | the phenolog's place among the {term}'s phenologs (`rank` in `{prd}-phenologs.parquet`) |
 | `phenotype_id`, `phenotype_name`, `species` | the phenolog's model phenotype |
 | `score` | what the phenolog adds to the family |
 | `known_symbols` | the family's human genes curated for the {term} |
@@ -968,26 +979,28 @@ The PANTHER protein families.
 
 # Every file of a release folder with its size, row count, sha256 and what it holds (DESCRIPTIONS)
 DESCRIPTIONS = {
-    "overview.json":              "Everything the release page shows: headline numbers, species, FDR table, top lists, graph inputs",
-    "phenologs.parquet":          "Every significant phenolog, ranked within its {term} by p-value",
-    "candidates.parquet":         "The gene candidates of each {term}: rank, score, known flag and support per species",
-    "additive.parquet":           "Per {term}, each protein family's score from each of its top phenologs",
-    "terms.parquet":              "The {terms} with a phenolog, with their counts",
-    "genes.parquet":              "Every gene with a protein family, a phenotype or a known {term}, with its counts",
-    "phenotypes.parquet":         "Every annotated phenotype of every species, with its counts",
-    "families.parquet":           "The PANTHER protein families: their genes and the {terms} they are ranked for",
-    "species.parquet":            "The species of the run, with their counts",
-    "known_associations.parquet": "The curated human {pair} associations",
-    "gene_phenotypes.parquet":    "Gene to phenotype annotations of every species",
-    "human_orthologs.parquet":    "Ortholog pairs between model species genes and human genes",
-    "search.parquet":             "What the search box finds",
-    "README.md":                  "What every table and column holds",
+    "overview.json":                 "Everything the release page shows: headline numbers, species, FDR table, top lists, graph inputs",
+    "{prd}-phenologs.parquet":       "Every significant phenolog, ranked within its {term} by p-value",
+    "gene-{prd}-candidates.parquet": "The {best}gene candidates of each {term}: rank, score, known flag and support per species",
+    "additive.parquet":              "Per {term}, each protein family's score from each of its top phenologs",
+    "terms.parquet":                 "The {terms} with a phenolog, with their counts",
+    "genes.parquet":                 "Every gene with a protein family, a phenotype or a known {term}, with its counts",
+    "phenotypes.parquet":            "Every annotated phenotype of every species, with its counts",
+    "families.parquet":              "The PANTHER protein families: their genes and the {terms} they are ranked for",
+    "species.parquet":               "The species of the run, with their counts",
+    "known_associations.parquet":    "The curated human {pair} associations",
+    "gene_phenotypes.parquet":       "Gene to phenotype annotations of every species",
+    "human_orthologs.parquet":       "Ortholog pairs between model species genes and human genes",
+    "search.parquet":                "What the search box finds",
+    "README.md":                     "What every table and column holds",
 }
 
 
 def build_manifest(con, run, outdir):
     """ Write <outdir>/manifest.json. Returns its list of files """
 
+    descriptions = {path.format(prd=run.prediction_network): text for path, text in DESCRIPTIONS.items()}
+    best = "best {:,} ".format(run.top_candidates) if run.top_candidates else ""
     files = []
     for folder, _, names in sorted(os.walk(outdir)):
         for name in sorted(names):
@@ -996,7 +1009,7 @@ def build_manifest(con, run, outdir):
             path = os.path.join(folder, name)
             rel = os.path.relpath(path, outdir)
             files.append(dict(path=rel, bytes=os.path.getsize(path), rows=count_rows(con, path), sha256=sha256(path),
-                              description=DESCRIPTIONS.get(rel, "").format(**run.words)))
+                              description=descriptions.get(rel, "").format(best=best, **run.words)))
 
     with open(os.path.join(outdir, "manifest.json"), "w") as fh:
         json.dump(files, fh, indent=1)
