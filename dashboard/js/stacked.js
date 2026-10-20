@@ -5,6 +5,8 @@ import { state, esc, fmt, speciesOf, shortBinomial, route } from "./format.js";
 import { showTip, moveTip, hideTip } from "./tooltip.js";
 
 const PALETTE = [...d3.schemeTableau10, ...d3.schemeSet3.filter(c => c !== "#d9d9d9" && c !== "#ffffb3")];
+// A known gene's label, as in the term page's Known genes: recovered by the ranking, not recovered, no ortholog with phenotypes
+const KNOWN_FILL = { recovered: "#f0b84a", plain: "#e6ebf2", out: "#5c687a" };
 
 export const ORDERS = {
   total: ["Summed contribution", f => -f.total],
@@ -76,7 +78,7 @@ export function additiveChart(el, rows, opts = {}) {
       .on("mouseleave", hideTip);
   });
 
-  // gene labels: known genes first, in the accent colour
+  // gene labels: known genes first, in bold and marked by whether the ranking recovered them (opts.recovery, by symbol)
   fam.append("text").attr("x", f => x(f.total) + 8).attr("y", rowH / 2 + 4).attr("font-size", 11.5).each(function (f) {
     const t = d3.select(this);
     const known = (f.known || "").split(", ").filter(Boolean);
@@ -84,7 +86,7 @@ export function additiveChart(el, rows, opts = {}) {
     const shown = [...known.map(s => [s, true]), ...other.map(s => [s, false])];
     const limit = 4;
     shown.slice(0, limit).forEach(([s, isKnown], i) => {
-      t.append("tspan").attr("fill", isKnown ? "#f0b84a" : "#e6ebf2").attr("font-weight", isKnown ? 700 : 400)
+      t.append("tspan").attr("fill", isKnown ? KNOWN_FILL[opts.recovery?.get(s)] || KNOWN_FILL.plain : "#8b97a8").attr("font-weight", isKnown ? 700 : 400)
         .text((i ? ", " : "") + s);
     });
     if (shown.length > limit) t.append("tspan").attr("fill", "#5c687a").text(`  +${shown.length - limit}`);

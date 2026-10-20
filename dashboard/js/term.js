@@ -56,8 +56,9 @@ export async function render(el, id) {
   if (known.length) knownGrid(false);
   else knownEl.innerHTML = `<div class="empty">No curated genes for this ${net.term} in the graph</div>`;
 
-  // additive decomposition with its controls
-  additiveSection(el.querySelector("#additive"), el.querySelector("#add-controls"), add);
+  // additive decomposition with its controls; the known genes in it are marked as in the grid above
+  const recovery = new Map(known.map(g => [g.symbol, g.rank != null ? "recovered" : g.in_reach ? "plain" : "out"]));
+  additiveSection(el.querySelector("#additive"), el.querySelector("#add-controls"), add, recovery);
 
   // candidates
   let novelOnly = false;
@@ -94,11 +95,11 @@ export async function render(el, id) {
 }
 
 // Controls: how many phenologs (k), how many families, which species, and the ordering
-function additiveSection(chartEl, controlsEl, rows) {
+function additiveSection(chartEl, controlsEl, rows, recovery) {
   if (!rows.length) { chartEl.innerHTML = `<div class="empty">No decomposition available</div>`; return; }
   const maxK = Math.max(...rows.map(r => r.phenolog_rank));
   const speciesPresent = [...new Set(rows.map(r => r.species))];
-  const opts = { k: Math.min(20, maxK), topFamilies: 20, order: "total", species: new Set(speciesPresent) };
+  const opts = { k: Math.min(20, maxK), topFamilies: 20, order: "total", species: new Set(speciesPresent), recovery };
 
   controlsEl.innerHTML = `
     <label>top phenologs <input type="range" id="k" min="1" max="${maxK}" value="${opts.k}"> <span class="val" id="k-val">${opts.k}</span></label>
@@ -119,7 +120,8 @@ function additiveSection(chartEl, controlsEl, rows) {
   draw();
   const t = state.net.term;
   chartEl.insertAdjacentHTML("beforeend", `<div class="note">Each bar is a PANTHER family and each segment one of the ${t}'s top phenologs
-    whose phenotype the family carries, sized (shared families / ${t} families) × (1 − p) (Woods et al. 2013). The candidate genes below are
-    ranked by the hypergeometric score instead, so the two orders can differ. Human genes of the family follow each bar,
-    <span class="known-mark">known genes of this ${t}</span> first.</div>`);
+    whose phenotype a gene of the family carries in that species, sized (shared families / ${t} families) × (1 − p) (Woods et al. 2013).
+    The candidate genes below are ranked by the hypergeometric score instead, which counts only each gene's own orthologs, so the two
+    can differ: a family can lead here through genes other than its known one. Human genes of the family follow each bar, known genes
+    of this ${t} first, in <span class="known-mark">amber</span> where the ranking recovered them.</div>`);
 }
