@@ -1,0 +1,6 @@
+# Slide tooling only. Kept apart from the pipeline's locked environment (pyproject.toml / uv.lock).
+python-pptx==1.0.2
+matplotlib==3.8.4
+numpy==1.26.4
+PyYAML==6.0.2
+Pillow==11.3.0

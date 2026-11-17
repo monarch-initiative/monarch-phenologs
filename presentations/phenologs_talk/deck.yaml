@@ -1,0 +1,1016 @@
+# The talk, slide by slide. Words live here; numbers live in data.yaml; pictures in figures*.py.
+#
+# Text may quote data.yaml with {path.to.value}: {totals.disease_phenologs:,} -> 61,243,
+# {bbs.best_p!p} -> 9.6 × 10⁻²⁸. Reorder, drop or add slides by editing this list.
+#
+# kinds
+#   cover     title slide
+#   divider   section break (style: carolina | navy | white)
+#   figure    title + one-sentence lede + a figure from figures*.py. `steps` shows one figure in builds.
+#   cards     title + lede + editable text cards
+#   stats     title + big-number tiles
+#   columns   title + two text columns
+#   end       the template's closing slide
+#
+# `notes` become speaker notes. `skip: true` leaves a slide out without deleting it.
+# Optional layout keys, for a slide that was adjusted by hand in PowerPoint:
+#   title_size: 20                    title in points (28 otherwise)
+#   lede_size: 15                     lede in points (17 otherwise)
+#   lede_box: [x, y, width]           where the lede sits, in inches
+#   title_box: [x, y, width, height]  where the title sits, in inches
+#   figure_dy: 0.1                    move the figure down (or up, when negative), in inches
+
+meta:
+  title: "Phenologs at knowledge-graph scale"
+  cover_title: "Phenologs at\nknowledge-graph scale"     # where the cover's title breaks
+  subtitle: "Candidate genes for thousands of human diseases, from mouse to slime mold"
+  presenter: "Aaron Odell · Department of Genetics · UNC Chapel Hill"
+  date: "Monarch Initiative · 2026"
+  footer: "Odell et al. 2026 · bioRxiv · doi:{meta.doi}"
+  out: "phenologs_talk"
+
+slides:
+  # ------------------------------------------------------------------------------------------
+  # The talk
+  # The order is the deck's as rearranged by hand on 2026-11-16 (kept in hand_edited/).
+  # ------------------------------------------------------------------------------------------
+  - id: cover
+    kind: cover
+    notes: |
+      20 to 25 minutes. The problem and the idea of a phenolog; Part 1, phenologs rebuilt on the Monarch KG;
+      Part 2, from phenologs to ranked candidate genes and how we tested them; then what comes next.
+      Bardet-Biedl syndrome opens the talk and comes back when candidates are ranked.
+
+  - id: problem
+    kind: figure
+    section: "The problem"
+    title: "Many rare disease patients still go undiagnosed"
+    figure: diagnostic_gap
+    notes: |
+      About 1 minute.
+      Even with exome or genome sequencing in hand, roughly half to 70 percent of rare-disease patients still have
+      no molecular diagnosis (diagnostic yield is about {problem.yield_low} to {problem.yield_high} percent, varying by cohort).
+      Several reasons: the variant is hard to detect, it is found but cannot be interpreted, the gene has not been
+      linked to the disease yet, or the cause is not purely genetic (environment, gene-environment interaction).
+      This talk is about the third one: we do not know all the disease genes. Many likely-monogenic diseases have
+      no causal gene at all, and diseases with many known genes can still have more.
+      TO DO: add a citation for the {problem.yield_low}-{problem.yield_high}% yield (it comes from the outline, not from the preprint).
+
+  - id: bbs
+    kind: figure
+    section: "The problem"
+    title: "Example complex disease: Bardet–Biedl syndrome"
+    lede: "An autosomal recessive ciliopathy: about {bbs.prevalence} people, up to {bbs.prevalence_isolated} in isolated populations."
+    figure: bbs_overview
+    notes: |
+      About 1 minute.
+      Autosomal-recessive ciliopathy, roughly {bbs.prevalence}. Retinal dystrophy, obesity, postaxial polydactyly,
+      chronic kidney disease, hypogonadism, cognitive impairment. The Monarch KG annotates {bbs.phenotypes_known} HPO phenotypes
+      to the disease, so it touches most organ systems.
+      At least 24 genes in the literature (Niederlova 2019); {bbs.known_genes} in the Monarch KG. Sequencing all of them still
+      leaves about 1 in 5 clinically diagnosed patients without an identifiable pathogenic variant
+      (Forsythe and Beales 2013; Perea-Romero 2022).
+      The list of causal and modifier genes is incomplete, so a ranked list of candidates is a clinical need here,
+      and we will come back to this disease at every step.
+
+  - id: gaps
+    kind: figure
+    section: "The problem"
+    title: "Model organism gene–phenotype information\nmay help fill in the gaps"
+    figure: fill_gaps
+    notes: |
+      About 1 minute. The turn from the problem to an idea for it.
+      On the left, seven model organisms, each a curated network: circles are genes, squares are the phenotypes
+      those genes give when perturbed. On the right, what we care about: human diseases and human phenotypes, the
+      terms a patient like the Bardet-Biedl patient is described with.
+      The bars: {totals.model_annotations:,} non-human gene-phenotype edges, all seven species together (the colours
+      are the species), against {human.phenotype_annotations:,} human gene-phenotype edges and only
+      {human.gene_disease_pairs:,} human gene-disease edges.
+      The core idea of phenologs: can decades of gene-phenotyping in model organisms tell us about human disease
+      biology? That is the question mark.
+      How can we leverage this information? We need a way to compare these networks across species and get
+      something meaningful out. One way has been around since 2010: next slide.
+
+  - id: mcgary
+    kind: figure
+    section: "The problem"
+    title: "Phenologs: an idea from 2010"
+    lede: "Coined in 2010, “phenologs” were used to discover new human disease genes and repurpose a drug"
+    figure: phenolog_papers
+    notes: |
+      About 1 minute. The last slide asked how model organism data can be used for human disease. One answer is
+      not ours: it comes from Edward Marcotte's lab at UT Austin, in three papers.
+      McGary et al. 2010, PNAS (PMID {history.mcgary2010.pmid}): defined phenologs and found them systematically across
+      five species (human, mouse, worm, yeast, Arabidopsis). The title says "nonobvious": yeast lovastatin sensitivity
+      matched mouse angiogenesis defects, and plant gravitropism defects matched Waardenburg syndrome, each with a
+      new gene confirmed in frog embryos (SOX13, SEC23IP).
+      Cha et al. 2012, PLoS Biology (PMID {history.cha2012.pmid}): the yeast-angiogenesis module led to thiabendazole, an
+      antifungal, as a vascular disrupting agent.
+      Woods et al. 2013, BMC Bioinformatics (PMID {history.woods2013.pmid}): pooled a phenotype's nearest phenologs to rank
+      candidate genes, with leave-one-out cross validation.
+      The definition. A phenolog is an orthologous phenotype: two phenotypes in different species that share
+      significantly more orthologous genes than expected by chance. The quote is the paper's own wording
+      (Results and Discussion). Note what the definition does not mention: what the phenotypes look like.
+      Next: the idea as one picture, and the example the 2010 paper is remembered for.
+
+  - id: idea
+    kind: figure
+    section: "The problem"
+    title: "Phenologs: comparing gene-networks across species"
+    lede: "Decades of model organism gene–phenotype data can be linked to human disease through gene orthology."
+    figure: phenolog_idea
+    notes: |
+      About 2 minutes. The idea of the 2010 paper, close to first principles. Left first, then the example.
+      Left. Model organisms have decades of mutants, knockouts and screens behind them. Each species is a curated
+      network: circles are genes, open squares are the phenotypes those genes give when perturbed. In 2010 that was
+      {history.mcgary2010.associations.mouse:,} associations for mouse, {history.mcgary2010.associations.worm:,} for worm, {history.mcgary2010.associations.yeast:,} for budding yeast and
+      {history.mcgary2010.associations.arabidopsis:,} for Arabidopsis.
+      The human network in the middle is gene to disease (filled squares), from OMIM: {history.mcgary2010.associations.human:,} associations over
+      about {history.mcgary2010.human_diseases_approx} diseases. The four model organisms together had about 110 times more (210,619).
+      That is the gap they wanted to borrow across.
+      The networks cannot be compared by what the phenotypes look like: a yeast has no blood vessels, a plant has no
+      neural crest. They can be compared by gene. Orthology (dashed) says which genes are equivalent between two
+      species. So take every pair of one model phenotype and one human disease, and ask whether the two share more
+      orthologous genes than chance allows. If they do, they are phenologs: one gene module read out in two organisms.
+      The number on each link is how many phenologs with human disease they found at 5% FDR: 3,755 for mouse,
+      9 for worm, 154 for yeast, 48 for Arabidopsis.
+      Right. One of the 48 human-plant ones, the paper's Fig. 4.
+      Waardenburg syndrome: a neural crest disorder (abnormal pigmentation, hearing loss, craniofacial dysmorphology).
+      Counting only genes with a plant ortholog, it had {history.mcgary2010.waardenburg.human_genes} known genes.
+      Negative gravitropism defects in Arabidopsis: shoots that fail to grow against gravity. {history.mcgary2010.waardenburg.plant_genes} genes.
+      {history.mcgary2010.waardenburg.shared} are shared. That leaves {history.mcgary2010.waardenburg.candidates} plant genes, all vesicle trafficking genes, and their human orthologs become
+      candidate Waardenburg genes: STX7/STX12, DDHD2/SEC23IP and DNAJC13. This is guilt by association.
+      They tested them in Xenopus embryos. sec23ip turned out to be expressed in migrating neural crest cells.
+      Knocking it down with a morpholino on one side of the embryo gave neural crest migration defects on that side
+      in {history.mcgary2010.waardenburg.defect[0]} of {history.mcgary2010.waardenburg.defect[1]} embryos, against {history.mcgary2010.waardenburg.control[0]} of {history.mcgary2010.waardenburg.control[1]} untreated controls.
+      So a plant, which has no neural crest, pointed to a neural crest gene. That is the "nonobvious" in the title.
+      Next: the same kind of data today, in the Monarch knowledge graph.
+      If asked. They also compared the model organisms with each other: more than 6,200 phenologs in all. The worm
+      number is low because both data sets were small. Orthologs were pairwise ortholog groups with in-paralogs
+      (Remm et al. 2001). STX12 already had support: it interacts with pallid, a mouse pigmentation and ear gene.
+      The 23 of 35 is with the snai2-a marker; with twist it was {history.mcgary2010.waardenburg.defect_twist[0]} of {history.mcgary2010.waardenburg.defect_twist[1]}. The embryo drawings are schematic.
+
+  - id: part1
+    kind: divider
+    style: carolina
+    label: "PART 1 · Monarch knowledge graph for phenologs"
+    title: "Revitalize phenologs with more data using the Monarch Knowledge graph"
+    notes: |
+      The idea is from 2010. What has changed since is the data and where it lives: the Monarch knowledge graph holds
+      human and model organism gene-phenotype data under one model. Part 1: what a phenolog calculation takes from
+      the graph, how much more of it there is now, how one phenolog is computed, and what comes out.
+
+  - id: kg_components
+    kind: figure
+    section: "Phenologs on the Monarch KG"
+    title: "Monarch KG for phenolog calculations"
+    figure: kg_components
+    notes: |
+      About 1.5 minutes. The last slide was the idea as the earlier papers laid it down. This one asks what it
+      looks like in practice: which parts of the Monarch knowledge graph do we actually pull?
+      Three things, one column each. Top of a column: the pattern in the graph. Middle: what is in it.
+      Bottom: the Biolink categories that select it (the same symbols as the pattern above).
+      Human. Two networks around one set of genes, HGNC ids. Gene-disease: {human.gene_disease_pairs:,} edges to
+      {human.diseases_with_gene:,} Mondo diseases, causal and correlated associations together. Gene-phenotype:
+      {human.phenotype_annotations:,} edges to {human.phenotype_terms:,} HPO terms.
+      Model organisms. One gene-phenotype network per species, {totals.model_annotations:,} edges in all, each in the
+      species' own phenotype ontology and with its own database's gene ids: MP for mouse and rat (MGI, RGD),
+      XPO for frog (Xenbase), ZP for zebrafish (ZFIN), WBPhenotype for worm (WormBase), FYPO for fission yeast
+      (PomBase), DDPHENO for slime mold (dictyBase). These are the only species with gene-phenotype edges in the graph.
+      Gene equivalence. Gene-to-gene orthology edges from PANTHER. Every one carries a PANTHER protein family id,
+      and that id is what we compare on: {human.genes_with_ortholog:,} human genes with an ortholog fall into {human.families:,} families.
+      The small numbers are the families each species shares with human, the universe for that species' tests
+      ({sp.mouse.families_shared:,} for mouse, down to {sp.pombe.families_shared:,} for fission yeast).
+      Why Biolink matters: one data model means one query pattern pulls all of this, with no per-database parsing.
+      Next: how much more data that is than the earlier papers had.
+      If asked. Predicates: gene to phenotype is biolink:has_phenotype; causal gene to disease is
+      {kg.biolink.causal_predicates}; correlated is
+      {kg.biolink.correlated_predicates}. Orthology edges are kept only when their evidence
+      is a PANTHER family. Term filters: Mondo terms under "human disease", HPO terms under "phenotypic
+      abnormality", FYPO terms under "abnormal phenotype" (preprint Tables S1 to S3). KG release {meta.kg_release}.
+      The table counts every term annotated in a species ({sp.mouse.phenotype_terms:,} for mouse); the {comparisons.mouse.phenotypes:,} on the "Phenologs conceptualized"
+      slide are the mouse terms that can be tested against human (at least one gene in a shared family).
+      The {human.diseases_with_gene:,} diseases is the dashboard's count of diseases with a gene; the preprint's Fig. 1A says 7,935.
+
+  - id: then_now
+    kind: figure
+    section: "Phenologs on the Monarch KG"
+    title: "Then and now: the data behind phenologs"
+    lede: "When phenologs were last computed, only a fraction of today's curated annotations existed."
+    figure: then_now
+    notes: |
+      About 1 minute.
+      The method worked in 2010 to 2013, on a fraction of the data we have today.
+      2010 (McGary et al.): five species; about 300 human diseases with {history.mcgary2010.associations.human:,} gene-disease associations from OMIM;
+      no human phenotype annotations at all; 210,619 model organism gene-phenotype associations (mouse 74,250,
+      worm 27,065, yeast 86,383, Arabidopsis 22,921).
+      Now: eight species; {human.diseases_with_gene:,} Mondo diseases with a gene and {human.gene_disease_pairs:,} gene-disease annotations;
+      {human.phenotype_terms:,} HPO phenotypes with {human.phenotype_annotations:,} gene-phenotype annotations, which did not exist as a
+      data set then; {totals.model_annotations:,} model organism gene-phenotype annotations.
+      What changed underneath. 2010 and 2013: annotations assembled by hand from each source database, and gene
+      homology computed per study with InParanoid. 2026: the Monarch KG and the Biolink model harmonize the
+      annotation sets, and PANTHER protein families resolve gene equivalence across species.
+      Caveats if asked: the "then" bars are the 2010 paper's numbers as stated in its text; Woods et al. 2013
+      added species and updated OMIM but does not state totals. Disease counts are like for like only roughly
+      (OMIM then, Mondo now, which includes grouping terms).
+      Next: how one phenolog is computed, on one of the species comparisons, human against mouse.
+
+  - id: concept
+    kind: figure
+    section: "Phenologs on the Monarch KG"
+    title: "Phenologs conceptualized"
+    lede: "A way to compare two different species' gene-association networks through gene orthology"
+    figure: phenolog_concept
+    notes: |
+      About 2.5 minutes. Top half first, then the bottom half.
+      Top. Two of the networks: the human gene-phenotype network
+      ({human.phenotype_terms:,} HPO terms) and the mouse gene-phenotype network ({comparisons.mouse.phenotypes:,} terms). Phenologs compare them
+      term by term, every human phenotype against every mouse phenotype: a grid of about 96 million pairs.
+      Almost every pair shows nothing. A few overlap far beyond chance (the orange cells): those are phenologs.
+      The same grid is built for each of the seven model organisms, and again with human diseases in place of
+      human phenotypes ({comparisons.mouse.diseases:,} diseases against mouse: {comparisons.mouse.tests:,} pairs, preprint Table S4).
+      The 96 million is {human.phenotype_terms:,} times {comparisons.mouse.phenotypes:,}; {human.phenotype_terms:,} counts HPO terms with a gene that has an ortholog in
+      any of the seven species, so for mouse alone it is a slight upper bound. Hence the "about".
+      Bottom. The ringed cell of that grid. Rod-cone dystrophy, a human phenotype, has {rod_cone.derivation.genes} genes (RHO, PDE6B, CRB1...).
+      Mouse retina degeneration has {rod_cone.derivation.phenotype_genes}. To compare them we have to say which human gene is the same gene as
+      which mouse gene, and orthologs are often not one to one. So every gene is replaced by its PANTHER protein
+      family: {rod_cone.derivation.families} families on the human side, {rod_cone.derivation.phenotype_families} on the mouse side.
+      {rod_cone.derivation.shared} families are shared, of {rod_cone.derivation.N:,} the two species have in common. Hypergeometric P = 3.8e-45.
+      That overlap makes the two phenotypes phenologs.
+      Guilt by association: because the link is gene overlap, it predicts. The 57 families tied to the mouse
+      phenotype but not yet to the human one become candidates for rod-cone dystrophy. Those 57 families are
+      {rod_cone.derivation.mouse_only_genes} mouse genes, each with one human ortholog, so {rod_cone.derivation.mouse_only_genes} human candidate genes from this one phenolog
+      ({rod_cone.derivation.mouse_only_examples} are among them). The reverse holds for the 100 human-only families and the mouse phenotype.
+      Detail if asked: {rod_cone.derivation.phenotype_genes_with_family} of the 115 mouse genes have a PANTHER family; the rest are unmapped loci.
+      Numbers: dashboard, HP:0000510 against MP:0001326. Which pairs count as significant: a 5% FDR from 1,000
+      randomized networks.
+
+  - id: rodcone_tree
+    kind: figure
+    section: "Phenologs on the Monarch KG"
+    title: "One human phenotype against every model phenotype"
+    lede: "{rod_cone.phenologs} model organism phenotypes related back to human Rod-cone dystrophy"
+    figure: rodcone_tree
+    notes: |
+      About 2 minutes.
+      Run that test for rod-cone dystrophy against every phenotype in every species: {rod_cone.phenologs} phenologs,
+      {rod_cone.by_species.mouse} in mouse, {rod_cone.by_species.zebrafish} in zebrafish, {rod_cone.by_species.worm} in worm. Rat, frog, fission yeast and slime mold have none at 5% FDR.
+      Ten are shown, strongest first within each species.
+      Mouse: retina degeneration, abnormal photoreceptor outer segment morphology, abnormal rod electrophysiology.
+      Semantically similar: eye to eye. A text or ontology match would find these too.
+      Zebrafish: there are retina phenotypes, but the two strongest are kinked notochord and cystic pronephros.
+      Worm: osmotic avoidance defective, cilia morphology variant, ivermectin resistant. A worm has no retina.
+      Nothing in the words connects these to a human eye phenotype. Only the genes do.
+      Why: a gene's molecular function is conserved, the organism-level phenotype is not. The phenotype is an
+      emergent property of the system the gene sits in (McGary et al. 2010).
+      Interpretation to say out loud: the shared module here is the cilium. Photoreceptor outer segments are
+      modified cilia; the worm senses its surroundings through ciliated neurons, and fish kidney and body-axis
+      phenotypes are classic ciliary readouts. CHECK you are happy with the cilium framing before presenting.
+      So one method gives both: the counterparts we expect, and new links we could not have guessed.
+      Which phenologs are drawn as "semantically similar" is my labelling (`obvious` under rod_cone.tree in data.yaml).
+
+  - id: counts
+    kind: figure
+    section: "Phenologs on the Monarch KG"
+    title: "Initial results"
+    figure: counts
+    figure_dy: -0.245             # no lede: the figure was moved up by hand
+    notes: |
+      About 1 minute.
+      Disease network: {totals.disease_phenologs:,} phenologs across {totals.diseases_with_phenologs:,} Mondo diseases and
+      {totals.model_phenotypes_with_diseases:,} model phenotypes. 82% of those diseases are leaf terms, so this is breadth
+      across the ontology, not a few broad classes.
+      Mouse supplies 84.5%, tracking annotation depth, but zebrafish, worm, fission yeast and even slime mold contribute.
+      Phenotype network (HPO terms instead of diseases): {totals.phenotype_phenologs:,} phenologs. We have barely
+      scratched that one; it comes back under future directions.
+
+  - id: part2
+    kind: divider
+    style: carolina
+    label: "PART 2 · FROM PHENOLOGS TO CANDIDATE GENES"
+    title: "Phenologs nominate many gene candidates. We need a way to score them"
+    notes: |
+      There is a second layer to the problem. Finding phenologs is step one.
+      Turning a disease's phenologs into a ranked list of genes is step two, and how you score matters.
+
+  - id: pooling
+    kind: figure
+    section: "Candidate genes"
+    title: "Phenologs can nominate thousands of genes per disease"
+    lede: "Bardet–Biedl syndrome's {bbs.phenologs} phenologs pool {bbs.genes_ranked:,} genes. Ranking them is a second problem."
+    figure: pooling
+    notes: |
+      About 1 minute (preprint Fig. 1C; the three panels follow that figure).
+      Panel 1: take the disease's significant phenologs, up to k = 1,000 (Bardet-Biedl has 109).
+      Panel 2: map every model gene carrying those phenotypes back to its human orthologs, and count how many of the
+      109 phenologs each human gene turns up in. BBS1 turns up in 50 of 109, CEP290 in 42.
+      Panel 3: what we want out is a ranked list of candidate genes. The score column is question marks on purpose:
+      the next two slides are about how to fill it in.
+      Recurrence alone is not the score. Look at the order: MKKS recurs in 32 phenologs and ranks above BBS4 with 41,
+      and CEP290 with 42 is sixth, outside the top five. Some genes are annotated to hundreds of phenotypes and recur
+      everywhere.
+      IFT140 and ARL2BP are not known Bardet-Biedl genes; they recur in 21 and 14 phenologs and rank 12th and 14th.
+      Bottom strip: three ways to turn recurrence into a score. Naive Bayes and additive from the earlier papers, and
+      the hypergeometric score we introduce.
+      The ranks shown are the ones the hypergeometric score gives at k = 1,000.
+
+  - id: naive_bayes
+    kind: figure
+    section: "Candidate genes"
+    title: "Gene-disease scoring, the original way: naive Bayes"
+    lede: "The probability of the initial phenolog association being true, multiplied by the probability of the gene already being associated to the disease"
+    figure: naive_bayes
+    figure_dy: 0.094              # the lede runs to two lines: the figure was moved down by hand
+    notes: |
+      About 1.5 minutes. Keep it simple.
+      Each phenolog carrying the gene contributes a weight: the fraction of the disease's families the phenotype
+      shares, times our confidence that the phenolog is real (1 minus its P, effectively 1 here).
+      Naive Bayes treats phenologs as independent: the probability the gene belongs to the disease is 1 minus the
+      probability that every phenolog is wrong. Three witnesses at 0.54, 0.50, 0.46 give 0.88.
+      Additive (Woods 2013) just sums the weights. Its advantage is that it decomposes by phenolog, which is how the
+      stacked-bar figures in the paper and on the dashboard are drawn (backup slide).
+      Limits: the product saturates toward 1 as k grows, and the score is relative to one disease, so you cannot
+      merge candidates from different diseases into one list.
+      The weights on the slide are computed in the build from Bardet-Biedl's real top phenologs; "gene X" is hypothetical.
+
+  - id: hypergeom_marbles
+    kind: figure
+    section: "Candidate genes"
+    # as typed in PowerPoint: the tabs and spaces indent the second line, which wraps on its own at this size
+    title: "New scoring method: Second round hypergeometric test against backdrop of all \t\t            species gene-phenotype edges"
+    title_size: 20
+    figure: marbles
+    notes: |
+      The main score explainer: one real gene, {bbs.score_example.gene}, worked through {bbs.label}. Every number on
+      the slide is the release's own. About 2 minutes.
+      1. Fill a bag with marbles. Every gene-phenotype annotation in the seven model species is one marble:
+      {bbs.score_example.bag:,} of them. The three lines at the top are real annotations (mouse, zebrafish, worm).
+      {bbs.score_example.gene}'s mouse ortholog {bbs.score_example.ortholog} is annotated to {bbs.score_example.own}
+      mouse phenotypes, so {bbs.score_example.gene} owns {bbs.score_example.own} marbles. Only annotations of genes
+      in a protein family shared with human are in the bag.
+      2. The disease draws from the bag. This is the phenolog table from two slides ago (the paper's Fig. 1C):
+      {bbs.label}'s {bbs.phenologs} significant phenologs, ranked by P. The new column is the marbles each one
+      draws: every gene annotated to that model phenotype. The three annotations from panel 1 are on this list:
+      notochord kinked is phenolog 2, male infertility is phenolog 20 and carries {bbs.score_example.ortholog}'s
+      marble (the orange one), osmotic avoidance defective is phenolog 81. Male infertility is a broad phenotype,
+      so it draws 1,027 marbles on its own.
+      All {bbs.phenologs} phenologs pool into {bbs.score_example.pulled:,} marbles, spread across
+      {bbs.genes_ranked:,} candidate genes. {bbs.score_example.drawn} of them are {bbs.score_example.gene}'s: it is
+      on {bbs.score_example.drawn} of the {bbs.phenologs} phenologs, the "14 of 109" from the pooling slide.
+      3. Is that more than chance? Read the four numbers top to bottom. The bag holds {bbs.score_example.bag:,}
+      marbles and {bbs.score_example.own} are {bbs.score_example.gene}'s. We drew {bbs.score_example.pulled:,} and
+      {bbs.score_example.drawn} are {bbs.score_example.gene}'s.
+      To say out loud, not on the slide: we drew 1.6% of the bag, so a random draw that size would hold 1.6% of
+      {bbs.score_example.gene}'s {bbs.score_example.own} marbles, about 0.6. We drew {bbs.score_example.drawn},
+      24 times more.
+      The score is the chance of drawing that many or more at random, the upper tail of the hypergeometric
+      distribution: 2.0 x 10^-16, rank 14 of {bbs.genes_ranked:,}. Smaller is stronger. It is the test behind gene
+      set over-representation (GO enrichment), pointed at one gene.
+      {bbs.score_example.gene} is not a known {bbs.label} gene; it is known for
+      {bbs.score_example.known_for}.
+      If asked for the symbols (Supplementary Note 5), panel 3 top to bottom is N = {bbs.score_example.bag:,},
+      m = {bbs.score_example.own}, n = {bbs.score_example.pulled:,} ("the genes we originally pulled in from our top
+      k phenologs"), c = {bbs.score_example.drawn}; score = P(X >= c). These four numbers reproduce the published
+      score for this gene and for six others checked. n is the marbles drawn, not the number of phenologs.
+      If asked whether the draw is really random: no. It is every gene on {bbs.phenologs} chosen phenotypes. The
+      random draw is the null model the score compares against.
+      Detail: a gene with two orthologs annotated to the same phenotype is counted twice there. That is 44 of the
+      {bbs.score_example.pulled:,} marbles here, and none of {bbs.score_example.gene}'s.
+      The bag and the tray are schematic; the numbers are bbs.score_example in data.yaml. The marble counts per
+      phenolog, the percentages, the 0.6, the 24 and the P in this note are typed, so update them if those numbers
+      change.
+      The two-genes follow-up (hypergeom_two_genes) and the dot-grid version (hypergeom) were taken out of the deck
+      by hand on 2026-11-16; both are parked in deck.yaml.
+
+  - id: time_split
+    kind: figure
+    section: "Evaluation"
+    title: "Can last year's graph predict this year's?"
+    lede: "Rank candidates on the 2025 graph, then check them against gene–disease pairs added by 2026."
+    figure: time_split
+    notes: |
+      About 1 minute. Disease-gene discovery is continuous, so versioned KG releases give a natural time split.
+      Rebuild phenologs and rankings on Monarch KG {meta.kg_prior}; score against pairs added by {meta.kg_release}.
+      524 pairs were added. 402 are on diseases that had no gene a year earlier: the method needs a seed, so those are
+      untestable. Of the 122 left, 49 are the same gene moving to a parent, child or sibling Mondo term (MLH1 from
+      Lynch syndrome to Lynch syndrome 1): ontology refinement, not new biology.
+      That leaves a conservative 73 genuine new pairs across 43 diseases.
+
+  - id: eval_results
+    kind: figure
+    section: "Evaluation"
+    title: "It predicts links it has never seen"
+    lede: "The top 100 candidates per disease recover 9 of {evaluation.genuine} new pairs: 23.5 times a random gene."
+    figure: eval_results
+    notes: |
+      About 2 minutes (preprint Fig. 3).
+      Left panel, per disease: recall of the 73 pairs within each disease's top N. Top 10: 2 (52x random). Top 20: 3.
+      Top 100: 9 of 73, 23.5-fold over a random gene, 95% CI 10.5 to 39.2, permutation P = 2e-4.
+      The ceiling is 41 of 73: the rest never surface in any candidate list.
+      Within a disease hg and naive Bayes are indistinguishable (P = 0.32). Expected: same candidate pool.
+      Right panel, everything pooled into one list: only hg separates from random ordering (AUC 0.58 against 0.45).
+      In the top 10,000 pooled pairs, 0.7% of the list, 4 confirmed against 0.3 expected.
+      One genuinely prospective hit: FAAP100 for Fanconi anemia. Absent from the 2025 graph, ranked near the top on
+      mouse phenologs alone, human link first reported April 2025.
+      Next: what the ranking looks like for one disease. The second kind of test, on the genes we already know
+      (leave-one-out and precision-recall), is the first two backup slides.
+
+  - id: bbs_model
+    kind: figure
+    section: "Evaluation"
+    title: "Bardet–Biedl is modeled well by phenologs method"
+    lede: "All {bbs.known_recovered}/{bbs.known_genes} known genes are recovered, all with ranks of {bbs.known_rank_all_but_one} or better except for one at rank {bbs.known_rank_last:,}"
+    figure: bbs_decomposition
+    notes: |
+      About 2 minutes. The payoff: the method models a real disease, and here is how and why. Back to the running
+      example from slide 3.
+      The lede is the gene result (hypergeometric score, all {bbs.phenologs} phenologs): all {bbs.known_genes} known genes are in the
+      list of {bbs.genes_ranked:,}, 25 of them at rank {bbs.known_rank_all_but_one} or better (22 in the top 62); the one that is not is SCAPER, at {bbs.known_rank_last:,}.
+      Left: the additive decomposition, as on the dashboard and in the paper's Fig. 5, cut to the disease's ten best
+      phenologs. One row per protein family, labelled with its human genes; bold is a known Bardet-Biedl gene.
+      Each block is one of the ten phenologs that carries the family, numbered by the phenolog's rank. A block's
+      width is the phenolog's weight: the share of the 26 known families it holds, times 1 minus its P. So 14 of 26
+      is 0.54. The bar is the sum, the additive score of Woods 2013.
+      The eleven longest bars are all known genes, and 13 of the top 16 families hold one. They rise to the top
+      because they sit on nearly all ten phenologs, of both kinds.
+      Right: what the ten phenotypes are. This is the same split as on the rod-cone slide.
+      Semantically similar, all mouse: retina degeneration, obese, photoreceptor outer and inner segment
+      degeneration, absent sperm flagellum. That is the patient from slide 3: retinal dystrophy, obesity,
+      hypogonadism. And two of them are the cilium itself: the photoreceptor outer segment is a modified cilium and
+      the sperm flagellum is built on the same axoneme. The mouse data say "ciliopathy" without being told.
+      Non-obvious, all zebrafish embryo: gastrulation disrupted, notochord kinked, somite increased width, a shorter
+      body axis, a wider notochord. No patient has a kinked notochord. These are five readouts of one process,
+      convergent extension: the cell movements that narrow and lengthen the embryo. The disease's phenologs 16 and 17
+      say so in words ("cell migration involved in gastrulation disrupted", "convergent extension process quality").
+      The fish orthologs of 14 of the 26 known families are annotated to each of the top three.
+      One conserved set of genes, a different emergent phenotype in each organism, and both kinds point at the same
+      genes. The numbers on the right are how many of the 26 known families each phenotype shares.
+      The rows without a bold gene are the candidates this view suggests. IFT140 (with the known IFT172) and IFT88
+      are intraflagellar transport genes. The frizzled family (FRZB, FZD1 and 14 more) and the receptor tyrosine
+      kinases (ALK, AXL and 40 more) are large families pulled in by the fish phenologs: Wnt and planar cell polarity
+      signalling gives the same embryo phenotypes. Be straight about those: phenotype overlap, not claims, and this
+      panel ranks whole families. The hypergeometric score ranks single genes and accounts for how widely a gene is
+      annotated (the marble slide).
+      Two rankings are on this slide: the lede is genes by the hypergeometric score over all {bbs.phenologs} phenologs, the bars
+      are families by the additive score over the top ten. They agree on the known genes.
+      If asked for literature on the fish phenotypes: Bardet-Biedl proteins and planar cell polarity (Ross et al.
+      2005, Nature Genetics), and convergent extension defects on bbs1 knockdown in zebrafish. Check both references
+      before quoting them; the reading of the five fish phenotypes as convergent extension is mine.
+      Which phenotypes count as non-obvious is my labelling (`obvious` under bbs.decomposition in data.yaml), and the
+      two sentences in the boxes are why_nonobvious and why_similar there.
+      The gene-by-gene list of the top 25 candidates, and the paper's 20 by 20 version of this figure, are in backup.
+      Next: all of this can be browsed.
+
+  - id: resource
+    kind: figure
+    section: "Resource"
+    title: "Browse and download everything"
+    lede: "Per-disease candidate rankings for {totals.diseases_with_phenologs:,} diseases, with known and novel pairs flagged."
+    figure: dashboard
+    notes: |
+      About 1 minute. Show the live site if the room has network: {meta.dashboard_url}
+      Every disease, human phenotype, gene, model phenotype, protein family and species has a page.
+      Static site; the browser reads the release's parquet tables with DuckDB-WASM.
+      One data release per Monarch KG version; the pipeline is containerized and open source (BSD 3-Clause).
+
+  - id: part3
+    kind: divider
+    style: navy
+    label: "PART 3 · Next steps"
+    title: "Future directions"
+
+  - id: future
+    kind: cards
+    section: "Next"
+    title: "Can we leverage this large dataset in meaningful ways?"
+    title_box: [0.667, 0.318, 10.993, 1.0]      # the title box as moved by hand
+    columns: 2
+    cards:
+      - tag: "BEYOND PROTEIN-CODING"
+        head: "Non-coding RNA genes"
+        body: "PANTHER families only cover protein-coding genes. An orthology layer for ncRNAs would bring their phenotypes into reach."
+      - tag: "VARIANT PRIORITIZATION"
+        head: "A candidate table for Exomiser"
+        body: "Export gene–disease scores as a table a variant prioritizer can read as prior evidence in unsolved cases."
+      - tag: "PATIENT PROFILES"
+        head: "Put the phenotype network to work"
+        body: "{totals.phenotype_phenologs:,} HPO phenologs are barely explored. Score a patient's phenotype profile against them."
+      - tag: "BACK INTO THE GRAPH"
+        head: "Phenolog edges in the Monarch KG"
+        body: "Publish phenologs and candidate pairs as edges, rebuilt with every KG release."
+    notes: |
+      About 1.5 minutes. PLACEHOLDER CONTENT: these four come from the outline and the preprint discussion;
+      edit the cards in deck.yaml once the future directions are agreed.
+      ncRNA: Phil's figure belongs on this slide or the next (not in hand yet).
+      Limitations worth saying here: the method needs a seed gene on the disease, and a gene with no ortholog
+      in a model species is out of reach.
+
+  - id: thanks
+    kind: columns
+    section: "Thanks"
+    title: "Acknowledgements"
+    left:
+      head: "Co-authors"
+      items:
+        - "Daniel R. Korn"
+        - "Bryan J. Laraway"
+        - "Phillip A. Richmond"
+        - "Nicolas Matentzoglu (Semanticly)"
+        - "Kevin Schaper"
+        - "Christopher J. Mungall (LBNL)"
+        - "Melissa A. Haendel"
+        - "and the Monarch Initiative team"
+    right:
+      head: "Data and funding"
+      items:
+        - "Model organism databases: MGI, ZFIN, WormBase, PomBase, RGD, Xenbase, dictyBase"
+        - "PANTHER, Mondo and HPO"
+        - "NIH Office of the Director: R24OD042574, R24OD039947, R24OD011883"
+        - "Preprint: doi:{meta.doi}"
+        - "Explore: {meta.dashboard_url}"
+    notes: |
+      Questions. Backup slides follow: leave-one-out and precision-recall (two slides), the leave-one-out heatmaps,
+      the top 25 Bardet-Biedl candidate genes, the additive decomposition, Carney complex, one top phenolog per species, what each species adds to the time
+      split, and the eight networks of the Monarch KG.
+
+  # ------------------------------------------------------------------------------------------
+  # Backup
+  # Everything that left the main flow, kept in the deck after the acknowledgements.
+  # ------------------------------------------------------------------------------------------
+  - id: backup
+    kind: divider
+    style: white
+    label: "BACKUP"
+    title: "Backup slides"
+
+  - id: recover_known
+    kind: figure
+    section: "Backup"
+    title: "Leave one out cross validation to assess per disease precision recall"
+    lede: "Remove a protein family from the human network side, then recompute phenolog predictions and assess gene-disease assignment"
+    lede_size: 15                 # the title runs to two lines: the lede was made smaller and moved under it by hand
+    lede_box: [0.677, 1.361, 12.494]
+    figure: recover_known
+    notes: |
+      Backup (moved here by hand on 2026-11-16). About 2 minutes. The time split tests new biology, but on only {evaluation.genuine} pairs. The second kind of test uses
+      what is already known, and there is far more of that. Two parts.
+      Left: leave-one-out cross validation, adapted from Woods et al. 2013.
+      1. Take one PANTHER protein family and remove all of its genes from the human gene-disease network.
+      The whole family goes, not one gene: phenologs are computed on families, so a paralog left behind would keep
+      the family on the disease and make the test trivial.
+      2. Recompute everything from scratch: every phenolog against the seven model species, then every disease's
+      candidate ranking, with both scores (naive Bayes and hypergeometric), combining the top k = 1, 5, 20 or 100 phenologs.
+      3. Read where the hidden genes come back in the candidate list of each disease they were annotated to.
+      When a disease has more than one hidden gene we take the median of their ranks.
+      Repeat for each of the {loo.families_hidden:,} families that carry a human disease gene.
+      A disease annotated to a single family cannot be tested: with that family hidden it has nothing left to find
+      a phenolog with.
+      Right: precision. For the {loo.compared_diseases} diseases with at least {loo.min_known_genes} known genes, take the ranked candidate list and
+      walk down it. Precision: of the candidates so far, how many are known genes. Recall: of the known genes, how
+      many have been found so far. The area under that curve (AUPRC) is one number per disease, and it would be 1
+      if every known gene sat at the very top. We compute it once for each score.
+      Say this clearly: the right half is the complete model at k = {loo.precision_k}, with no genes hidden (preprint
+      Supplementary Note 7). A disease's own genes helped find its phenologs, so the absolute numbers are
+      optimistic. What it measures fairly is one score against the other, on identical candidate lists.
+      The list and the curve on the slide are a made-up example: 8 candidates, 4 of them known genes.
+      Next slide: what both tests showed.
+      If asked. The same leave-one-out runs are also read the other way round: take a hidden gene and ask where its
+      true disease ranks among all the diseases the gene is ranked for (two slides on). Tied scores get the average rank.
+      Why at least four known genes: so that there is a curve to draw. That is my reading; the preprint does not
+      give the reason. The preprint counts known genes that have an ortholog in a modeled species.
+
+  - id: precision
+    kind: figure
+    section: "Backup"
+    title: "Our score puts known genes nearer the top"
+    lede: "hg is the more precise ranking in {loo.more_precise_diseases} of {loo.compared_diseases} diseases, with {loo.recall_top20_hg}% of known genes in the top 20."
+    figure: precision
+    notes: |
+      Backup (moved here by hand on 2026-11-16). About 1.5 minutes (preprint Fig. S7C and D).
+      Both panels: the complete model, no genes hidden, k = {loo.precision_k}, the {loo.compared_diseases} diseases with at least {loo.min_known_genes} known genes.
+      Left: for each list size N, the mean share of a disease's known genes inside its top N. At N = 20, hg has
+      {loo.recall_top20_hg}% and naive Bayes {loo.recall_top20_nb}%. The dotted line is the ceiling: {loo.recall_ceiling_pct}% of known genes are in the candidate list at
+      all, the same for both scores because they rank the same candidates.
+      Right: one point per disease, its AUPRC under naive Bayes (x) against hg (y). Points above the diagonal are
+      diseases where hg is the more precise ranking: {loo.more_precise_diseases} of {loo.compared_diseases} ({loo.more_precise_pct}%), by a median of {loo.auprc_median_gain}.
+      Caveat to say: nothing is hidden here, so absolute recall is optimistic. The fair reading is hg against
+      naive Bayes on identical lists.
+      Leave-one-out, the box at the lower right (heatmaps are on the next slide). Within a disease the two scores bring
+      hidden genes back at near identical rates, as expected from the same candidate pool. Read across diseases,
+      hg places the hidden gene's true disease in the top 20 for {loo.true_disease_top20_hg} diseases at k = {loo.k}, naive Bayes for {loo.true_disease_top20_nb}.
+      Naive Bayes loses resolution as more phenologs are combined, because its scores saturate toward 1.
+      So: hg matches naive Bayes within a disease, is more precise at the top of the list, and is the only one of
+      the two that can rank across diseases.
+
+  - id: loo
+    kind: figure
+    section: "Backup"
+    title: "Leave-one-out: where the hidden genes rank"
+    lede: "Hide each of {loo.families_hidden:,} annotated protein families in turn and ask whether its genes come back."
+    figure: loo
+    notes: |
+      Preprint Supplementary Note 7, Fig. S7; adapted from Woods et al. 2013. Also a fidelity check on the rewritten code.
+      Top heatmap: rank of the hidden gene among a disease's candidates. hg and naive Bayes are interchangeable.
+      Bottom heatmap: rank of the true disease among all diseases the hidden gene is ranked for. This needs scores
+      that compare across diseases. At k = 20, hg puts the true disease in the top 20 for 165 diseases, naive Bayes for 12.
+      On the complete model hg also recovers more known genes at every list size (45% against 39% in the top 20)
+      and is the more precise ranking in 67% of diseases: that part is on the previous slide, "Our score puts known genes
+      nearer the top".
+
+  - id: bbs_ranking
+    kind: figure
+    section: "Backup"
+    title: "Bardet–Biedl: the top 25 candidate genes"
+    lede: "Known genes fill the top of the list, with new candidates among them."
+    figure: bbs_ranking
+    notes: |
+      Backup (moved here on 2026-11-16, when the decomposition slide took its place). The candidates gene by gene,
+      ranked by the hypergeometric score: we recover the knowns, and we suggest new candidates.
+      {bbs.genes_ranked:,} genes ranked; all 26 known Bardet-Biedl genes are in the list and the first eleven ranks
+      are all known genes. 17 of the top 25 are known.
+      The lede: 25 of the {bbs.known_genes} rank {bbs.known_rank_all_but_one} or better (22 are in the top 62). The one that does not is SCAPER, at
+      {bbs.known_rank_last:,}. All {bbs.known_genes} ranks are bbs.known_ranks in data.yaml.
+      New candidates in the top 25: IFT140 (rank 12) is an intraflagellar-transport gene supported by mouse, zebrafish
+      and worm. ARL2BP (14), RP1, RPE65, CEP78, NMNAT1, TULP1, FSCN2 are supported by mouse only.
+      Be straight about those: they are retinal-dystrophy genes pulled in by mouse retinal phenologs, so they reflect
+      phenotype overlap as much as Bardet-Biedl specifically. Candidates and possible modifiers to interrogate in
+      unsolved cases, not claims.
+      The stacked-bar version of this figure from the paper is the next slide.
+
+  - id: additive
+    kind: figure
+    section: "Backup"
+    title: "Additive decomposition: Bardet–Biedl syndrome"
+    lede: "Which phenologs, from which species, support each of the top 20 protein families."
+    figure: additive_bbs
+    notes: |
+      Preprint Fig. 5. Additive score (Woods 2013), top 20 families over the top 20 phenologs.
+      13 of the top 20 families are shared by all three scoring schemes; hg and additive both put 15 of 20 known
+      families in the top 20, naive Bayes 16.
+
+  - id: carney
+    kind: figure
+    section: "Backup"
+    title: "Carney complex and the slime mold"
+    lede: "Five phenologs from three species. Only the two causal families are backed by all five."
+    figure: carney
+    notes: |
+      Preprint Fig. 4D. Carney complex: endocrine tumour syndrome, PRKAR1A.
+      Three mouse adiposity phenologs support the phosphodiesterase and PKA regulatory families, and eight other
+      families equally. Dictyostelium aberrant chemotaxis to cAMP and a C. elegans quiescence variant support only
+      those two, which puts them alone at the top. Dictyostelium diverged from us about a billion years ago and has
+      no endocrine system.
+
+  - id: top_species
+    kind: figure
+    section: "Backup"
+    title: "From mouse to slime mold"
+    lede: "Some top pairs are intuitive. Others only make sense through the pathway the genes share."
+    figure: top_species
+    notes: |
+      About 1.5 minutes. One top-ranked disease phenolog per species (preprint Table 1). Pick two or three to talk through.
+      Mouse: recessive hearing loss and raised auditory brainstem response threshold. Intuitive.
+      Zebrafish: Fanconi anemia and skewed sex ratio. Loss of fancl drives Tp53-mediated germ-cell apoptosis and
+      sex reversal (Rodriguez-Mari 2010). Only the DNA-repair pathway connects them.
+      Fission yeast: hereditary breast ovarian cancer syndrome and loss of break-induced loss of heterozygosity. DNA repair again.
+      Slime mold: early-onset epileptic encephalopathy and delayed aggregation.
+      Which pairs count as "non-obvious" on this slide is my labelling; adjust `obvious` in data.yaml.
+
+  - id: species
+    kind: figure
+    section: "Backup"
+    title: "Mouse leads; other species fill gaps"
+    lede: "Mouse reaches most new pairs. Zebrafish, worm and fission yeast each add one of their own."
+    figure: species_contrib
+    notes: |
+      About 1 minute (preprint Fig. 4A-C). Rebuild the ranking from each species alone and score the same 73 pairs.
+      41 are reachable by at least one species. Mouse reaches 38, 29 of them uniquely. Fission yeast 7, worm 3,
+      zebrafish 3, each with one unique pair. Pooling all seven reaches 3 pairs mouse alone cannot, at the same quality.
+      Zebrafish is narrow but sharp (AUC 0.88). Fission yeast looks worse than random overall because six of its seven
+      hits are one broad neurodevelopmental term reached through generic growth phenotypes; the seventh is ATM for
+      hereditary breast ovarian cancer syndrome, in its top 1.2%.
+      Rat, frog and slime mold surface none: a blind spot of this test (tiny candidate lists, few new pairs), not a verdict.
+      If asked about slime mold: backup slide on Carney complex.
+
+  - id: networks
+    kind: figure
+    section: "Backup"
+    title: "Curated gene–phenotype networks in the Monarch KG"
+    lede: "Human and seven model organisms, each a separate network of genes and their phenotypes."
+    figure: kg_networks
+    notes: |
+      About 1 minute. This is the turn from the problem to what our lab works on: using curated model-organism
+      data for human health.
+      The Monarch knowledge graph collects curated gene-phenotype data for human and seven model organisms under
+      one data model. Think of each species as its own network: circles are genes, squares are phenotypes (or
+      diseases, for human), and a line is a curated edge: this gene, when perturbed, gives this phenotype.
+      Human has {human.phenotype_annotations:,} gene-phenotype edges and {human.gene_disease_pairs:,} gene-disease edges.
+      Mouse alone has {sp.mouse.annotations:,} gene-phenotype edges, fission yeast {sp.pombe.annotations:,}, zebrafish {sp.zebrafish.annotations:,}:
+      decades of mutants, knockouts and screens, curated by the model-organism databases.
+      Cluster size follows the number of edges: mouse and fission yeast are deep, frog and slime mold are shallow.
+      The species sit in order of divergence from human, 87 million years to about 1.3 billion.
+      For now these are separate networks. Nothing on this slide connects a mouse phenotype to a human one.
+
+  - id: gaps_backup              # the hand-edited deck has this slide twice: slide 4 and here
+    kind: figure
+    section: "Backup"
+    title: "Model organism gene–phenotype information\nmay help fill in the gaps"
+    figure: fill_gaps
+    notes: |
+      Backup copy of slide 4.
+
+  # ------------------------------------------------------------------------------------------
+  # Parked
+  # Slides taken out of the deck, and earlier versions of slides, kept out with `skip: true`.
+  # Remove that line to bring one back.
+  # ------------------------------------------------------------------------------------------
+  - id: hypergeom_two_genes
+    skip: true                   # taken out of the deck by hand on 2026-11-16: two genes in one bag, made-up counts
+    kind: figure
+    section: "Candidate genes"
+    title: "Our score: same count, different verdict"
+    lede: "Two genes each turn up {hg_illustration.marbles.specific.drawn} times in the handful. Only for one of them is that a surprise."
+    figure: marbles_two_genes
+    notes: |
+      Optional follow-up to the previous slide, which works the score through for one real gene: that slide says
+      how the score works, this one says why a count is not enough. Made-up numbers here.
+      About 1.5 minutes.
+      One bag: every gene-phenotype annotation in the seven model species, one marble each. One handful: what the
+      disease's phenologs draw.
+      Two genes are marked. Orange is a specific gene with {hg_illustration.marbles.specific.own} marbles in the
+      whole bag. Navy is a hub gene, annotated to many phenotypes, with {hg_illustration.marbles.hub.own}.
+      Both turn up {hg_illustration.marbles.specific.drawn} times in the handful, so by count alone they tie.
+      The handful is a sixth of the bag, so chance predicts a sixth of each gene's marbles: 1 orange, 5 navy.
+      Five of the six orange marbles came out: P = 4.4 x 10^-4, a strong candidate. Five of the thirty navy ones
+      came out, which is what chance predicts: P = 0.60.
+      The naive Bayes score never looks at how many marbles a gene has in the bag. The hypergeometric score does.
+      Navy box: every gene is judged against the same bag, so scores compare across diseases. That gives one global
+      list: {totals.ranked_pairs:,} ranked gene-disease pairs across {totals.diseases_with_phenologs:,} diseases.
+      The picture is drawn to its own made-up counts (hg_illustration.marbles in data.yaml), so both P values are
+      exact for the picture. The expected counts and P values in this note are typed; update them if the counts change.
+
+  - id: takehome
+    skip: true                   # taken out of the deck by hand on 2026-11-16: the three take-home numbers
+    kind: stats
+    section: "Next"
+    title: "Take-home"
+    stats:
+      - big: "{totals.disease_phenologs:,}"
+        head: "disease phenologs"
+        body: "{totals.diseases_with_phenologs:,} human diseases against seven model species, at {totals.fdr_pct}% FDR"
+      - big: "{totals.ranked_pairs:,}"
+        head: "ranked gene–disease pairs"
+        body: "one hypergeometric score, comparable across diseases"
+      - big: "23.5×"
+        head: "over a random gene"
+        body: "9 of {evaluation.genuine} pairs added the following year sit in their disease's top 100"
+    closing: "Decades of model-organism phenotyping, from mouse to slime mold, turned into ranked hypotheses for human disease."
+    notes: |
+      30 seconds. Phenologs revived on a modern knowledge graph; a score that lets candidates be compared across
+      diseases; evidence that it anticipates new gene-disease links; and everything is released.
+
+  - id: hypergeom
+    skip: true                   # taken out of the deck by hand on 2026-11-16: the dot-grid score explainer, made-up numbers
+    kind: figure
+    section: "Candidate genes"
+    title: "Our score: a gene-level hypergeometric"
+    lede: "Is this gene in the disease's phenologs more often than its background frequency predicts?"
+    figure: hypergeom
+    notes: |
+      Backup. The earlier dot-grid version of the score explainer, with made-up numbers. The talk uses the marble
+      slide (hypergeom_marbles), which works one real gene through Bardet-Biedl syndrome.
+      About 1.5 minutes.
+      Think of every gene-phenotype annotation in the cross-species graph as a ball in an urn: N.
+      The disease's top-k phenologs pull out n of them. A given gene owns m balls in the whole urn, and c of them
+      came out in the draw. The score is the hypergeometric upper tail: the chance of seeing c or more.
+      So a specific gene that keeps turning up scores far better than a hub gene that turns up just as often but
+      is annotated to thousands of phenotypes. The numbers on the right are illustrative, not from the data.
+      Because every gene is judged against the same background, scores are comparable across diseases. That gives
+      one global list: {totals.ranked_pairs:,} ranked gene-disease pairs across {totals.diseases_with_phenologs:,} diseases.
+
+  - id: fdr
+    skip: true                   # taken out of the deck by hand on 2026-11-16: how the 5% FDR cutoff is set
+    kind: figure
+    section: "Backup"
+    title: "How a phenolog earns significance"
+    lede: "A pair counts only if real networks beat {totals.randomized_trials:,} randomized ones at a {totals.fdr_pct}% false discovery rate."
+    figure: pipeline_fdr
+    notes: |
+      About 1.5 minutes.
+      Five steps. Extract the eight-species subgraph. Collapse {human.genes_with_ortholog:,} human genes to
+      {human.families:,} PANTHER families. Test every disease against every model phenotype: about 320 million
+      hypergeometric tests for the disease network.
+      With that many tests we need a null. Shuffle the gene-phenotype links 1,000 times per species pair, keeping
+      each phenotype's gene count, and recompute everything. The plot is real against randomized for human-mouse.
+      The cutoff is the most permissive P at which randomized pairs are at most 5% of real ones (McGary 2010).
+      For mouse that is P <= 2.7e-4, 51,766 pairs, realised FDR 3.8%.
+
+  - id: part1_old
+    skip: true                   # taken out of the deck by hand on 2026-11-16: an earlier Part 1 divider
+    kind: divider
+    style: carolina
+    label: "PART 1 · WHAT IS A PHENOLOG"
+    title: "How does a model-organism phenotype get back to a human?"
+    notes: |
+      A mouse gene with a mouse phenotype tells you something about the human ortholog, but what?
+      The phenotype vocabularies differ and the anatomy differs. One answer is the phenolog.
+
+  - id: part2_old
+    skip: true                   # taken out of the deck by hand on 2026-11-16: an earlier Part 2 divider
+    kind: divider
+    style: navy
+    label: "PART 2 · PHENOLOGS AT KNOWLEDGE-GRAPH SCALE"
+    title: "We have far more data now. So we rebuilt phenologs."
+    notes: |
+      Phenologs were last computed systematically in 2013, on a fraction of today's data.
+      We set out to revive them: rebuild the toolkit, and run it on everything the Monarch KG holds.
+
+  - id: mcgary_models
+    skip: true                   # the earlier 2010 slide: the paper, its data tiles and its three non-obvious models
+    kind: figure
+    section: "What is a phenolog"
+    title: "Phenologs: an idea from 2010"
+    lede: "McGary et al. asked which phenotypes, in different species, come from the same genes."
+    figure: mcgary2010
+    notes: |
+      About 1.5 minutes. The idea is not ours: McGary et al. 2010, PNAS (PMID {history.mcgary2010.pmid}), from the Marcotte lab.
+      Phenolog: an orthologous phenotype. Two phenotypes in different species are phenologs when their genes are
+      orthologs of each other more often than chance allows.
+      What they had: five species (human, mouse, worm, yeast, Arabidopsis), {history.mcgary2010.gene_phenotype_associations:,} gene-phenotype
+      associations, about 300 human diseases, more than 6,200 phenologs at 5% FDR from 1,000 permutations.
+      The title says "nonobvious", and that is what made the paper:
+      yeast lovastatin sensitivity matched mouse angiogenesis defects (5 shared genes of 67 and 8, P <= 1e-6); they
+      predicted SOX13 and confirmed it by knockdown in Xenopus and in human endothelial cells.
+      Plant negative gravitropism defects matched Waardenburg syndrome (3 known genes against 5 plant genes); they
+      predicted SEC23IP, and knocking it down in Xenopus gave neural crest migration defects (23 of 35 embryos).
+      Worm high frequency of male progeny matched breast/ovarian cancer (the paper's term is X-linked breast/ovarian
+      cancer): 13 new candidate genes, 9 of which the literature already tied to breast cancer.
+      Bardet-Biedl syndrome was in that paper too, with 11 genes, matching four mouse ciliary phenotypes.
+      Next: how the test works, step by step.
+
+  - id: classical
+    skip: true                   # replaced by the concept and rodcone_tree slides (the two-network cartoon, build 1)
+    kind: figure
+    section: "What is a phenolog"
+    title: "A patient phenotype and its mouse counterpart"
+    figure: phenolog_cartoon
+    steps:
+      - step: 1
+        lede: "A patient has rod-cone dystrophy. Mouse has a phenotype called retina degeneration."
+    notes: |
+      About 45 seconds. The recipe from the 2010 paper, on one of our own pairs: phenotype against phenotype.
+      A Bardet-Biedl patient presents with rod-cone dystrophy. That HPO term has {rod_cone.known_genes} known genes.
+      Mouse has a phenotype term, retina degeneration, with its own genes. Different species, different ontology.
+      To compare the two gene sets we first have to say which human gene is the same gene as which mouse gene.
+      That is the gene-equivalence problem, next slide.
+
+  - id: equivalence
+    skip: true                   # the gene-equivalence slide: now one column of the concept slide and a line on then_now
+    kind: figure
+    section: "What is a phenolog"
+    title: "First problem: which genes are the same gene?"
+    lede: "Orthologs are rarely one-to-one, so every gene is rolled up to its PANTHER protein family."
+    figure: gene_equivalence
+    notes: |
+      About 1.5 minutes.
+      Orthologs are genes in two species that descend from one gene in their common ancestor. Paralogs come from a
+      duplication inside one lineage. So the mapping is often not one-to-one.
+      Four cases. One to one: easy. One to many: the gene duplicated in the model lineage (zebrafish often carries
+      two copies after the teleost genome duplication). Many to one: it duplicated on the human side.
+      Many to many: paralogs on both sides.
+      PANTHER builds a phylogenetic tree and a hidden Markov model for each protein family, and assigns every gene to
+      exactly one family (and a subfamily). We replace each gene by its family: {human.genes_with_ortholog:,} human genes with an
+      ortholog become {human.families:,} families. All four cases turn into the same thing: one family on each side.
+      That gives one unit of comparison across all eight species. The cost is resolution: paralogs with different
+      jobs share a family. We get the gene-level detail back later, when candidates are ranked gene by gene.
+      McGary et al. used pairwise ortholog groups with in-paralogs (Remm et al. 2001) for the same purpose; we use
+      PANTHER families because the Monarch KG already carries them on every orthology edge.
+
+  - id: classical_test
+    skip: true                   # replaced by the concept and rodcone_tree slides (the two-network cartoon, builds 2 and 3)
+    kind: figure
+    section: "What is a phenolog"
+    title: "A patient phenotype and its mouse counterpart"
+    figure: phenolog_cartoon
+    steps:
+      - step: 2
+        lede: "Their gene sets overlap far more than chance allows. That overlap makes them phenologs."
+      - step: 3
+        lede: "Phenologs predict in both directions: the genes they do not share become candidates."
+    notes: |
+      About 1.5 minutes across the two builds.
+      Build 1. With genes as PANTHER families, count the overlap: 40 shared, out of 140 human and 97 mouse
+      families, among 7,394 families the two species have in common. Hypergeometric P = 3.8e-45.
+      Two phenotypes whose orthologous gene sets overlap more than chance are phenologs: orthologous phenotypes.
+      Build 2. Because the link is gene overlap, it predicts both ways. The 57 mouse families not yet tied to the
+      human phenotype are candidates for it. Guilt by association.
+      This one is semantically obvious: eye to eye. The cartoon is schematic; the numbers are real (dashboard, HP:0000510).
+
+  - id: nonobvious
+    skip: true                   # the breast-ovarian cancer version of the non-obvious slide; rodcone_tree carries the point now
+    kind: figure
+    section: "What is a phenolog"
+    title: "…and counterparts nobody would guess"
+    lede: "{hboc.label} has {hboc.phenologs} phenologs. One is a zebrafish with no females."
+    figure: nonobvious_hboc
+    notes: |
+      About 1.5 minutes. The emergent-property slide, on a disease everyone knows.
+      Hereditary breast ovarian cancer syndrome: {hboc.known_genes} genes (BRCA1, BRCA2, ATM, PALB2, RAD51C...), {hboc.phenologs} phenologs in five species.
+      Mouse increased mammary adenocarcinoma incidence is what you would expect.
+      Zebrafish female organism absent: mutants in these genes grow up all male. Worm: germ cells fail to arrest after
+      UV. Fission yeast: sensitive to ionizing radiation. No semantic similarity search would connect these to breast cancer.
+      Why: a gene's molecular function is conserved, the organism-level phenotype is not. The phenotype is an
+      emergent property of the system the gene sits in (McGary et al. 2010, Introduction).
+      Interpretation to say out loud: the shared module is DNA double-strand break repair and the damage checkpoint.
+      CHECK you are happy with that framing before presenting. It also echoes the 2010 paper's worm model of breast cancer.
+      Numbers: dashboard, MONDO:0003582. This is a disease term; in 2010 the human "phenotypes" were diseases too.
+
+  - id: nonobvious_rodcone
+    skip: true                   # the earlier version of the slide above: rod-cone dystrophy and the worm with no eyes
+    kind: figure
+    section: "What is a phenolog"
+    title: "…and a counterpart nobody would guess"
+    lede: "Rod-cone dystrophy has {rod_cone.phenologs} phenologs. Most are mouse retina. Some are in a worm with no eyes."
+    figure: nonobvious
+    notes: |
+      About 1.5 minutes. The emergent-property slide.
+      Same human phenotype. Mouse retina degeneration is what you would expect.
+      Zebrafish kinked notochord: 17 shared families. Worm osmotic avoidance defective and ivermectin resistant:
+      8 and 7 shared families. No semantic similarity search would connect these.
+      Why: a gene's molecular function is conserved, the organism-level phenotype is not. The phenotype is an
+      emergent property of the system the gene sits in (McGary et al. 2010, Introduction).
+      Interpretation to say out loud: here the shared module is the cilium. Photoreceptor outer segments are modified
+      cilia; the worm's other phenologs for this term include cilia morphology variant, intraflagellar transport
+      variant and dye filling defect. CHECK you are happy with the cilium framing before presenting.
+
+  - id: history
+    skip: true                   # the three papers are on the mcgary slide now
+    kind: figure
+    section: "What is a phenolog"
+    title: "Phenologs since 2010"
+    lede: "A repurposed drug in 2012, a gene predictor in 2013, and now a rebuild on the Monarch KG."
+    figure: history
+    notes: |
+      About 1 minute. What happened to the idea.
+      Cha et al. 2012 (PLoS Biology, PMID 22927795): the yeast-angiogenesis module led to thiabendazole as a vascular
+      disrupting agent.
+      Woods et al. 2013 (BMC Bioinformatics, PMID 23800157): pool a phenotype's k nearest phenologs and rank the genes
+      they nominate, with a naive Bayes or an additive score; leave-one-out cross validation.
+      Then the idea went quiet while the data kept growing. That is what we picked up.
+      Two flavours. Classical: phenotype against phenotype (the last slides). Disease-framed: a disease is just a gene
+      set, so the same test runs on a Mondo disease. The rest of the talk uses the disease flavour.
+
+  - id: derivation
+    skip: true                   # the Bardet-Biedl version of the one-phenolog walk-through; the concept slide uses rod-cone dystrophy
+    kind: figure
+    section: "What is a phenolog"
+    title: "The same test, framed on a disease"
+    lede: "A disease is just another gene set: Bardet–Biedl syndrome against mouse retina degeneration."
+    figure: derivation
+    notes: |
+      About 1 minute. How one disease phenolog is derived, with the real numbers (preprint Fig. 1B).
+      26 Bardet-Biedl genes collapse to 26 PANTHER families. Mouse retina degeneration has 115 genes in 97 families.
+      13 families are shared, out of 7,394 present in both species: P = 1.3e-18.
+      Why families: gene families expand unevenly across species (one human gene can have many mouse co-orthologs),
+      so we compare at the family level and resolve back to genes later.
+      A pair is kept only if it passes the species-specific 5% FDR cutoff; for human-mouse that is P <= 2.7e-4.
+
+  - id: tree
+    skip: true                   # the Bardet-Biedl version of the tree; rodcone_tree is the one in the talk
+    kind: figure
+    section: "What is a phenolog"
+    title: "One disease against every model phenotype"
+    lede: "{bbs.phenologs} phenologs in three species. Mouse reads like the clinic; the strongest hits do not."
+    figure: bbs_tree
+    notes: |
+      About 1.5 minutes.
+      Run that test for Bardet-Biedl syndrome against every phenotype in every species: 109 significant phenologs,
+      62 mouse, 45 zebrafish, 2 worm.
+      Mouse: retina degeneration, obese, absent sperm flagellum, kidney cyst, polydactyly. That is the clinical
+      picture of the syndrome, recovered from gene overlap alone.
+      Zebrafish: gastrulation disrupted and kinked notochord are the strongest phenologs of all (1e-27, 5e-26),
+      plus Kupffer's vesicle and melanosome transport. Worm: osmotic avoidance defective, ivermectin resistant.
+      None of those resemble the human disease; all of them are ciliary readouts in that organism.
+      Rat, frog, fission yeast and slime mold have no phenolog for this disease at 5% FDR.
+
+  - id: dataset
+    skip: true                   # the networks slide is back in the opening (id: networks); this is the version with orthology arcs
+    kind: figure
+    section: "At knowledge-graph scale"
+    title: "One knowledge graph: human and seven model species"
+    lede: "Orthology, from PANTHER, is the only thing that connects the eight networks."
+    figure: kg_networks_orthology
+    notes: |
+      About 1 minute. What the data set is.
+      Each cluster is a gene-phenotype network: circles are genes, squares are phenotypes (or diseases, for human).
+      Human has {human.gene_disease_pairs:,} gene-disease edges and {human.phenotype_annotations:,} gene-phenotype edges.
+      The seven model species together carry {totals.model_annotations:,} gene-phenotype annotations
+      on {totals.model_genes_with_phenotypes:,} genes: decades of systematic mutagenesis and phenotyping.
+      Cluster size follows annotation depth: mouse and fission yeast are deep, frog and slime mold are shallow.
+      The species sit in order of divergence from human, 87 million years to about 1.3 billion.
+      The dashed arcs are the only thing that connects the networks: gene orthology, from PANTHER.
+      Monarch collates all of this under one data model. The question is how to use it.
+
+  # ------------------------------------------------------------------------------------------
+  - id: end
+    kind: end

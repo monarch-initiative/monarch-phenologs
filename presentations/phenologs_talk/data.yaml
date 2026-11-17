@@ -1,0 +1,561 @@
+# Every number the talk shows lives here, once. Figures and slide text read from this file,
+# so a new release means editing this file (or regenerating it) and running the build.
+#
+# Sources
+#   preprint   Odell et al. 2026, bioRxiv, doi:10.64898/2026.10.23.761438 (assets/phenologs_preprint_biorxiv.pdf)
+#   dashboard  https://monarch-initiative.github.io/monarch-phenologs/ , release 2026-03-06, read 2026-11-11
+#   McGary2010 PNAS 107(14):6544-9, PMID 20308572 (numbers as stated in the paper's text)
+#   Woods2013  BMC Bioinformatics 14:203, PMID 23800157
+#   Cha2012    PLoS Biology 10(8):e1001379, PMID 22927795
+
+meta:
+  kg_release: "2026-03-06"
+  kg_prior: "2025-03-10"
+  phenio: "2025-11-14"
+  preprint: "Odell et al. 2026, bioRxiv"
+  doi: "10.64898/2026.10.23.761438"
+  dashboard_url: "monarch-initiative.github.io/monarch-phenologs"
+  repo_url: "github.com/monarch-initiative/monarch-phenologs"
+
+# ---------------------------------------------------------------------------------------------
+# The problem (slide text only; see deck.yaml notes for what still needs a citation)
+problem:
+  yield_low: 30          # % diagnostic yield of genome-wide sequencing in rare disease; outline doc, citation to add
+  yield_high: 50         # the slide shows the complement: 50-70% still undiagnosed
+  reasons:               # the "Why no diagnosis?" cards, in order
+    - {head: "The variant is hard to detect",            sub: "structural, non-coding, repeat expansions"}
+    - {head: "The variant can't be interpreted",         sub: "variants of uncertain significance"}
+    - {head: "The gene isn't linked to the disease yet", sub: "many Mendelian diseases still have no known gene"}
+    - {head: "The cause isn't purely genetic",           sub: "environmental exposures, gene–environment interactions"}
+
+# ---------------------------------------------------------------------------------------------
+# Species, in order of divergence from human. Colours are the dashboard's (python/phenologs_release_utils.py);
+# slime mold is darkened from #B0B0B0 so it reads on a white slide.
+# mya: approximate divergence from Homo sapiens, TimeTree, as shown on the dashboard's species tree.
+# All counts: dashboard, Release page ("Species in the graph", "Model species" cards, "False discovery control").
+human:
+  code: Hs
+  common: Human
+  binomial: Homo sapiens
+  color: "#13294B"
+  genes_with_ortholog: 19159
+  families: 7489
+  genes_with_phenotypes: 4790
+  phenotype_terms: 8750            # HPO terms on genes with an ortholog
+  phenotype_annotations: 131495    # gene-phenotype edges
+  gene_disease_pairs: 12426        # curated gene-disease edges (causal + correlated)
+  diseases_with_gene: 8040
+
+species:
+  - {key: mouse,     code: Mm, common: Mouse,         binomial: Mus musculus,              color: "#0072B2", ontology: MP,
+     mya: 87,   genes_with_phenotypes: 16044, phenotype_terms: 11009, annotations: 251361, families_shared: 7394,
+     disease_phenologs: 51766, diseases: 3716, phenotypes_with_diseases: 6659, phenotype_phenologs: 1922559,
+     p_cutoff: 2.7e-4, realised_fdr: 3.8, candidate_pairs: 1302749}
+  - {key: rat,       code: Rn, common: Rat,           binomial: Rattus norvegicus,         color: "#56B4E9", ontology: MP,
+     mya: 87,   genes_with_phenotypes: 1592,  phenotype_terms: 1160,  annotations: 3311,   families_shared: 7296,
+     disease_phenologs: 113,   diseases: 67,   phenotypes_with_diseases: 51,   phenotype_phenologs: 7191,
+     p_cutoff: 1.1e-4, realised_fdr: 0.9, candidate_pairs: 1077}
+  - {key: frog,      code: Xt, common: Frog,          binomial: Xenopus tropicalis,        color: "#D55E00", ontology: XPO,
+     mya: 352,  genes_with_phenotypes: 175,   phenotype_terms: 125,   annotations: 683,    families_shared: 6173,
+     disease_phenologs: 98,    diseases: 45,   phenotypes_with_diseases: 24,   phenotype_phenologs: 3778,
+     p_cutoff: 1.5e-4, realised_fdr: 0.5, candidate_pairs: 1659}
+  - {key: zebrafish, code: Dr, common: Zebrafish,     binomial: Danio rerio,               color: "#009E73", ontology: ZP,
+     mya: 429,  genes_with_phenotypes: 7862,  phenotype_terms: 26210, annotations: 87652,  families_shared: 6479,
+     disease_phenologs: 6120,  diseases: 460,  phenotypes_with_diseases: 2107, phenotype_phenologs: 190335,
+     p_cutoff: 1.5e-4, realised_fdr: 0.8, candidate_pairs: 171672}
+  - {key: worm,      code: Ce, common: Worm,          binomial: Caenorhabditis elegans,    color: "#E69F00", ontology: WBPhenotype,
+     mya: 686,  genes_with_phenotypes: 2999,  phenotype_terms: 1730,  annotations: 18371,  families_shared: 3931,
+     disease_phenologs: 2150,  diseases: 251,  phenotypes_with_diseases: 446,  phenotype_phenologs: 53460,
+     p_cutoff: 2.5e-4, realised_fdr: 0.7, candidate_pairs: 86296}
+  - {key: pombe,     code: Sp, common: Fission yeast, binomial: Schizosaccharomyces pombe, color: "#CC79A7", ontology: FYPO,
+     mya: 1105, genes_with_phenotypes: 4377,  phenotype_terms: 3980,  annotations: 100162, families_shared: 2301,
+     disease_phenologs: 912,   diseases: 131,  phenotypes_with_diseases: 425,  phenotype_phenologs: 9275,
+     p_cutoff: 4.3e-4, realised_fdr: 2.0, candidate_pairs: 51528}
+  - {key: dicty,     code: Dd, common: Slime mold,    binomial: Dictyostelium discoideum,  color: "#8E8E8E", ontology: DDPHENO,
+     mya: 1300, genes_with_phenotypes: 595,   phenotype_terms: 242,   annotations: 1920,   families_shared: 3021,
+     disease_phenologs: 84,    diseases: 40,   phenotypes_with_diseases: 31,   phenotype_phenologs: 920,
+     p_cutoff: 3.3e-4, realised_fdr: 1.6, candidate_pairs: 6967}
+
+# ---------------------------------------------------------------------------------------------
+# What is compared with what, disease network. preprint Table S4.
+# diseases / phenotypes: terms with at least one gene in a family the two species share ("comparable").
+# tests = diseases x phenotypes; the seven add up to totals.pairwise_tests_disease.
+comparisons:
+  mouse:     {diseases: 7919, phenotypes: 10998, tests: 87093162}
+  rat:       {diseases: 7879, phenotypes: 1156,  tests: 9108124}
+  frog:      {diseases: 7522, phenotypes: 124,   tests: 932728}
+  zebrafish: {diseases: 7725, phenotypes: 26040, tests: 201159000}
+  worm:      {diseases: 5925, phenotypes: 1707,  tests: 10113975}
+  pombe:     {diseases: 3072, phenotypes: 3646,  tests: 11200512}
+  dicty:     {diseases: 3719, phenotypes: 235,   tests: 873965}
+
+# ---------------------------------------------------------------------------------------------
+# What the pipeline takes from the Monarch KG, for the "Monarch KG for phenolog calculations" slide.
+# preprint Supplementary Note 1 (Table S1: Biolink categories and predicates; Table S2: ontologies per species;
+# Table S3: root terms kept), Supplementary Note 2 (PANTHER orthology) and Fig. 1A (gene id sources);
+# the selection itself is python/02_kg_data_extraction.py. Counts come from `human`, `species` and `totals` above.
+kg:
+  human:
+    gene_ids: HGNC
+    disease_ontology: Mondo            # prefix MONDO; only terms under "human disease" (MONDO:0700096)
+    phenotype_ontology: HPO            # prefix HP; only terms under "phenotypic abnormality" (HP:0000118)
+  # gene id source per model species; the phenotype ontology is species[].ontology
+  gene_ids: {mouse: MGI, rat: RGD, frog: Xenbase, zebrafish: ZFIN, worm: WB, pombe: PomBase, dicty: dictyBase}
+  orthology:
+    source: PANTHER
+    example_family: "PTHR24240"        # RHO's family, the one named on the next slide
+  biolink:
+    gene: "biolink:Gene"
+    disease: "biolink:Disease"
+    phenotype: "biolink:PhenotypicFeature"
+    gene_disease: ["biolink:CausalGeneToDiseaseAssociation", "biolink:CorrelatedGeneToDiseaseAssociation"]
+    gene_phenotype: "biolink:GeneToPhenotypicFeatureAssociation"
+    gene_phenotype_predicate: "biolink:has_phenotype"
+    orthology: "biolink:GeneToGeneHomologyAssociation"
+    orthology_predicate: "biolink:orthologous_to"
+    orthology_evidence: "PANTHER.FAMILY:PTHR…"      # the has_evidence value an orthology edge must carry to be kept
+    # not on the slide, for the notes (Table S1)
+    causal_predicates: "biolink:causes, biolink:associated_with_increased_likelihood_of"
+    correlated_predicates: "biolink:gene_associated_with_condition, biolink:contributes_to"
+
+# ---------------------------------------------------------------------------------------------
+# Release totals. dashboard (Release page) and preprint (abstract, Fig. 2C, Table S4).
+totals:
+  model_species: 7
+  model_annotations: 463460          # sum of species[].annotations
+  model_genes_with_phenotypes: 33644
+  model_phenotype_terms: 44456
+  pairwise_tests_disease: 320481466  # sum of Table S4 pairwise comparisons, disease network
+  randomized_trials: 1000
+  fdr_pct: 5
+  disease_phenologs: 61243
+  diseases_with_phenologs: 3752
+  diseases_testable: 7933            # preprint Fig. 2C
+  diseases_leaf: 3088                # preprint: most-specific Mondo terms among the 3,752
+  model_phenotypes_with_diseases: 9700
+  phenotype_phenologs: 2187518
+  hp_terms_with_phenologs: 8567
+  hp_terms_testable: 8750
+  model_phenotypes_with_hp: 28031
+  ranked_pairs: 1485624              # ranked gene-disease candidate pairs (hg, k = 1,000)
+  genes_ranked: 15168                # dashboard; the preprint text says 15,170
+  known_pairs_recovered: 5311
+  known_pairs_recovered_pct_reach: 70.6
+  k_phenologs: 1000
+
+# ---------------------------------------------------------------------------------------------
+# Earlier phenolog studies, for the "then and now" comparison.
+history:
+  mcgary2010:
+    cite: "McGary et al. 2010"
+    journal: "PNAS"
+    pmid: 20308572
+    title: "Systematic discovery of nonobvious human disease models through orthologous phenotypes"
+    species: 5                         # human, mouse, yeast, worm, Arabidopsis
+    species_names: "human, mouse, worm, yeast, Arabidopsis"
+    gene_phenotype_associations: 212542
+    human_gene_disease_associations: 1923
+    human_diseases_approx: 300
+    # per species, "Systematic Discovery of Phenologs" and the Arabidopsis section; they add up to 212,542.
+    # Human is OMIM gene-disease only: no human phenotype (HPO) annotations in the 2010 data.
+    associations: {human: 1923, mouse: 74250, worm: 27065, yeast: 86383, arabidopsis: 22921}
+    model_phenotypes_label: "> 6,000"      # mouse, worm and yeast together; Arabidopsis adds 1,711
+    # the paper's own definition (Results and Discussion), quoted on the slide
+    definition: "phenotypes related by the orthology of the associated genes in two organisms"
+    phenologs_total: 6200              # ">6,200 significant phenologs", all species pairs
+    phenologs_human_mouse: 3755
+    randomizations: 1000
+    # The rest of this block: main text of the paper, read from PMC2851946 on 2026-11-12.
+    authors: "McGary, Park, Woods, Cha, Wallingford & Marcotte"
+    human_diseases_label: "≈ 300"
+    orthology: "pairwise ortholog groups with in-paralogs (Remm et al. 2001)"
+    bbs: {human_genes: 11, mouse_traits: 4, p_at_most: 1.0e-11}     # Bardet-Biedl vs four mouse ciliary traits
+    # the headline non-obvious models. a/b: the two phenotypes, in the paper's wording; key: our species key if we have one.
+    classics:
+      - a: {code: Sc, species: "yeast", label: "lovastatin sensitivity"}
+        b: {code: Mm, species: "mouse", label: "angiogenesis defects", key: mouse}
+        outcome: "5 shared genes, of 67 and 8. New gene SOX13, confirmed in frog embryos and human cells."
+      - a: {code: At, species: "plant", label: "negative gravitropism defects"}
+        b: {code: Hs, species: "human", label: "Waardenburg syndrome", key: human}
+        outcome: "3 Waardenburg genes against 5 plant genes. New gene SEC23IP: neural crest migration defects in frog."
+      - a: {code: Ce, species: "worm", label: "high frequency of male progeny", key: worm}
+        b: {code: Hs, species: "human", label: "breast / ovarian cancer", key: human}
+        outcome: "13 new candidate genes; 9 of them already tied to breast cancer in the literature."
+    # The "idea" slide (id: idea). The four model organisms compared with human disease, in the order they sit around
+    # the human network (counter-clockwise from the top left, nearest relative first). name: the key into
+    # `associations` above; key: our own species key, where the species is also in our data (it keeps that colour).
+    # phenologs_with_human: 5% FDR, "Systematic Discovery of Phenologs" and, for Arabidopsis, the plant section.
+    models:
+      - {name: mouse,       code: Mm, common: Mouse,         key: mouse,       phenologs_with_human: 3755}
+      - {name: worm,        code: Ce, common: Worm,          key: worm,        phenologs_with_human: 9}
+      - {name: yeast,       code: Sc, common: Budding yeast, color: "#8E5A9B", phenologs_with_human: 154}
+      - {name: arabidopsis, code: At, common: Arabidopsis,   color: "#6A9A1F", phenologs_with_human: 48}
+    human_source: "OMIM"
+    # The plant model of Waardenburg syndrome: main text and Fig. 4 of the paper, read from PMC2851946 on 2026-11-15.
+    # Gene counts consider human/Arabidopsis orthologs only. Fig. 4B is a Venn of 1 | 2 | 3: three Waardenburg genes,
+    # five plant genes, two shared; the three plant-only genes give the candidates STX7/STX12, DDHD2/SEC23IP and DNAJC13.
+    waardenburg:
+      model: arabidopsis
+      disease: "Waardenburg syndrome"
+      disease_gloss: "a neural crest disorder"          # "stems from defects in the developing neural crest"
+      human_genes: 3
+      phenotype: "Negative gravitropism defects"
+      phenotype_gloss: "shoots fail to grow against gravity"
+      plant_genes: 5
+      shared: 2
+      candidates: 3
+      tested_gene: "SEC23IP"
+      frog_gene: "sec23ip"                               # Xenopus laevis, morpholino knockdown on one side of the embryo
+      frog_code: Xl
+      defect: [23, 35]                                   # neural crest migration defects, snai2-a marker
+      control: [0, 21]                                   # untreated control animals, snai2-a
+      defect_twist: [8, 14]                              # the second marker
+  cha2012:
+    cite: "Cha et al. 2012"
+    journal: "PLoS Biology"
+    pmid: 22927795
+    authors: "Cha, Byrom, Mead, Ellington, Wallingford & Marcotte"      # PubMed, read 2026-11-13
+    title: "Evolutionarily repurposed networks reveal the well-known antifungal drug thiabendazole to be a novel vascular disrupting agent"
+  woods2013:
+    cite: "Woods et al. 2013"
+    journal: "BMC Bioinformatics"
+    pmid: 23800157
+    authors: "Woods, Singh-Blom, Laurent, McGary & Marcotte"            # PubMed, read 2026-11-13
+    title: "Prediction of gene-phenotype associations in humans, mice, and plants using phenologs"
+    orthology: "INPARANOID (Östlund et al. 2010)"                       # stated in the paper's Results
+
+# ---------------------------------------------------------------------------------------------
+# Rod-cone dystrophy, the patient-phenotype example (phenotype network). dashboard, HP:0000510.
+# c: shared families; m: human families with an ortholog in that species; n: model phenotype families;
+# N: families in both species.
+rod_cone:
+  id: "HP:0000510"
+  label: "Rod-cone dystrophy"
+  known_genes: 152
+  phenologs: 688
+  by_species: {mouse: 565, zebrafish: 99, worm: 24}
+  punchline: "A worm has no retina. It does have sensory cilia, built by orthologs of the same genes."
+  # the non-obvious card on the tree slide. The cilium reading is an interpretation: see the slide's notes.
+  takeaway: "Explained only through the genes. A worm has no retina, but it builds sensory cilia with orthologs of the same genes: one conserved pathway, a different emergent phenotype in each organism."
+  examples:
+    - {species: mouse,     label: "retina degeneration",          id: "MP:0001326",          c: 40, m: 140, n: 97, N: 7394, p: 3.8e-45, obvious: true}
+    - {species: zebrafish, label: "notochord kinked",             id: "ZP:0001556",          c: 17, m: 138, n: 39, N: 6479, p: 4.8e-19, obvious: false}
+    - {species: worm,      label: "osmotic avoidance defective",  id: "WBPhenotype:0000249", c: 8,  m: 108, n: 23, N: 3931, p: 8.7e-8,  obvious: false}
+    - {species: worm,      label: "ivermectin resistant",         id: "WBPhenotype:0002053", c: 7,  m: 108, n: 25, N: 3931, p: 3.1e-6,  obvious: false}
+  # The single phenolog walked through on the "Phenologs conceptualized" slide: HP:0000510 against MP:0001326.
+  # dashboard term page, read 2026-11-13. RHO, PDE6B and CRB1 are three of the 152 annotated genes; PTHR24240 is
+  # RHO's family. Mouse gene count and examples as on the Bardet-Biedl derivation (same mouse phenotype).
+  derivation:
+    genes: 152
+    gene_examples: "RHO, PDE6B, CRB1"
+    families: 140                          # the families of those genes that human and mouse share
+    phenotype: "retina degeneration"
+    phenotype_id: "MP:0001326"
+    phenotype_genes: 115
+    phenotype_gene_examples: "Rho, Pde6b, Crb1"
+    phenotype_families: 97
+    family_example: "PTHR24240"
+    shared: 40
+    N: 7394
+    p: 3.8e-45
+    # The genes behind the 57 mouse-only families (97 - 40). dashboard, MP:0001326 "Genes annotated" table against the
+    # 152 known genes of HP:0000510, read 2026-11-13: 102 of the 115 mouse genes have a family; the 57 mouse-only
+    # families carry 58 of them (one family has two: Mpp3 and Pals1), each with one human ortholog listed.
+    phenotype_genes_with_family: 102
+    mouse_only_genes: 58
+    mouse_only_examples: "RPGRIP1, NMNAT1, GUCY2D"     # three of the 58 human orthologs, for the notes
+  # Phenologs shown on the tree slide, strongest first within a species (dashboard, read 2026-11-13; zebrafish labels
+  # without their ", abnormal" suffix). obvious: true when the model phenotype reads like the human one (a judgement call).
+  tree:
+    mouse:
+      - {label: "retina degeneration",                             c: 40, n: 97,  p: 3.8e-45, obvious: true}
+      - {label: "abnormal photoreceptor outer segment morphology", c: 35, n: 70,  p: 3.6e-43, obvious: true}
+      - {label: "abnormal rod electrophysiology",                  c: 37, n: 119, p: 2.9e-36, obvious: true}
+    zebrafish:
+      - {label: "notochord kinked",                                c: 17, n: 39,  p: 4.8e-19, obvious: false}
+      - {label: "pronephros cystic",                               c: 21, n: 117, p: 2.4e-14, obvious: false}
+      - {label: "retina layer formation disrupted",                c: 15, n: 74,  p: 2.4e-11, obvious: true}
+      - {label: "retinal outer nuclear layer decreased thickness", c: 9,  n: 24,  p: 6.9e-10, obvious: true}
+    worm:
+      - {label: "osmotic avoidance defective",                     c: 8,  n: 23,  p: 8.7e-8,  obvious: false}
+      - {label: "cilia morphology variant",                        c: 7,  n: 22,  p: 1.2e-6,  obvious: false}
+      - {label: "ivermectin resistant",                            c: 7,  n: 25,  p: 3.1e-6,  obvious: false}
+
+# ---------------------------------------------------------------------------------------------
+# Hereditary breast ovarian cancer syndrome, the "weird ones" example (disease network). dashboard, MONDO:0003582,
+# read 2026-11-12. Same columns as rod_cone; labels are the ontology terms as the dashboard prints them.
+hboc:
+  id: "MONDO:0003582"
+  label: "Hereditary breast ovarian cancer syndrome"
+  known_genes: 15
+  phenologs: 199
+  by_species: {mouse: 118, pombe: 67, zebrafish: 10, worm: 2, rat: 2}
+  punchline: "Fish, worms and yeast do not get breast cancer. They do repair damaged DNA, with orthologs of the same genes."
+  examples:
+    - {species: mouse,     label: "increased mammary adenocarcinoma incidence",               id: "MP:0001883",          c: 6, m: 15, n: 32, N: 7394, p: 1.9e-11, obvious: true}
+    - {species: zebrafish, label: "female organism absent",                                   id: "ZP:0005342",          c: 4, m: 14, n: 26, N: 6479, p: 2.0e-7,  obvious: false}
+    - {species: worm,      label: "UV induced mitotic germ cell arrest defective",            id: "WBPhenotype:0001755", c: 2, m: 9,  n: 4,  N: 3931, p: 2.8e-5,  obvious: false}
+    - {species: pombe,     label: "sensitive to ionizing radiation during vegetative growth", id: "FYPO:0000267",        c: 7, m: 9,  n: 58, N: 2301, p: 1.5e-10, obvious: false}
+
+# ---------------------------------------------------------------------------------------------
+# Bardet-Biedl syndrome, the running example (disease network). dashboard, MONDO:0015229; preprint Figs. 1, 5.
+bbs:
+  id: "MONDO:0015229"
+  label: "Bardet–Biedl syndrome"
+  known_genes: 26
+  families: 26
+  phenologs: 109
+  by_species: {mouse: 62, zebrafish: 45, worm: 2}
+  best_p: 9.6e-28
+  genes_ranked: 3075
+  known_recovered: 26
+  # Where the 26 known genes rank among the 3,075 candidates (hg score, k = 1,000). Dashboard database, candidates
+  # table of release 2026-03-06, read 2026-11-16. The ranks up to 25 are also in `candidates` below.
+  known_ranks: {BBS1: 1, MKKS: 2, BBS7: 3, BBS2: 4, BBS4: 5, CEP290: 6, BBS10: 7, SDCCAG8: 8, NPHP1: 9, LZTFL1: 10,
+                BBS9: 11, ARL6: 13, BBS5: 16, CFAP418: 18, TTC8: 21, BBS12: 22, IFT172: 24, MKS1: 33, IFT27: 47,
+                IFT74: 54, WDPCP: 58, BBIP1: 62, SCLT1: 96, TRIM32: 210, CEP19: 233, SCAPER: 1228}
+  known_rank_all_but_one: 233        # CEP19: 25 of the 26 rank here or better
+  known_rank_last: 1228              # SCAPER
+  prevalence: "1 in 160,000"
+  prevalence_isolated: "1 in 13,500"
+  solved_pct: 80                     # share of clinically diagnosed cases resolved by the known genes (Forsythe & Beales 2013)
+  # HPO terms annotated directly to MONDO:0015229 in the Monarch KG (api.monarchinitiative.org, has_phenotype, read 2026-11-12).
+  # Every label below is one of those terms. Retinal dystrophy (HP:0000556) is annotated; "Retinal degeneration" is not.
+  phenotypes_known: 95
+  features: ["Retinal dystrophy", "Obesity", "Postaxial polydactyly", "Chronic kidney disease", "Hypogonadism", "Cognitive impairment"]
+  phenotype_examples: ["nyctalopia", "type II diabetes", "hearing impairment"]     # a few beyond the six drawn on the figure
+  # the single phenolog walked through on the "derivation" slide
+  derivation:
+    disease_genes: 26
+    disease_gene_examples: "BBS1, BBS10, CEP290"
+    disease_families: 26
+    phenotype: "retina degeneration"
+    phenotype_id: "MP:0001326"
+    phenotype_genes: 115
+    phenotype_gene_examples: "Rho, Pde6b, Crb1"
+    phenotype_families: 97
+    family_example: "PTHR20870"
+    shared: 13
+    N: 7394
+    p: 1.3e-18
+  # phenologs shown on the tree slide. clinic: true when the model phenotype reads like a BBS clinical feature.
+  tree:
+    mouse:
+      - {label: "retina degeneration",    c: 13, n: 97,  p: 1.3e-18, clinic: true}
+      - {label: "obese",                  c: 12, n: 98,  p: 1.2e-16, clinic: true}
+      - {label: "absent sperm flagellum", c: 8,  n: 46,  p: 1.7e-12, clinic: true}
+      - {label: "kidney cyst",            c: 7,  n: 99,  p: 3.3e-8,  clinic: true}
+      - {label: "polydactyly",            c: 5,  n: 108, p: 3.1e-5,  clinic: true}
+    zebrafish:
+      - {label: "gastrulation disrupted",                c: 14, n: 31, p: 9.6e-28, clinic: false}
+      - {label: "notochord kinked",                      c: 14, n: 39, p: 5.4e-26, clinic: false}
+      - {label: "Kupffer's vesicle development disrupted", c: 5, n: 11, p: 3.1e-10, clinic: false}
+      - {label: "melanosome transport delayed",          c: 3,  n: 6,  p: 1.1e-6,  clinic: false}
+    worm:
+      - {label: "osmotic avoidance defective", c: 3, n: 23, p: 7.6e-5, clinic: false}
+      - {label: "ivermectin resistant",        c: 3, n: 25, p: 9.8e-5, clinic: false}
+  # top of the phenolog list, as ranked by p (for the pooling slide)
+  top_phenologs:
+    - {species: zebrafish, label: "gastrulation disrupted",   c: 14, m: 26, n: 31,  p: 9.6e-28}
+    - {species: zebrafish, label: "notochord kinked",         c: 14, m: 26, n: 39,  p: 5.4e-26}
+    - {species: zebrafish, label: "somite increased width",   c: 14, m: 26, n: 56,  p: 2.0e-23}
+    - {species: mouse,     label: "retina degeneration",      c: 13, m: 26, n: 97,  p: 1.3e-18}
+    - {species: mouse,     label: "obese",                    c: 12, m: 26, n: 98,  p: 1.2e-16}
+  # candidate ranking, hg score, k = 1,000. support: phenologs per species that carry an ortholog of the gene.
+  candidates:
+    - {rank: 1,  gene: BBS1,    score: 1.1e-57, known: true,  support: {zebrafish: 29, mouse: 21}}
+    - {rank: 2,  gene: MKKS,    score: 2.0e-46, known: true,  support: {zebrafish: 17, mouse: 15}}
+    - {rank: 3,  gene: BBS7,    score: 4.6e-45, known: true,  support: {mouse: 17, zebrafish: 13, worm: 2}}
+    - {rank: 4,  gene: BBS2,    score: 6.2e-43, known: true,  support: {mouse: 22, zebrafish: 13}}
+    - {rank: 5,  gene: BBS4,    score: 1.5e-41, known: true,  support: {mouse: 21, zebrafish: 20}}
+    - {rank: 6,  gene: CEP290,  score: 1.4e-36, known: true,  support: {mouse: 26, zebrafish: 16}}
+    - {rank: 7,  gene: BBS10,   score: 3.9e-33, known: true,  support: {zebrafish: 13, mouse: 11}}
+    - {rank: 8,  gene: SDCCAG8, score: 1.4e-30, known: true,  support: {mouse: 23, zebrafish: 2}}
+    - {rank: 9,  gene: NPHP1,   score: 1.5e-25, known: true,  support: {mouse: 13, zebrafish: 9}}
+    - {rank: 10, gene: LZTFL1,  score: 2.3e-22, known: true,  support: {mouse: 20}}
+    - {rank: 11, gene: BBS9,    score: 3.6e-20, known: true,  support: {zebrafish: 14, mouse: 1}}
+    - {rank: 12, gene: IFT140,  score: 2.3e-17, known: false, support: {mouse: 16, zebrafish: 4, worm: 1}}
+    - {rank: 13, gene: ARL6,    score: 1.1e-16, known: true,  support: {zebrafish: 9, mouse: 8}}
+    - {rank: 14, gene: ARL2BP,  score: 2.0e-16, known: false, support: {mouse: 14}}
+    - {rank: 15, gene: RP1,     score: 1.1e-14, known: false, support: {mouse: 11}}
+    - {rank: 16, gene: BBS5,    score: 4.2e-14, known: true,  support: {zebrafish: 12, mouse: 4}}
+    - {rank: 17, gene: RPE65,   score: 7.4e-14, known: false, support: {mouse: 12}}
+    - {rank: 18, gene: CFAP418, score: 1.8e-13, known: true,  support: {mouse: 7, zebrafish: 3}}
+    - {rank: 19, gene: CEP78,   score: 1.1e-12, known: false, support: {mouse: 12}}
+    - {rank: 20, gene: NMNAT1,  score: 1.7e-12, known: false, support: {mouse: 11}}
+    - {rank: 21, gene: TTC8,    score: 2.0e-12, known: true,  support: {zebrafish: 8, mouse: 3, worm: 1}}
+    - {rank: 22, gene: BBS12,   score: 2.5e-12, known: true,  support: {mouse: 6, zebrafish: 5}}
+    - {rank: 23, gene: TULP1,   score: 1.1e-11, known: false, support: {mouse: 10}}
+    - {rank: 24, gene: IFT172,  score: 2.0e-11, known: true,  support: {mouse: 15, worm: 2, zebrafish: 2}}
+    - {rank: 25, gene: FSCN2,   score: 2.5e-11, known: false, support: {mouse: 10}}
+  # The additive decomposition of the dashboard's term page with "top phenologs" set to 10 (figure
+  # bbs_decomposition): the disease's ten best phenologs and the protein families they carry. Dashboard database,
+  # tables phenologs and additive of release 2026-03-06, read 2026-11-16.
+  #   A phenolog's weight is shared / 26 known families x (1 - p). A family's additive score is the sum of the
+  #   weights of the phenologs that carry it (`ranks`; `on` would be read as a boolean by YAML). Both are computed in the figure. Labels are the dataset's, without the
+  #   trailing ", abnormal" of the zebrafish terms.
+  #   families: the 16 that score 2.0 or more, in the dashboard's order (five more tie just below, at 1.92).
+  #   `known` and `other` are the family's human genes; `other` names the first of `n_other`.
+  #   `obvious` is a judgement call: does the model phenotype look like something a patient has?
+  decomposition:
+    phenologs:
+      - {rank: 1,  species: zebrafish, label: "gastrulation disrupted",                    shared: 14, p: 9.6e-28, obvious: false}
+      - {rank: 2,  species: zebrafish, label: "notochord kinked",                          shared: 14, p: 5.4e-26, obvious: false}
+      - {rank: 3,  species: zebrafish, label: "somite increased width",                    shared: 14, p: 2.0e-23, obvious: false}
+      - {rank: 4,  species: mouse,     label: "retina degeneration",                       shared: 13, p: 1.3e-18, obvious: true}
+      - {rank: 5,  species: mouse,     label: "obese",                                     shared: 12, p: 1.2e-16, obvious: true}
+      - {rank: 6,  species: zebrafish, label: "anterior-posterior axis whole organism decreased length", shared: 12, p: 1.2e-15, obvious: false}
+      - {rank: 7,  species: zebrafish, label: "notochord increased width",                 shared: 10, p: 1.7e-14, obvious: false}
+      - {rank: 8,  species: mouse,     label: "photoreceptor outer segment degeneration",  shared: 8,  p: 7.1e-14, obvious: true}
+      - {rank: 9,  species: mouse,     label: "absent sperm flagellum",                    shared: 8,  p: 1.7e-12, obvious: true}
+      - {rank: 10, species: mouse,     label: "photoreceptor inner segment degeneration",  shared: 6,  p: 3.0e-12, obvious: true}
+    families:
+      - {family: PTHR16074, known: [BBS7],   ranks: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]}
+      - {family: PTHR14667, known: [BBS10],  ranks: [1, 2, 3, 4, 5, 6, 7, 8, 10]}
+      - {family: PTHR20870, known: [BBS1],   ranks: [1, 2, 3, 4, 5, 6, 7, 9, 10]}
+      - {family: PTHR44186, known: [BBS4],   ranks: [1, 2, 3, 4, 5, 6, 7, 9]}
+      - {family: PTHR46883, known: [BBS12],  ranks: [1, 2, 3, 4, 5, 6, 8]}
+      - {family: PTHR32465, known: [BBS2],   ranks: [1, 2, 3, 5, 6, 7, 9]}
+      - {family: PTHR46787, known: [MKKS],   ranks: [1, 2, 3, 5, 6, 7, 9]}
+      - {family: PTHR21351, known: [BBS5],   ranks: [1, 2, 3, 5, 6, 7, 9]}
+      - {family: PTHR44177, known: [TTC8],   ranks: [1, 2, 3, 4, 5, 6]}
+      - {family: PTHR15176, known: [NPHP1],  ranks: [2, 3, 4, 6, 7, 8, 10]}
+      - {family: PTHR20991, known: [BBS9],   ranks: [1, 2, 3, 6, 7]}
+      - {family: PTHR11309, other: [FRZB, FZD1], n_other: 16, ranks: [2, 3, 4, 6, 7]}            # frizzled, SFRP and SMO
+      - {family: PTHR11711, known: [ARL6],   other: [ARF1], n_other: 16, ranks: [1, 2, 3, 6, 9]}
+      - {family: PTHR15722, known: [IFT172], other: [IFT140], n_other: 1, ranks: [2, 3, 4, 7, 8]}
+      - {family: PTHR24416, other: [ALK, AXL], n_other: 42, ranks: [3, 4, 6, 7, 8]}              # receptor tyrosine kinases
+      - {family: PTHR44117, other: [IFT88], n_other: 1, ranks: [1, 2, 3, 7]}
+    # the two sentences under the lists on the slide
+    why_nonobvious: "Nothing a patient has: the embryo's body axis forms wrongly (convergent extension) when a fish loses a bbs gene."
+    why_similar: "What patients have: retinal dystrophy, obesity, hypogonadism. The outer segment and the sperm flagellum are both cilia."
+  # The worked example on the marble slide (figure marbles): how the hg score ranks one gene for this disease.
+  # Read on 2026-11-16 from the release's own tables, queried through the dashboard's database (disease network,
+  # k = 1,000). In the paper's symbols (Supplementary Note 5):
+  #   bag (N): gene-phenotype annotations of the seven model species whose gene is in a protein family shared with
+  #     human: mouse 237,961, zebrafish 74,630, fission yeast 69,709, worm 14,135, rat 3,057, slime mold 1,374, frog 598.
+  #   pulled (n): the genes pulled in from the disease's 109 phenologs, that is every annotation on those 109 model
+  #     phenotypes, counted once per human ortholog; the "hits" field of `support` in the candidates table, summed
+  #     over the disease's 3,075 candidates. It is not the number of phenologs (109).
+  #   own (m): annotations of the gene's orthologs that are in the bag; drawn (c): its hits for this disease.
+  # scipy.stats.hypergeom.sf(drawn - 1, bag, own, pulled) reproduces the published score to four figures for ARL2BP
+  # and for BBS1, BBS9, LZTFL1, IFT140, RP1 and IFT172 (own = 116, 28, 54, 103, 22, 161), so these are the numbers
+  # the pipeline used. The figure recomputes the score from them and checks it against `candidates` above.
+  score_example:
+    bag: 401464
+    pulled: 6436
+    gene: ARL2BP                   # HGNC:17146, not a known Bardet-Biedl gene; rank and score are in `candidates`
+    ortholog: Arl2bp               # MGI:1349429, its only ortholog with phenotype annotations
+    own: 36                        # all 36 are mouse phenotypes
+    drawn: 14
+    known_for: "retinitis pigmentosa with or without situs inversus"
+    # which of the disease's phenologs carry the gene: positions within each species' phenologs, in rank order
+    carrying:
+      mouse: [7, 8, 9, 13, 15, 22, 30, 35, 43, 47, 56, 57, 58, 62]
+    carrying_examples: ["male infertility", "retina photoreceptor degeneration", "abnormal primary cilium morphology"]
+    # Rows of the phenolog table on the marble slide: rank and P as on the dashboard, and the marbles that phenolog
+    # draws (annotations on that model phenotype, counted once per human ortholog; same query as `pulled`, and the
+    # 109 rows sum to it). The three example annotations below sit on ranks 2, 20 and 81. ours: the row holds one
+    # of the example gene's marbles. Full zebrafish labels end ", abnormal".
+    phenolog_rows:
+      - {rank: 1,  species: zebrafish, label: "gastrulation disrupted",      p: 9.6e-28, marbles: 47}
+      - {rank: 2,  species: zebrafish, label: "notochord kinked",            p: 5.4e-26, marbles: 51}
+      - {rank: 20, species: mouse,     label: "male infertility",            p: 6.9e-9,  marbles: 1027, ours: true}
+      - {rank: 81, species: worm,      label: "osmotic avoidance defective", p: 7.6e-5,  marbles: 29}
+    # three annotations for the cartoon of what goes into the bag; each is in the release (gene_phenotypes).
+    # The zebrafish label is "notochord kinked, abnormal" there. ours: the example gene's own marble.
+    annotations:
+      - {species: mouse,     gene: Arl2bp, phenotype: "male infertility", ours: true}
+      - {species: zebrafish, gene: bbs1,   phenotype: "notochord kinked"}
+      - {species: worm,      gene: osm-1,  phenotype: "osmotic avoidance defective"}
+
+# ---------------------------------------------------------------------------------------------
+# One top-ranked disease phenolog per species. preprint Table 1.
+# m: disease families; n: phenotype families; c: shared; obvious: reads as the same thing in both species.
+top_per_species:
+  - {species: mouse,     disease: "hearing loss, autosomal recessive",               phenotype: "increased or absent threshold for auditory brainstem response", m: 61, n: 211, c: 42, p: 3.6e-52, obvious: true}
+  - {species: rat,       disease: "chromosome 1p36 deletion syndrome",               phenotype: "decreased fetal weight",                    m: 13, n: 3,   c: 3,  p: 4.4e-9,  obvious: false}
+  - {species: frog,      disease: "cleft lip/palate",                                phenotype: "abnormal tail morphology",                  m: 12, n: 41,  c: 5,  p: 7.7e-9,  obvious: false}
+  - {species: zebrafish, disease: "Fanconi anemia",                                  phenotype: "female sex determination decreased occurrence", m: 20, n: 22, c: 17, p: 1.7e-43, obvious: false}
+  - {species: worm,      disease: "colorectal cancer",                               phenotype: "vulval cell induction increased",           m: 21, n: 12,  c: 6,  p: 9.6e-12, obvious: false}
+  - {species: pombe,     disease: "hereditary breast ovarian cancer syndrome",       phenotype: "abolished break-induced loss of heterozygosity", m: 9, n: 8, c: 5, p: 1.3e-11, obvious: false}
+  - {species: dicty,     disease: "undetermined early-onset epileptic encephalopathy", phenotype: "delayed aggregation",                     m: 27, n: 30,  c: 6,  p: 1.4e-7,  obvious: false}
+
+# ---------------------------------------------------------------------------------------------
+# Temporal validation. preprint Table 2, Fig. 3, Fig. 4, Results.
+evaluation:
+  shared_pairs: 11902
+  new_pairs: 524
+  removed_pairs: 335
+  not_testable: 402          # disease had no gene in the prior graph
+  redundant: 49              # same gene already on a parent, child or sibling Mondo term
+  genuine: 73
+  genuine_diseases: 43
+  ceiling: 41                # genuine pairs present anywhere in the candidate lists
+  recall:                    # hg, per disease, top N candidates
+    - {n: 10,   hits: 2,  fold: 52}
+    - {n: 20,   hits: 3,  fold: 39}
+    - {n: 100,  hits: 9,  fold: 23.5}
+    - {n: 1000, hits: 20, fold: 5}
+  top100_ci: "10.5–39.2"
+  top100_p: 2.0e-4
+  hg_vs_nb_p: 0.32
+  pooled_auc_hg: 0.58
+  pooled_auc_nb: 0.45
+  pooled_top: 10000
+  pooled_top_pct: 0.7
+  pooled_hits: 4
+  pooled_expected: 0.3
+  pooled_fold: 14
+  prospective: {gene: FAAP100, disease: "Fanconi anemia", reported: "April 2025"}
+  species_recall:            # genuine new pairs reachable from each species' ranking alone
+    - {species: mouse,     reached: 38, unique: 29, auc: 0.59}
+    - {species: pombe,     reached: 7,  unique: 1,  auc: 0.33}
+    - {species: worm,      reached: 3,  unique: 1,  auc: 0.54}
+    - {species: zebrafish, reached: 3,  unique: 1,  auc: 0.88}
+  extra_over_mouse: 3        # pairs the all-species ranking reaches that mouse alone does not
+  silent_species: "Rat, frog and slime mold reach none: their candidate lists are too small for this test to see"
+
+# Leave-one-out cross validation. preprint Supplementary Note 7, Fig. S7.
+loo:
+  families_hidden: 2001
+  k: 20
+  true_disease_top20_hg: 165
+  true_disease_top20_nb: 12
+  true_disease_first_hg: 18
+  true_disease_first_nb: 0
+  recall_top20_hg: 45
+  recall_top20_nb: 39
+  more_precise_diseases: 278
+  compared_diseases: 414
+  more_precise_pct: 67
+  # Supplementary Note 7 and the Fig. S7 legend, read from the preprint PDF on 2026-11-16.
+  k_values: [1, 5, 20, 100]          # top phenologs combined per disease in the leave-one-out runs
+  diseases_evaluated: {1: 168, 5: 274, 20: 322, 100: 332}   # diseases whose hidden genes surface, by k (Fig. S7A, total column)
+  # Panels C and D are NOT leave-one-out runs: the complete model, no genes withheld, k = 100, across the diseases
+  # with at least four known genes carrying an ortholog in a modeled species.
+  min_known_genes: 4
+  precision_k: 100
+  recall_ceiling_pct: 75             # mean share of known genes present anywhere in the candidate lists (dotted line, S7C)
+  auprc_median_gain: 0.026           # hg minus nb, per disease (S7D)
+  # A made-up ranked list for the precision-recall cartoon (slide id: recover_known): the ranks at which the known
+  # genes sit among the first `shown` candidates. Labelled as an example in the notes.
+  pr_example: {known_at: [1, 2, 5, 8], shown: 8}
+
+# ---------------------------------------------------------------------------------------------
+# Made-up numbers for the hypergeometric explainer (labelled "illustrative" on the slide).
+# expected = n * m / N.  c: times the gene turns up in the disease's phenologs.
+hg_illustration:
+  N: 600000          # all gene-phenotype annotations
+  n: 5000            # annotations pulled in by the disease's phenologs
+  specific: {label: "A specific gene", m: 40,   c: 30}
+  hub:      {label: "A hub gene",      m: 2000, c: 30}
+  # The two-genes marble slide (figure marbles_two_genes) is drawn to these counts exactly, so the P values on it
+  # are exact for the picture: P(X >= drawn), with N = bag, n = handful, m = own. Keep bag a multiple of handful
+  # (the slide says "a sixth of the bag") and handful one of 17, 20, 23... (three rows in the tray).
+  # The three-panel marble slide (figure marbles) uses real numbers instead: bbs.score_example.
+  marbles:
+    bag: 120             # N: one marble per gene-phenotype annotation
+    handful: 20          # n: marbles the disease's phenologs draw
+    specific: {own: 6,  drawn: 5}
+    hub:      {own: 30, drawn: 5}

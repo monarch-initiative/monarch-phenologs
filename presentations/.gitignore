@@ -1,0 +1,12 @@
+# built files: `make deck` recreates all of these
+out/
+.venv/
+__pycache__/
+*.pyc
+.DS_Store
+~$*.pptx
+# copies of decks edited in PowerPoint, kept by the build before it overwrites them
+hand_edited/
+# not kept in git: add these two yourself before building (see README)
+assets/UNC_NEW_Template_2026.pptx
+assets/phenologs_preprint_biorxiv.pdf
