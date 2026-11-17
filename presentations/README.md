@@ -94,6 +94,10 @@ PowerPoint look alike.
   the 73 evaluable pairs; the version with all 524 pairs is the first backup slide (`time_split_full`).
   The earlier one-slide layout of `eval_results` is the figure `eval_results_tiles`, parked as `eval_results_old`.
   The FAAP100 box is no longer on the slide; it is in the notes.
+- Round 4 (Notion, 2026-11-17): on `naive_bayes` the cards read "14/26 Bardet–Biedl disease genes shared in common"
+  (the code counts protein families; this disease's 26 known genes are in 26 families, and the figure checks
+  that). The footer sections "The problem" and "Phenologs on the Monarch KG" are now "Motivation" and "Monarch KG
+  for phenologs". Three backup slides are parked: `top_species`, `networks`, `gaps_backup`.
 - Round 3 (Notion, 2026-11-17): the wording of two cards on the problem slide, and the colours on `bbs_model`.
   "Complex diseases" on the problem slide follows the preprint, which also calls Bardet-Biedl syndrome a complex
   disease (`bbs_gaps` does the same); strictly it is Mendelian and genetically heterogeneous, see that slide's notes.
@@ -118,10 +122,10 @@ PowerPoint look alike.
   problem, Bardet-Biedl with the model organism data that could fill the gap (`bbs_gaps`), the three papers (`mcgary`), the
   idea as a cartoon (`idea`); Part 1 (`kg_components`, `then_now`, `concept`, `rodcone_tree`, `counts`); Part 2
   (`pooling`, `naive_bayes`, `hypergeom_marbles`, `time_split`, `eval_results`, `bbs_model`, `resource`); Part 3
-  (`future`), `thanks`. 43 slides, 29 before the backup divider.
+  (`future`), `thanks`. 40 slides, 29 before the backup divider.
 - The lede on `bbs_model` was typed with two placeholders ("ranks below XYZ except for one at rank XYZ"). They are
   filled from `bbs.known_ranks` in `data.yaml`: 25 of the 26 known genes rank 233 or better, SCAPER is at 1,228.
-- The footer names a slide's section. It follows where the slide now sits: `bbs_gaps` says "The problem", and
+- The footer names a slide's section. It follows where the slide now sits: `bbs_gaps` says "Motivation", and
   `recover_known` and `precision` say "Backup".
 - `recover_known` (figure `recover_known`, in backup since 2026-11-16) has two halves that are two different analyses in the preprint
   (Supplementary Note 7). Left: leave-one-out, one protein family hidden at a time, 2,001 families. Right: the
@@ -142,7 +146,7 @@ PowerPoint look alike.
   calls, and reading the five fish phenotypes as convergent extension is an interpretation (see the slide's notes).
   The gene-by-gene top 25 it replaced (`bbs_ranking`) is in backup.
 - Backup holds what left the main flow: `fdr_plot`, `time_split_full`, `recover_known`, `precision`, `loo`, `bbs_ranking`, `additive`,
-  `carney`, `top_species`, `species`, `networks`, and the old slide 4 (`gaps_backup`), as in the hand-edited deck.
+  `carney` and `species`.
 - On `idea`: the network sizes follow the 2010 association counts on a log scale; "≈ 110×" is the four model
   organisms' 210,619 associations over the 1,923 human ones; the Venn (1 | 2 | 3) and the candidate genes are from
   the paper's Fig. 4B; the embryo drawings are schematic, not the paper's photographs.

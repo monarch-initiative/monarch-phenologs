@@ -33,7 +33,7 @@ slides:
   # ------------------------------------------------------------------------------------------
   # The talk
   # The order is the deck's as rearranged by hand on 2026-11-16 (kept in hand_edited/), with the round 1 edits
-  # from Notion ("Presentation edits round1", 2026-11-16) and rounds 2 and 3 (2026-11-17) applied on top.
+  # from Notion ("Presentation edits round1", 2026-11-16) and rounds 2 to 4 (2026-11-17) applied on top.
   # ------------------------------------------------------------------------------------------
   - id: cover
     kind: cover
@@ -44,7 +44,7 @@ slides:
 
   - id: problem
     kind: figure
-    section: "The problem"
+    section: "Motivation"
     title: "Many rare disease patients still go undiagnosed"
     figure: diagnostic_gap
     notes: |
@@ -67,7 +67,7 @@ slides:
 
   - id: bbs_gaps
     kind: figure
-    section: "The problem"
+    section: "Motivation"
     title: "Model organism gene–phenotype information\nmay help fill in the gaps"
     figure: bbs_fill_gaps
     notes: |
@@ -92,11 +92,11 @@ slides:
       about a human disease like this one?
       How can we leverage this information? We need a way to compare these networks across species and get
       something meaningful out. One way has been around since 2010: next slide.
-      The two slides this one replaces (ids bbs and gaps) are parked in deck.yaml; the old slide 4 is also in backup.
+      The two slides this one replaces (ids bbs and gaps) are parked in deck.yaml.
 
   - id: mcgary
     kind: figure
-    section: "The problem"
+    section: "Motivation"
     title: "Phenologs: an idea from 2010"
     lede: "The term “phenologs” was coined in 2010 and a method was published, discovering new candidate human disease genes and identifying a new drug application"
     figure: phenolog_papers
@@ -119,7 +119,7 @@ slides:
 
   - id: idea
     kind: figure
-    section: "The problem"
+    section: "Motivation"
     title: "Phenologs: comparing gene-networks across species"
     lede: "Decades of model organism gene–phenotype data can be linked to human disease through gene orthology."
     figure: phenolog_idea
@@ -170,7 +170,7 @@ slides:
 
   - id: kg_components
     kind: figure
-    section: "Phenologs on the Monarch KG"
+    section: "Monarch KG for phenologs"
     title: "Monarch KG for phenolog calculations"
     figure: kg_components
     steps:                        # three slides, one panel more each time (round 2)
@@ -207,7 +207,7 @@ slides:
 
   - id: then_now
     kind: figure
-    section: "Phenologs on the Monarch KG"
+    section: "Monarch KG for phenologs"
     title: "Then and now: the data behind phenologs"
     lede: "When phenologs were last computed, only a fraction of today's curated annotations existed."
     figure: then_now
@@ -230,7 +230,7 @@ slides:
 
   - id: concept
     kind: figure
-    section: "Phenologs on the Monarch KG"
+    section: "Monarch KG for phenologs"
     title: "Phenologs conceptualized"
     lede: "A way to compare two different species' gene-association networks through gene orthology"
     figure: phenolog_concept
@@ -265,7 +265,7 @@ slides:
 
   - id: rodcone_tree
     kind: figure
-    section: "Phenologs on the Monarch KG"
+    section: "Monarch KG for phenologs"
     title: "An example human phenotype term compared against 7 model organisms"
     title_size: 22                # the title is long: 28 pt would wrap onto the lede
     lede: "{rod_cone.phenologs} significant hits against human Rod-cone dystrophy"
@@ -291,7 +291,7 @@ slides:
 
   - id: counts
     kind: figure
-    section: "Phenologs on the Monarch KG"
+    section: "Monarch KG for phenologs"
     title: "Initial results"
     figure: counts
     figure_dy: -0.245             # no lede: the figure was moved up by hand
@@ -360,6 +360,8 @@ slides:
       The lede follows the code: each phenolog's weight is (1 - P) times shared families over the disease's
       families (phenologs_utils.py, the naive Bayes product), so the second factor is not a per-gene probability.
       The weights on the slide are computed in the build from Bardet-Biedl's real top phenologs; "gene X" is hypothetical.
+      The cards say "14/26 Bardet-Biedl disease genes shared in common" (round 4). The code counts protein families;
+      for this disease the two are the same number, because its 26 known genes sit in 26 different families.
 
   - id: hypergeom_marbles
     kind: figure
@@ -591,9 +593,9 @@ slides:
         - "Preprint: doi:{meta.doi}"
         - "Explore: {meta.dashboard_url}"
     notes: |
-      Questions. Backup slides follow: leave-one-out and precision-recall (two slides), the leave-one-out heatmaps,
-      the top 25 Bardet-Biedl candidate genes, the additive decomposition, Carney complex, one top phenolog per species, what each species adds to the time
-      split, and the eight networks of the Monarch KG.
+      Questions. Backup slides follow: how the FDR cutoff is computed, the full breakdown of the newly added pairs,
+      leave-one-out and precision-recall (two slides), the leave-one-out heatmaps, the top 25 Bardet-Biedl candidate
+      genes, the additive decomposition, Carney complex, and what each species adds to the time split.
 
   # ------------------------------------------------------------------------------------------
   # Backup
@@ -753,21 +755,6 @@ slides:
       those two, which puts them alone at the top. Dictyostelium diverged from us about a billion years ago and has
       no endocrine system.
 
-  - id: top_species
-    kind: figure
-    section: "Backup"
-    title: "From mouse to slime mold"
-    lede: "Some top pairs are intuitive. Others only make sense through the pathway the genes share."
-    figure: top_species
-    notes: |
-      About 1.5 minutes. One top-ranked disease phenolog per species (preprint Table 1). Pick two or three to talk through.
-      Mouse: recessive hearing loss and raised auditory brainstem response threshold. Intuitive.
-      Zebrafish: Fanconi anemia and skewed sex ratio. Loss of fancl drives Tp53-mediated germ-cell apoptosis and
-      sex reversal (Rodriguez-Mari 2010). Only the DNA-repair pathway connects them.
-      Fission yeast: hereditary breast ovarian cancer syndrome and loss of break-induced loss of heterozygosity. DNA repair again.
-      Slime mold: early-onset epileptic encephalopathy and delayed aggregation.
-      Which pairs count as "non-obvious" on this slide is my labelling; adjust `obvious` in data.yaml.
-
   - id: species
     kind: figure
     section: "Backup"
@@ -783,33 +770,6 @@ slides:
       hereditary breast ovarian cancer syndrome, in its top 1.2%.
       Rat, frog and slime mold surface none: a blind spot of this test (tiny candidate lists, few new pairs), not a verdict.
       If asked about slime mold: backup slide on Carney complex.
-
-  - id: networks
-    kind: figure
-    section: "Backup"
-    title: "Curated gene–phenotype networks in the Monarch KG"
-    lede: "Human and seven model organisms, each a separate network of genes and their phenotypes."
-    figure: kg_networks
-    notes: |
-      About 1 minute. This is the turn from the problem to what our lab works on: using curated model-organism
-      data for human health.
-      The Monarch knowledge graph collects curated gene-phenotype data for human and seven model organisms under
-      one data model. Think of each species as its own network: circles are genes, squares are phenotypes (or
-      diseases, for human), and a line is a curated edge: this gene, when perturbed, gives this phenotype.
-      Human has {human.phenotype_annotations:,} gene-phenotype edges and {human.gene_disease_pairs:,} gene-disease edges.
-      Mouse alone has {sp.mouse.annotations:,} gene-phenotype edges, fission yeast {sp.pombe.annotations:,}, zebrafish {sp.zebrafish.annotations:,}:
-      decades of mutants, knockouts and screens, curated by the model-organism databases.
-      Cluster size follows the number of edges: mouse and fission yeast are deep, frog and slime mold are shallow.
-      The species sit in order of divergence from human, 87 million years to about 1.3 billion.
-      For now these are separate networks. Nothing on this slide connects a mouse phenotype to a human one.
-
-  - id: gaps_backup              # the hand-edited deck has this slide twice: slide 4 and here
-    kind: figure
-    section: "Backup"
-    title: "Model organism gene–phenotype information\nmay help fill in the gaps"
-    figure: fill_gaps
-    notes: |
-      Backup copy of slide 4.
 
   # ------------------------------------------------------------------------------------------
   # Parked
@@ -1106,7 +1066,7 @@ slides:
   - id: bbs
     skip: true                   # round 1 (2026-11-16): merged with the old slide 4 into bbs_gaps
     kind: figure
-    section: "The problem"
+    section: "Motivation"
     title: "Example complex disease: Bardet–Biedl syndrome"
     lede: "An autosomal recessive ciliopathy: about {bbs.prevalence} people, up to {bbs.prevalence_isolated} in isolated populations."
     figure: bbs_overview
@@ -1124,7 +1084,7 @@ slides:
   - id: gaps
     skip: true                   # round 1 (2026-11-16): merged with the old slide 3 into bbs_gaps; gaps_backup is the copy in backup
     kind: figure
-    section: "The problem"
+    section: "Motivation"
     title: "Model organism gene–phenotype information\nmay help fill in the gaps"
     figure: fill_gaps
     notes: |
@@ -1159,6 +1119,51 @@ slides:
       mouse phenologs alone, human link first reported April 2025.
       Next: what the ranking looks like for one disease. The second kind of test, on the genes we already know
       (leave-one-out and precision-recall), is the first two backup slides.
+
+  - id: top_species
+    skip: true                   # round 4 (2026-11-17): backup slide taken out
+    kind: figure
+    section: "Backup"
+    title: "From mouse to slime mold"
+    lede: "Some top pairs are intuitive. Others only make sense through the pathway the genes share."
+    figure: top_species
+    notes: |
+      About 1.5 minutes. One top-ranked disease phenolog per species (preprint Table 1). Pick two or three to talk through.
+      Mouse: recessive hearing loss and raised auditory brainstem response threshold. Intuitive.
+      Zebrafish: Fanconi anemia and skewed sex ratio. Loss of fancl drives Tp53-mediated germ-cell apoptosis and
+      sex reversal (Rodriguez-Mari 2010). Only the DNA-repair pathway connects them.
+      Fission yeast: hereditary breast ovarian cancer syndrome and loss of break-induced loss of heterozygosity. DNA repair again.
+      Slime mold: early-onset epileptic encephalopathy and delayed aggregation.
+      Which pairs count as "non-obvious" on this slide is my labelling; adjust `obvious` in data.yaml.
+
+  - id: networks
+    skip: true                   # round 4 (2026-11-17): backup slide taken out
+    kind: figure
+    section: "Backup"
+    title: "Curated gene–phenotype networks in the Monarch KG"
+    lede: "Human and seven model organisms, each a separate network of genes and their phenotypes."
+    figure: kg_networks
+    notes: |
+      About 1 minute. This is the turn from the problem to what our lab works on: using curated model-organism
+      data for human health.
+      The Monarch knowledge graph collects curated gene-phenotype data for human and seven model organisms under
+      one data model. Think of each species as its own network: circles are genes, squares are phenotypes (or
+      diseases, for human), and a line is a curated edge: this gene, when perturbed, gives this phenotype.
+      Human has {human.phenotype_annotations:,} gene-phenotype edges and {human.gene_disease_pairs:,} gene-disease edges.
+      Mouse alone has {sp.mouse.annotations:,} gene-phenotype edges, fission yeast {sp.pombe.annotations:,}, zebrafish {sp.zebrafish.annotations:,}:
+      decades of mutants, knockouts and screens, curated by the model-organism databases.
+      Cluster size follows the number of edges: mouse and fission yeast are deep, frog and slime mold are shallow.
+      The species sit in order of divergence from human, 87 million years to about 1.3 billion.
+      For now these are separate networks. Nothing on this slide connects a mouse phenotype to a human one.
+
+  - id: gaps_backup              # the hand-edited deck has this slide twice: slide 4 and here
+    skip: true                   # round 4 (2026-11-17): backup slide taken out
+    kind: figure
+    section: "Backup"
+    title: "Model organism gene–phenotype information\nmay help fill in the gaps"
+    figure: fill_gaps
+    notes: |
+      Backup copy of slide 4.
 
   # ------------------------------------------------------------------------------------------
   - id: end

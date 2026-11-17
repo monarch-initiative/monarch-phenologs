@@ -376,6 +376,8 @@ def fig_naive_bayes(D, step=None):
     c = Canvas()
     b = D.bbs
     wit = [b.top_phenologs[0], b.top_phenologs[3], b.top_phenologs[4]]
+    assert b.known_genes == b.families and all(w.m == b.families for w in wit), "the cards say genes for families"
+    short = b.label.removesuffix(" syndrome")
     weights = [(w.c / w.m) * (1 - w.p) for w in wit]
     nb = 1 - float(np.prod([1 - x for x in weights]))
     add = sum(weights)
@@ -383,8 +385,8 @@ def fig_naive_bayes(D, step=None):
     gx, gy = 1.05, 2.5
     g = c.pill(gx, gy, "candidate\ngene X", size=14, weight="bold", w=1.7, h=0.86, edge=T.ACCENT, fill=T.ACCENT_TINT,
                lw=2.2, r=0.26)
-    c.text(gx, gy + 0.72, "an ortholog carries\nthree of the disease's\nphenologs", size=10.5, color=T.MUTED, ha="center",
-           va="top")
+    c.text(gx, gy + 0.72, c.wrap(f"An example arbitrary gene candidate for {b.label}", 1.95, 10.5), size=10.5,
+           color=T.MUTED, ha="center", va="top", linespacing=1.2)
 
     cx, cw, ch = 2.55, 4.85, 1.3
     ys = [0.25, 1.85, 3.45]
@@ -396,8 +398,11 @@ def fig_naive_bayes(D, step=None):
         c.box(cx, y, cw, ch, fill=T.WHITE, edge=T.RULE, lw=1.3, r=0.12)
         c.badge(cx + 0.36, y + 0.45, sp.code, sp.color, r=0.19)
         c.text(cx + 0.68, y + 0.45, w.label, size=14.5, weight="bold")
-        c.text(cx + 0.18, y + 0.93, f"shares {w.c} of the disease's {w.m} families  ×  (1 − P)", size=12, color=T.MUTED)
-        c.text(cx + cw - 0.22, y + ch / 2, f"{wt:.2f}", size=24, weight="bold", ha="right", color=T.CAROLINA_DARK)
+        # "disease genes": this disease's known genes sit one to a protein family, so shared families are shared genes
+        val = f"{wt:.2f}"
+        line = f"{w.c}/{w.m} {short} disease genes shared in common  ×  (1 − P)"
+        c.text(cx + 0.18, y + 0.95, line, size=c.fit(line, cw - 0.4, 12, min_size=10.5), color=T.MUTED)
+        c.text(cx + cw - 0.22, y + 0.45, val, size=24, weight="bold", ha="right", color=T.CAROLINA_DARK)   # on the title's row
         c.line(cx + cw, y + ch / 2, bus, y + ch / 2, color=T.FAINT, lw=1.5)
     c.line(bus, ys[0] + ch / 2, bus, ys[-1] + ch / 2, color=T.FAINT, lw=1.5)
     c.arrow(bus, r1 + rh / 2, nbx - 0.05, r1 + rh / 2, color=T.FAINT, lw=1.5)
