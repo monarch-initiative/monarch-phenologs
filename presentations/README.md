@@ -84,19 +84,33 @@ PowerPoint look alike.
 
 ### Open items in the current deck
 
-- The problem slide shows 50 to 70% undiagnosed, the complement of the 30 to 50% diagnostic yield in the outline;
-  that yield still needs a citation.
-- `future` ("Can we leverage this large dataset in meaningful ways?") holds four placeholder directions; the ncRNA
-  figure is not in yet.
+- The problem slide shows 50 to 70% undiagnosed, the complement of the 30 to 50% diagnostic yield in the outline.
+  It now cites Chung et al. 2023 (Genet Med, PMID 37191093) and Clark et al. 2018 (npj Genom Med, PMID 30002876);
+  their pooled yields (34 to 41%) put the undiagnosed share at about 59 to 66%, inside the range shown.
+- `future` ("Can we leverage this dataset in meaningful ways?") holds four directions as worded in round 1; the
+  ncRNA figure is not in yet.
+- Round 1 of edits (Notion, 2026-11-16) is applied. The old slides 3 and 4 (`bbs`, `gaps`) are one slide,
+  `bbs_gaps` (figure `bbs_fill_gaps`). `time_split` is a simpler drawing (`time_split_simple`) that only mentions
+  the 73 evaluable pairs; the version with all 524 pairs is the first backup slide (`time_split_full`).
+  `eval_results` is three slides, each adding to the last (left plot, right plot, the cross-validation note); its
+  earlier one-slide layout is the figure `eval_results_tiles`, parked as `eval_results_old`. The "9 of 73" tile and
+  the FAAP100 box are no longer on the slide; both are in its notes.
+- On `bbs_model`, "↔ HPO" marks a mouse phenotype whose meaning matches a term annotated to the disease in HPO
+  (obese and Obesity, retina degeneration and Retinal dystrophy). The match is by meaning against the disease's
+  95 HPO terms from the Monarch API, not a formal MP-to-HP mapping.
+- On `naive_bayes`, the lede says the second factor is the fraction of the disease's known gene families the
+  phenolog shares, which is what `python/phenologs_utils.py` computes; it is not a per-gene probability.
+- On `counts`, the McGary et al. 2010 row (3,966) is the sum of that paper's phenologs with human disease over its
+  four model organisms, from `history.mcgary2010` in `data.yaml`.
 - Which phenologs are tagged "non-obvious" is a judgement call recorded as `clinic:` / `obvious:` in `data.yaml`.
 - The order, titles and ledes follow the deck as edited in PowerPoint on 2026-11-16 (kept in `hand_edited/`): the
-  problem, Bardet-Biedl, the model organism data that could fill the gap (`gaps`), the three papers (`mcgary`), the
+  problem, Bardet-Biedl with the model organism data that could fill the gap (`bbs_gaps`), the three papers (`mcgary`), the
   idea as a cartoon (`idea`); Part 1 (`kg_components`, `then_now`, `concept`, `rodcone_tree`, `counts`); Part 2
   (`pooling`, `naive_bayes`, `hypergeom_marbles`, `time_split`, `eval_results`, `bbs_model`, `resource`); Part 3
-  (`future`), `thanks`. 35 slides, 23 before the backup divider.
+  (`future`), `thanks`. 37 slides, 24 before the backup divider.
 - The lede on `bbs_model` was typed with two placeholders ("ranks below XYZ except for one at rank XYZ"). They are
   filled from `bbs.known_ranks` in `data.yaml`: 25 of the 26 known genes rank 233 or better, SCAPER is at 1,228.
-- The footer names a slide's section. It follows where the slide now sits: `gaps` says "The problem", and
+- The footer names a slide's section. It follows where the slide now sits: `bbs_gaps` says "The problem", and
   `recover_known` and `precision` say "Backup".
 - `recover_known` (figure `recover_known`, in backup since 2026-11-16) has two halves that are two different analyses in the preprint
   (Supplementary Note 7). Left: leave-one-out, one protein family hidden at a time, 2,001 families. Right: the
@@ -108,21 +122,22 @@ PowerPoint look alike.
   `paper.py` if only one panel is wanted. The leave-one-out heatmaps (Fig. S7A and B) are the backup slide `loo`.
 - `bbs_model` (figure `bbs_decomposition`) is the slide on how well the method models one disease, and why. Left:
   the dashboard's additive decomposition for Bardet-Biedl syndrome at "top phenologs = 10", 16 protein families as
-  stacked bars. Right: the ten phenologs in two lists, non-obvious (zebrafish embryo) and semantically similar
-  (mouse), the same split as on `rodcone_tree`. Everything drawn is `bbs.decomposition` in `data.yaml`, read from the
+  stacked bars. Right: the ten phenologs in two lists, semantically similar (mouse) on top and non-obvious
+  (zebrafish embryo) below, the same split as on `rodcone_tree`. Everything drawn is `bbs.decomposition` in `data.yaml`, read from the
   release's `phenologs` and `additive` tables through the dashboard's database; the block widths and bar lengths are
   computed from it. Which phenotypes are non-obvious (`obvious:`) and the two sentences in the boxes are judgement
   calls, and reading the five fish phenotypes as convergent extension is an interpretation (see the slide's notes).
   The gene-by-gene top 25 it replaced (`bbs_ranking`) is in backup.
-- Backup holds what left the main flow: `recover_known`, `precision`, `loo`, `bbs_ranking`, `additive`, `carney`, `top_species`,
-  `species`, `networks`, and a second copy of the `gaps` slide (`gaps_backup`), as in the hand-edited deck.
+- Backup holds what left the main flow: `time_split_full`, `recover_known`, `precision`, `loo`, `bbs_ranking`, `additive`,
+  `carney`, `top_species`, `species`, `networks`, and the old slide 4 (`gaps_backup`), as in the hand-edited deck.
 - On `idea`: the network sizes follow the 2010 association counts on a log scale; "≈ 110×" is the four model
   organisms' 210,619 associations over the 1,923 human ones; the Venn (1 | 2 | 3) and the candidate genes are from
   the paper's Fig. 4B; the embryo drawings are schematic, not the paper's photographs.
 - On `kg_components` the model organism table counts every annotated term (11,009 for mouse), while `concept` shows
   the terms testable against human (10,998); the human disease count is the dashboard's 8,040, where the preprint's
   Fig. 1A says 7,935.
-- Parked in `deck.yaml` with `skip: true`, at the end of the file. Taken out of the deck by hand on 2026-11-16:
+- Parked in `deck.yaml` with `skip: true`, at the end of the file. Replaced in round 1: `bbs`, `gaps`,
+  `eval_results_old`. Taken out of the deck by hand on 2026-11-16:
   the two-genes follow-up to the score slide (`hypergeom_two_genes`), the take-home numbers (`takehome`), the
   dot-grid score explainer (`hypergeom`), how significance is set (`fdr`) and two earlier section dividers
   (`part1_old`, `part2_old`). Earlier versions of slides: the earlier 2010 slide with its data tiles and

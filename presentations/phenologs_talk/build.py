@@ -148,6 +148,16 @@ def add_para(tf, text, size, bold=False, color=T.INK, space_before=0, italic=Fal
     return para
 
 
+def bullet(para, indent=0.24):
+    """Give a paragraph a real bullet with a hanging indent."""
+    pPr = para._p.get_or_add_pPr()
+    pPr.set("marL", str(int(Inches(indent))))
+    pPr.set("indent", str(-int(Inches(indent))))
+    for tag, attrs in (("a:buFont", {"typeface": "Arial"}), ("a:buChar", {"char": "•"})):
+        pPr.append(pPr.makeelement(qn(tag), attrs))
+    return para
+
+
 def card(slide, x, y, w, h, fill_hex=T.TINT, name=None):
     shp = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, Inches(x), Inches(y), Inches(w), Inches(h))
     shp.adjustments[0] = min(0.5, 0.14 / min(w, h))
@@ -205,8 +215,9 @@ def content_frame(prs, spec, meta, D, lede=None):
     if lede:
         text = fill(lede, D)
         by_hand = "lede_box" in spec or spec.get("figure_dy", 0) > 0      # laid out in PowerPoint and carried over
-        if len(text) > LEDE_MAX and not by_hand:
-            print(f"  note: lede on {spec['id']!r} is {len(text)} characters and may wrap onto the figure (keep under {LEDE_MAX})")
+        most = int(LEDE_MAX * LEDE_PT / spec.get("lede_size", LEDE_PT))    # a smaller lede holds more on its one line
+        if len(text) > most and not by_hand:
+            print(f"  note: lede on {spec['id']!r} is {len(text)} characters and may wrap onto the figure (keep under {most})")
         x, y, w = spec.get("lede_box", (T.MARGIN_X + 0.1, T.LEDE_Y, 11.4))
         textbox(slide, x, y, w, T.LEDE_H, text, size=spec.get("lede_size", LEDE_PT), color="#3E4C5E", name="Lede")
     foot = placeholder(slide, PH_FOOTER)
@@ -238,6 +249,20 @@ def slide_divider(prs, spec, meta, D, figs):
     lab = placeholder(slide, PH_DIVIDER_LABEL)
     if spec.get("label"):
         set_text(lab, fill(spec["label"], D))
+    if spec.get("sub"):         # one line under the title; `link` makes its last part clickable
+        t = slide.shapes.title                          # the title is centred in its box, so sit just below its text
+        size = spec.get("size", 44)
+        lines = max(1, -(-len(fill(spec["title"], D)) // 30))
+        y = t.top + t.height // 2 + Inches(lines * size * 1.2 / 72 / 2 + 0.3)
+        tb = textbox(slide, 0, 0, 1, 0.45, fill(spec["sub"], D) + ("  " if spec.get("link") else ""), size=18, bold=True,
+                     color=T.NAVY, name="Divider sub")
+        tb.left, tb.top, tb.width = t.left, y, t.width
+        if spec.get("link"):
+            url = fill(spec["link"], D)
+            run = tb.text_frame.paragraphs[0].add_run()
+            run.text = url.split("://", 1)[-1]
+            run.font.size, run.font.bold = Pt(18), False
+            run.hyperlink.address = url
     return [slide]
 
 
@@ -274,8 +299,12 @@ def slide_cards(prs, spec, meta, D, figs):
         tf = shp.text_frame
         if c.get("tag"):
             add_para(tf, fill(c["tag"], D), 11, bold=True, color=T.CAROLINA_DARK)
-        add_para(tf, fill(c["head"], D), 20, bold=True, color=T.NAVY, space_before=4)
-        add_para(tf, fill(c["body"], D), 14.5, color="#3E4C5E", space_before=8)
+        if c.get("head"):
+            add_para(tf, fill(c["head"], D), 20, bold=True, color=T.NAVY, space_before=4)
+        if c.get("body"):
+            add_para(tf, fill(c["body"], D), 14.5, color="#3E4C5E", space_before=8)
+        for item in c.get("items", []):                 # a card can be a short bulleted list instead
+            bullet(add_para(tf, fill(item, D), 16, color=T.NAVY, space_before=8))
     return [slide]
 
 

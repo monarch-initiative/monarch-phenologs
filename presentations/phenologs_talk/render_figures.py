@@ -6,7 +6,7 @@ from . import figures as F
 from . import figures_results  # noqa: F401  (registers its figures)
 
 OUT = Path(__file__).resolve().parents[1] / "out" / "figures"
-BUILDS = {"phenolog_cartoon": [1, 2, 3]}     # figures drawn in steps: one image per step
+BUILDS = {"phenolog_cartoon": [1, 2, 3], "eval_results": [1, 2, 3]}     # figures drawn in steps: one image per step
 
 
 def render(names=None, data=None):

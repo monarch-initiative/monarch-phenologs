@@ -86,6 +86,7 @@ def fig_diagnostic_gap(D, step=None):
     bracket(0, n_lo - 1, "undiagnosed", T.NAVY)
     bracket(n_lo, n_hi - 1, "varies by cohort", T.CAROLINA_DARK)
     bracket(n_hi, count - 1, "diagnosed", T.MUTED)
+    c.text(0.1, c.h - 0.22, D.problem.yield_source, size=10, color=T.MUTED)
 
     px, ph = 7.0, c.h - 0.2
     c.panel(px, 0.1, 5.0, ph)
@@ -93,12 +94,20 @@ def fig_diagnostic_gap(D, step=None):
     cards = D.problem.reasons
     y0 = 0.9
     pitch = (0.1 + ph - 0.26 - y0 + 0.14) / len(cards)
+    assert cards[-1].get("focus") and sum(bool(r.get("focus")) for r in cards) == 1, "the talk's reason goes last"
     for i, r in enumerate(cards):
         y = y0 + i * pitch
-        c.box(px + 0.3, y, 4.4, pitch - 0.14, fill=T.WHITE, edge=T.RULE, lw=1.0, r=0.12)
+        hot = bool(r.get("focus"))
+        c.box(px + 0.3, y, 4.4, pitch - 0.14, fill=T.ACCENT_TINT if hot else T.WHITE,
+              edge=T.ACCENT if hot else T.RULE, lw=1.8 if hot else 1.0, r=0.12)
         mid = y + (pitch - 0.14) / 2
-        c.text(px + 0.55, mid - 0.18, r.head, size=c.fit(r.head, 3.9, 15, "bold"), weight="bold")
-        c.text(px + 0.55, mid + 0.19, r.sub, size=c.fit(r.sub, 3.9, 12), color=T.MUTED)
+        subs = [r.sub] if isinstance(r.sub, str) else list(r.sub)
+        size = min(c.fit(s, 3.9, 12) for s in subs)
+        top = mid - 0.18 - 0.12 * (len(subs) - 1)
+        c.text(px + 0.55, top, r.head, size=c.fit(r.head, 3.9, 15, "bold"), weight="bold",
+               color=T.ACCENT_DARK if hot else T.INK)
+        for k, s in enumerate(subs):
+            c.text(px + 0.55, top + 0.37 + 0.24 * k, s, size=size, color=T.INK if hot else T.MUTED)
     return c
 
 
@@ -342,6 +351,103 @@ def fig_fill_gaps(D, step=None):
     return c
 
 
+@figure("bbs_fill_gaps", "Two halves. Left: Bardet-Biedl syndrome as an example complex disease, a small patient figure "
+                         "with six clinical features, 26 known genes and 95 known phenotypes, and the gap: about 1 in "
+                         "5 clinically diagnosed patients has no identifiable pathogenic variant. Right: the "
+                         "gene-phenotype networks of seven model organisms, linked back to the disease through a "
+                         "question mark, above a bar chart: 463,460 non-human gene-phenotype edges against 131,495 "
+                         "human gene-phenotype edges and 12,426 human gene-disease edges, with the question: how can "
+                         "we leverage this information?")
+def fig_bbs_fill_gaps(D, step=None):
+    """The disease and its gaps (bbs_overview) and the model organism data (fill_gaps) on one slide."""
+    c = Canvas()
+    rng = np.random.default_rng(5)
+    H, b = D.human, D.bbs
+
+    # ---------------------------------------------------------------- left: the disease and what is missing
+    lw_ = 5.55
+    c.text(0.05, 0.27, f"Example complex disease: {b.label}", size=14, weight="bold")
+    c.text(0.05, 0.56, f"autosomal recessive ciliopathy, about {b.prevalence} people", size=11, color=T.MUTED)
+    cx, top, h = 2.62, 0.84, 1.9
+    c.person(cx, top, h, color=T.NAVY)
+    head_y, body = top + h * 0.15, h * 0.18
+    f = b.features
+    spots = [(f[0], -1, top + 0.28, head_y), (f[1], -1, top + 1.05, top + 1.05), (f[2], -1, top + 1.7, top + 1.55),
+             (f[5], 1, top + 0.28, head_y), (f[3], 1, top + 1.05, top + 1.05), (f[4], 1, top + 1.7, top + 1.62)]
+    for label, side, y, ty in spots:
+        w = c.measure(label, 10.5)[0] + 0.36
+        px_ = cx + side * 0.78
+        tx = cx + side * (h * 0.15 if ty == head_y else body)
+        c.pill(px_ + side * w / 2, y, label, w=w, h=0.34, size=10.5, lw=1.3)
+        c.scurve(px_, y, tx, ty, color=T.CAROLINA, lw=1.3)
+        c.circle(tx, ty, 0.045, fill=T.WHITE, edge=T.CAROLINA, lw=1.3, zorder=6)
+
+    ty0, th, tg = 2.98, 0.68, 0.12
+    tw_ = (lw_ - tg) / 2
+    for i, (big, label) in enumerate([(n(b.known_genes), "genes known"), (n(b.phenotypes_known), "phenotypes known")]):
+        x = i * (tw_ + tg)
+        c.panel(x, ty0, tw_, th)
+        c.text(x + 0.22, ty0 + th / 2 + 0.01, big, size=28, weight="bold")
+        c.text(x + 0.22 + c.measure(big, 28, "bold")[0] + 0.16, ty0 + th / 2, label, size=13, weight="bold")
+    gy = ty0 + th + tg
+    c.box(0, gy, lw_, th, fill=T.ACCENT_TINT, edge=T.ACCENT, lw=1.4, r=0.12)
+    hot = {"color": T.ACCENT_DARK, "weight": "bold"}
+    c.rich(0.22, gy + th / 2, [("About", None), ("1 in 5 clinically diagnosed patients", hot),
+                               ("has no identifiable pathogenic variant.", None)], lw_ - 0.44, size=12.5)
+    c.text(0.05, gy + th + 0.25, "Full list of causal and modifier genes is still incomplete", size=11.5, style="italic",
+           color=T.MUTED)
+    src = "Forsythe & Beales 2013 · Niederlova 2019 · Perea-Romero 2022 · Monarch KG"
+    c.text(0.05, c.h - 0.1, src, size=c.fit(src, lw_ - 0.1, 9, min_size=7.5), color=T.FAINT)
+
+    # ---------------------------------------------------------------- right: what the model organisms hold
+    px, pw, py, ph = 6.3, c.w - 6.3, 0.05, 3.22
+    c.panel(px, py, pw, ph, title="Model organism gene–phenotype networks", title_color=T.INK)
+    step_x = pw / 4
+    rows = [(1.14, D.species[:4]), (2.36, D.species[4:])]
+    lx = px + 3.5 * step_x - 0.38                     # legend, in the free cell at the end of the second row
+    c.circle(lx, rows[1][0] - 0.13, 0.05, fill=T.MUTED, edge=None)
+    c.text(lx + 0.14, rows[1][0] - 0.13, "gene", size=10, color=T.MUTED)
+    c.square(lx, rows[1][0] + 0.13, 0.12, fill=T.WHITE, edge=T.MUTED, lw=1.3)
+    c.text(lx + 0.14, rows[1][0] + 0.13, "phenotype", size=10, color=T.MUTED)
+    lo, hi = math.log10(600), math.log10(260000)
+    for cy, group in rows:
+        for j, sp in enumerate(group):
+            frac = (math.log10(sp.annotations) - lo) / (hi - lo)
+            R = 0.2 + 0.25 * frac
+            n_genes = int(round(5 + 15 * frac))
+            x = px + step_x / 2 + j * step_x
+            _cluster(c, x, cy, R, n_genes, max(2, n_genes // 4), sp.color, rng, node_r=0.042)
+            c.text(x, cy + 0.62, sp.common, size=10.5, weight="bold", ha="center")
+
+    # the open question: can the networks on the right say something about the disease on the left?
+    qx, qy = (lw_ + px) / 2 + 0.04, top + 1.05
+    c.line(px - 0.04, qy, qx, qy, color=T.CAROLINA, lw=1.6, ls=(0, (3, 2.5)))
+    c.arrow(qx, qy, lw_ - 0.08, qy, color=T.CAROLINA, lw=1.6, head=0.1, ls=(0, (3, 2.5)))
+    c.circle(qx, qy, 0.22, fill=T.ACCENT, edge=T.WHITE, lw=2.0, zorder=7)
+    c.text(qx, qy + 0.01, "?", size=16, weight="bold", color=T.WHITE, ha="center", zorder=8)
+
+    # how many edges of each kind the graph holds (one scale, labelled directly)
+    labels = ["Non-human gene–phenotype edges", "Human gene–phenotype edges", "Human gene–disease edges"]
+    x0 = px + max(c.measure(s_, 11, "bold")[0] for s_ in labels) + 0.12
+    total = D.totals.model_annotations
+    wmax = c.w - x0 - c.measure(n(total), 12.5, "bold")[0] - 0.14
+    bh, by = 0.24, [py + ph + 0.36, py + ph + 0.72, py + ph + 1.08]
+    for lab, y in zip(labels, by):
+        c.text(x0 - 0.12, y, lab, size=11, weight="bold", ha="right")
+    x = x0
+    for sp in D.species:                              # the non-human bar is split by species, same colours as above
+        w = wmax * sp.annotations / total
+        c.rect(x, by[0] - bh / 2, max(w - 0.02, 0.012), bh, fill=sp.color)
+        x += w
+    c.text(x0 + wmax + 0.1, by[0], n(total), size=12.5, weight="bold")
+    for val, y in zip([H.phenotype_annotations, H.gene_disease_pairs], by[1:]):
+        w = wmax * val / total
+        c.box(x0, y - bh / 2, w, bh, fill=T.NAVY, edge=None, r=0.04)
+        c.text(x0 + w + 0.1, y, n(val), size=12.5, weight="bold")
+    c.text(c.w, c.h - 0.2, "How can we leverage this information?", size=14, weight="bold", color=T.ACCENT_DARK, ha="right")
+    return c
+
+
 # =============================================================================================
 # 3. What a phenolog is
 # =============================================================================================
@@ -445,7 +551,7 @@ def fig_phenolog_papers(D, step=None):
                          "number of phenologs found with human disease: 3,755, 9, 154 and 48. Right: one of the 48 "
                          "human-plant phenologs. Waardenburg syndrome (3 known genes) and negative gravitropism defects "
                          "in Arabidopsis (5 genes) share 2 genes; the 3 plant-only genes give candidates, and knocking "
-                         "down one of them, sec23ip, in frog embryos gave neural crest migration defects in 23 of 35.")
+                         "down one of them, sec23ip, in frog embryos stops neural crest cells from migrating.")
 def fig_phenolog_idea(D, step=None):
     c = Canvas()
     rng = np.random.default_rng(3)
@@ -573,13 +679,10 @@ def fig_phenolog_idea(D, step=None):
     frog = D.sp.frog.color
     c.badge(bx + 0.33, by + 0.32, W.frog_code, frog, r=0.13)
     c.text(bx + 0.55, by + 0.32, "Tested in frog embryos", size=12, weight="bold")
-    ty = by + 0.66
-    c.text(bx + 0.2, ty, W.frog_gene, size=10.5, style="italic")
-    c.text(bx + 0.2 + c.measure(W.frog_gene, 10.5, style="italic")[0] + 0.05, ty, "knocked down on one side:", size=10.5)
-    c.text(bx + 0.2, ty + 0.24, "neural crest cells fail to migrate", size=10.5)
-    hit = f"{W.defect[0]} of {W.defect[1]} embryos"
-    c.text(bx + 0.2, ty + 0.58, hit, size=11.5, weight="bold", color=T.ACCENT_DARK)
-    c.text(bx + 0.2, ty + 0.82, f"{W.control[0]} of {W.control[1]} untreated controls", size=9.5, color=T.MUTED)
+    ty = by + 0.86                                    # the embryo counts are in the notes, not on the slide (round 1)
+    c.text(bx + 0.2, ty, W.frog_gene, size=11.5, style="italic")
+    c.text(bx + 0.2 + c.measure(W.frog_gene, 11.5, style="italic")[0] + 0.05, ty, "knockdown:", size=11.5)
+    c.text(bx + 0.2, ty + 0.27, "neural crest cells fail to migrate", size=11.5)
 
     # two sides of one embryo, schematic (after the paper's Fig. 4E): a tailbud embryo in side view, head to the
     # left. Streams of neural crest cells leave the back and move down; on the knockdown side they barely start.
@@ -764,7 +867,7 @@ def fig_phenolog_concept(D, step=None):
     # ------------------------------------------------------------------ a) one network against the other
     d, rc = D.rod_cone.derivation, D.rod_cone
     ah = 2.3
-    c.panel(0, 0, c.w, ah, tag="a)", title="Every human phenotype is tested against every mouse phenotype")
+    c.panel(0, 0, c.w, ah, tag="a)", title="Test every human phenotype term against every mouse phenotype term")
     cy, R = 1.3, 0.5
 
     def net(x, code, color, name, n_genes, count):
@@ -813,7 +916,7 @@ def fig_phenolog_concept(D, step=None):
 
     # ------------------------------------------------------------------ b) one of those tests
     b0 = ah + 0.14
-    c.panel(0, b0, c.w, c.h - b0, tag="b)", title="One of those tests")
+    c.panel(0, b0, c.w, c.h - b0, tag="b)", title="Example comparison")
     gx, fx, tx0, tw, px, kx = 2.78, 4.95, 6.2, 1.95, 9.28, 11.05
     for x, head in [(gx, "Genes"), (fx, "PANTHER protein families"), (tx0 + tw / 2, "Hypergeometric test"),
                     (px, "Phenolog"), (kx, "Guilt by association")]:
@@ -1263,17 +1366,18 @@ def fig_bbs_tree(D, step=None):
 def fig_rodcone_tree(D, step=None):
     c = Canvas()
     rc = D.rod_cone
-    bottom = _phenolog_tree(c, D, rc, "obvious", ry=1.93, top=0.2, row_h=0.345, quiet=False)
-    c.text(1.12, 1.93 + 0.92, f"human phenotype\n{rc.id}", size=10, color=T.FAINT, ha="center", linespacing=1.25)
+    bottom = _phenolog_tree(c, D, rc, "obvious", ry=1.83, top=0.18, row_h=0.325, quiet=False)
+    c.text(1.12, 1.83 + 0.92, f"human phenotype\n{rc.id}", size=10, color=T.FAINT, ha="center", linespacing=1.25)
 
     # the two kinds of counterpart
-    by, bh, lw_, gap = bottom + 0.22, c.h - bottom - 0.27, 4.35, 0.2
-    c.box(0, by, lw_, bh, fill=T.WHITE, edge=T.NAVY, lw=1.5, r=0.12)
-    c.text(0.28, by + 0.3, "Semantically similar", size=13.5, weight="bold")
-    c.text(0.28, by + 0.56, c.wrap("The counterparts we would expect: a retina phenotype in mouse or in fish.", lw_ - 0.56, 11.5),
-           size=11.5, color=T.MUTED, va="top", linespacing=1.28)
+    by, bh, lw_, gap = bottom + 0.2, c.h - bottom - 0.24, 5.55, 0.2
     rx, rw = lw_ + gap, c.w - lw_ - gap
+    left, right = c.wrap(rc.similar_text, lw_ - 0.56, 11.5), c.wrap(rc.nonobvious_text, rw - 0.56, 11.5)
+    assert max(left.count("\n"), right.count("\n")) <= 2, "the two cards under the tree hold three lines each"
+    c.box(0, by, lw_, bh, fill=T.WHITE, edge=T.NAVY, lw=1.5, r=0.12)
+    c.text(0.28, by + 0.28, "Semantically similar", size=13.5, weight="bold")
+    c.text(0.28, by + 0.52, left, size=11.5, color=T.MUTED, va="top", linespacing=1.28)
     c.box(rx, by, rw, bh, fill=T.ACCENT_TINT, edge=T.ACCENT, lw=1.5, r=0.12)
-    c.text(rx + 0.28, by + 0.3, "Non-obvious", size=13.5, weight="bold", color=T.ACCENT_DARK)
-    c.text(rx + 0.28, by + 0.56, c.wrap(rc.takeaway, rw - 0.56, 11.5), size=11.5, va="top", linespacing=1.28)
+    c.text(rx + 0.28, by + 0.28, "Non-obvious", size=13.5, weight="bold", color=T.ACCENT_DARK)
+    c.text(rx + 0.28, by + 0.52, right, size=11.5, va="top", linespacing=1.28)
     return c

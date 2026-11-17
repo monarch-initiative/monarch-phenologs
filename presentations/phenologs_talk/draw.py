@@ -6,6 +6,7 @@ here is 2 in wide there.
 """
 from __future__ import annotations
 
+import re
 import math
 from dataclasses import dataclass
 
@@ -112,9 +113,10 @@ class Canvas:
         return size
 
     def wrap(self, s, max_w, size, weight="normal"):
-        """Greedy word wrap to `max_w` inches. Returns the string with newlines."""
+        """Greedy word wrap to `max_w` inches. Returns the string with newlines.
+        Breaks at spaces only, so a no-break space (\u00a0) keeps two words together."""
         lines, cur = [], ""
-        for word in s.split():
+        for word in re.split(r"[ \t\n]+", s.strip()):
             trial = (cur + " " + word).strip()
             if cur and self.measure(trial, size, weight)[0] > max_w:
                 lines.append(cur)

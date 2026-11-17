@@ -20,13 +20,21 @@ meta:
 # ---------------------------------------------------------------------------------------------
 # The problem (slide text only; see deck.yaml notes for what still needs a citation)
 problem:
-  yield_low: 30          # % diagnostic yield of genome-wide sequencing in rare disease; outline doc, citation to add
+  yield_low: 30          # % diagnostic yield of exome or genome sequencing in rare disease (from the outline doc)
   yield_high: 50         # the slide shows the complement: 50-70% still undiagnosed
-  reasons:               # the "Why no diagnosis?" cards, in order
-    - {head: "The variant is hard to detect",            sub: "structural, non-coding, repeat expansions"}
+  # Printed under the number. Both checked against their PubMed abstracts on 2026-11-16:
+  # Chung et al. 2023, Genet Med 25:100896 (PMID 37191093): 161 studies, 50,417 probands; pooled yield exome 0.38, genome 0.34.
+  # Clark et al. 2018, npj Genom Med 3:16 (PMID 30002876): 37 studies, 20,068 children; genome 0.41, exome 0.36.
+  # So pooled estimates leave about 59-66% undiagnosed; large cohorts run from 59% (DDD) to 75% (100,000 Genomes pilot).
+  yield_source: "Chung et al. 2023, Genet Med · Clark et al. 2018, npj Genom Med"
+  # the "Why no diagnosis?" cards, in order. focus: the one this talk is about, drawn highlighted (kept last).
+  # sub may be a list: one entry per line.
+  reasons:
+    - head: "The variant is hard to detect"
+      sub: ["structural, non-coding, repeat expansions", "technical limitations (e.g. long-read, epigenetic)"]
     - {head: "The variant can't be interpreted",         sub: "variants of uncertain significance"}
-    - {head: "The gene isn't linked to the disease yet", sub: "many Mendelian diseases still have no known gene"}
     - {head: "The cause isn't purely genetic",           sub: "environmental exposures, gene–environment interactions"}
+    - {head: "The gene isn't linked to the disease yet", sub: "many Mendelian diseases still have no known gene", focus: true}
 
 # ---------------------------------------------------------------------------------------------
 # Species, in order of divergence from human. Colours are the dashboard's (python/phenologs_release_utils.py);
@@ -235,8 +243,9 @@ rod_cone:
   phenologs: 688
   by_species: {mouse: 565, zebrafish: 99, worm: 24}
   punchline: "A worm has no retina. It does have sensory cilia, built by orthologs of the same genes."
-  # the non-obvious card on the tree slide. The cilium reading is an interpretation: see the slide's notes.
-  takeaway: "Explained only through the genes. A worm has no retina, but it builds sensory cilia with orthologs of the same genes: one conserved pathway, a different emergent phenotype in each organism."
+  # the two cards under the tree, in Aaron's wording (round 1 edits, 2026-11-16)
+  similar_text: "Semantically similar and/or obvious biological connection (e.g. a retina or “eye” related phenotype in a mouse or fish relating back to a human eye related phenotype)"
+  nonobvious_text: "Only made apparent through gene and pathway level information (e.g. C.\u00a0elegans, which has no eyes, can still be used to map information onto human eye biology. “Cilia morphology variant” is a good example of this)"
   examples:
     - {species: mouse,     label: "retina degeneration",          id: "MP:0001326",          c: 40, m: 140, n: 97, N: 7394, p: 3.8e-45, obvious: true}
     - {species: zebrafish, label: "notochord kinked",             id: "ZP:0001556",          c: 17, m: 138, n: 39, N: 6479, p: 4.8e-19, obvious: false}
@@ -402,8 +411,10 @@ bbs:
       - {rank: 1,  species: zebrafish, label: "gastrulation disrupted",                    shared: 14, p: 9.6e-28, obvious: false}
       - {rank: 2,  species: zebrafish, label: "notochord kinked",                          shared: 14, p: 5.4e-26, obvious: false}
       - {rank: 3,  species: zebrafish, label: "somite increased width",                    shared: 14, p: 2.0e-23, obvious: false}
-      - {rank: 4,  species: mouse,     label: "retina degeneration",                       shared: 13, p: 1.3e-18, obvious: true}
-      - {rank: 5,  species: mouse,     label: "obese",                                     shared: 12, p: 1.2e-16, obvious: true}
+      # hpo: an HPO term annotated to the disease itself that names the same thing (Monarch API, MONDO:0015229
+      # has_phenotype, 95 terms, read 2026-11-16). Matched by meaning, not by an ontology mapping.
+      - {rank: 4,  species: mouse,     label: "retina degeneration",                       shared: 13, p: 1.3e-18, obvious: true, hpo: "Retinal dystrophy"}
+      - {rank: 5,  species: mouse,     label: "obese",                                     shared: 12, p: 1.2e-16, obvious: true, hpo: "Obesity"}
       - {rank: 6,  species: zebrafish, label: "anterior-posterior axis whole organism decreased length", shared: 12, p: 1.2e-15, obvious: false}
       - {rank: 7,  species: zebrafish, label: "notochord increased width",                 shared: 10, p: 1.7e-14, obvious: false}
       - {rank: 8,  species: mouse,     label: "photoreceptor outer segment degeneration",  shared: 8,  p: 7.1e-14, obvious: true}
@@ -426,9 +437,9 @@ bbs:
       - {family: PTHR15722, known: [IFT172], other: [IFT140], n_other: 1, ranks: [2, 3, 4, 7, 8]}
       - {family: PTHR24416, other: [ALK, AXL], n_other: 42, ranks: [3, 4, 6, 7, 8]}              # receptor tyrosine kinases
       - {family: PTHR44117, other: [IFT88], n_other: 1, ranks: [1, 2, 3, 7]}
-    # the two sentences under the lists on the slide
-    why_nonobvious: "Nothing a patient has: the embryo's body axis forms wrongly (convergent extension) when a fish loses a bbs gene."
-    why_similar: "What patients have: retinal dystrophy, obesity, hypogonadism. The outer segment and the sperm flagellum are both cilia."
+    # the sentence under each list, after Aaron's wording (round 1 edits, 2026-11-16)
+    why_similar: "Matches patient phenotype profiles and known biology of the disease."
+    why_nonobvious: "Not part of the patient phenotype profile. Only made apparent through gene and pathway level information."
   # The worked example on the marble slide (figure marbles): how the hg score ranks one gene for this disease.
   # Read on 2026-11-16 from the release's own tables, queried through the dashboard's database (disease network,
   # k = 1,000). In the paper's symbols (Supplementary Note 5):

@@ -32,7 +32,8 @@ meta:
 slides:
   # ------------------------------------------------------------------------------------------
   # The talk
-  # The order is the deck's as rearranged by hand on 2026-11-16 (kept in hand_edited/).
+  # The order is the deck's as rearranged by hand on 2026-11-16 (kept in hand_edited/), with the round 1 edits
+  # from Notion ("Presentation edits round1", 2026-11-16) applied on top.
   # ------------------------------------------------------------------------------------------
   - id: cover
     kind: cover
@@ -54,49 +55,47 @@ slides:
       linked to the disease yet, or the cause is not purely genetic (environment, gene-environment interaction).
       This talk is about the third one: we do not know all the disease genes. Many likely-monogenic diseases have
       no causal gene at all, and diseases with many known genes can still have more.
-      TO DO: add a citation for the {problem.yield_low}-{problem.yield_high}% yield (it comes from the outline, not from the preprint).
+      Where the number comes from (printed bottom left): Chung et al. 2023, Genet Med 25:100896, a meta-analysis of
+      161 studies and 50,417 probands, pooled diagnostic yield 38% for exome and 34% for genome; Clark et al. 2018,
+      npj Genom Med 3:16, 37 studies in children, 41% genome and 36% exome. So about 59 to 66% undiagnosed pooled.
+      Large single cohorts run from 59% (DDD, Wright 2023 NEJM) to 75% (100,000 Genomes pilot, 2021 NEJM).
+      "More than half" is the safe way to say it.
 
-  - id: bbs
+  - id: bbs_gaps
     kind: figure
     section: "The problem"
-    title: "Example complex disease: Bardet–Biedl syndrome"
-    lede: "An autosomal recessive ciliopathy: about {bbs.prevalence} people, up to {bbs.prevalence_isolated} in isolated populations."
-    figure: bbs_overview
+    title: "Model organism gene–phenotype information\nmay help fill in the gaps"
+    figure: bbs_fill_gaps
     notes: |
-      About 1 minute.
-      Autosomal-recessive ciliopathy, roughly {bbs.prevalence}. Retinal dystrophy, obesity, postaxial polydactyly,
-      chronic kidney disease, hypogonadism, cognitive impairment. The Monarch KG annotates {bbs.phenotypes_known} HPO phenotypes
-      to the disease, so it touches most organ systems.
+      About 2 minutes. Slides 3 and 4 as one (round 1 edits): the example disease and what is missing on the left,
+      where help could come from on the right.
+      Left. Bardet-Biedl syndrome: an autosomal-recessive ciliopathy, roughly {bbs.prevalence}, up to
+      {bbs.prevalence_isolated} in isolated populations. Retinal dystrophy, obesity, postaxial polydactyly, chronic kidney
+      disease, hypogonadism, cognitive impairment. The Monarch KG annotates {bbs.phenotypes_known} HPO phenotypes to the
+      disease, so it touches most organ systems.
       At least 24 genes in the literature (Niederlova 2019); {bbs.known_genes} in the Monarch KG. Sequencing all of them still
       leaves about 1 in 5 clinically diagnosed patients without an identifiable pathogenic variant
       (Forsythe and Beales 2013; Perea-Romero 2022).
       The list of causal and modifier genes is incomplete, so a ranked list of candidates is a clinical need here,
       and we will come back to this disease at every step.
-
-  - id: gaps
-    kind: figure
-    section: "The problem"
-    title: "Model organism gene–phenotype information\nmay help fill in the gaps"
-    figure: fill_gaps
-    notes: |
-      About 1 minute. The turn from the problem to an idea for it.
-      On the left, seven model organisms, each a curated network: circles are genes, squares are the phenotypes
-      those genes give when perturbed. On the right, what we care about: human diseases and human phenotypes, the
-      terms a patient like the Bardet-Biedl patient is described with.
+      Right. Seven model organisms, each a curated network: circles are genes, squares are the phenotypes those
+      genes give when perturbed.
       The bars: {totals.model_annotations:,} non-human gene-phenotype edges, all seven species together (the colours
       are the species), against {human.phenotype_annotations:,} human gene-phenotype edges and only
       {human.gene_disease_pairs:,} human gene-disease edges.
-      The core idea of phenologs: can decades of gene-phenotyping in model organisms tell us about human disease
-      biology? That is the question mark.
+      The question mark is the core idea of phenologs: can decades of gene-phenotyping in model organisms tell us
+      about a human disease like this one?
       How can we leverage this information? We need a way to compare these networks across species and get
       something meaningful out. One way has been around since 2010: next slide.
+      The two slides this one replaces (ids bbs and gaps) are parked in deck.yaml; the old slide 4 is also in backup.
 
   - id: mcgary
     kind: figure
     section: "The problem"
     title: "Phenologs: an idea from 2010"
-    lede: "Coined in 2010, “phenologs” were used to discover new human disease genes and repurpose a drug"
+    lede: "The term “phenologs” was coined in 2010 and a method was published, discovering new candidate human disease genes and identifying a new drug application"
     figure: phenolog_papers
+    figure_dy: 0.094              # the lede runs to two lines, as on the naive Bayes slide
     notes: |
       About 1 minute. The last slide asked how model organism data can be used for human disease. One answer is
       not ours: it comes from Edward Marcotte's lab at UT Austin, in three papers.
@@ -207,7 +206,7 @@ slides:
       Now: eight species; {human.diseases_with_gene:,} Mondo diseases with a gene and {human.gene_disease_pairs:,} gene-disease annotations;
       {human.phenotype_terms:,} HPO phenotypes with {human.phenotype_annotations:,} gene-phenotype annotations, which did not exist as a
       data set then; {totals.model_annotations:,} model organism gene-phenotype annotations.
-      What changed underneath. 2010 and 2013: annotations assembled by hand from each source database, and gene
+      Methodological differences. 2010 and 2013: annotations assembled by hand from each source database, and gene
       homology computed per study with InParanoid. 2026: the Monarch KG and the Biolink model harmonize the
       annotation sets, and PANTHER protein families resolve gene equivalence across species.
       Caveats if asked: the "then" bars are the 2010 paper's numbers as stated in its text; Woods et al. 2013
@@ -248,8 +247,9 @@ slides:
   - id: rodcone_tree
     kind: figure
     section: "Phenologs on the Monarch KG"
-    title: "One human phenotype against every model phenotype"
-    lede: "{rod_cone.phenologs} model organism phenotypes related back to human Rod-cone dystrophy"
+    title: "An example human phenotype term compared against 7 model organisms"
+    title_size: 22                # the title is long: 28 pt would wrap onto the lede
+    lede: "{rod_cone.phenologs} significant hits against human Rod-cone dystrophy"
     figure: rodcone_tree
     notes: |
       About 2 minutes.
@@ -268,6 +268,7 @@ slides:
       phenotypes are classic ciliary readouts. CHECK you are happy with the cilium framing before presenting.
       So one method gives both: the counterparts we expect, and new links we could not have guessed.
       Which phenologs are drawn as "semantically similar" is my labelling (`obvious` under rod_cone.tree in data.yaml).
+      The text of the two cards is rod_cone.similar_text and rod_cone.nonobvious_text in data.yaml.
 
   - id: counts
     kind: figure
@@ -281,8 +282,12 @@ slides:
       {totals.model_phenotypes_with_diseases:,} model phenotypes. 82% of those diseases are leaf terms, so this is breadth
       across the ontology, not a few broad classes.
       Mouse supplies 84.5%, tracking annotation depth, but zebrafish, worm, fission yeast and even slime mold contribute.
-      Phenotype network (HPO terms instead of diseases): {totals.phenotype_phenologs:,} phenologs. We have barely
+      Phenotype network (HPO terms instead of diseases): {totals.phenotype_phenologs:,} phenologs across
+      {totals.hp_terms_with_phenologs:,} HPO terms and {totals.model_phenotypes_with_hp:,} model phenotypes. We have barely
       scratched that one; it comes back under future directions.
+      Last row, for scale: McGary et al. 2010 found 3,966 phenologs with human disease across their four model
+      organisms (mouse 3,755, yeast 154, Arabidopsis 48, worm 9), so about 15 times fewer than the disease network
+      here. Their total of more than 6,200 also counts model organism against model organism.
 
   - id: part2
     kind: divider
@@ -297,7 +302,8 @@ slides:
     kind: figure
     section: "Candidate genes"
     title: "Phenologs can nominate thousands of genes per disease"
-    lede: "Bardet–Biedl syndrome's {bbs.phenologs} phenologs pool {bbs.genes_ranked:,} genes. Ranking them is a second problem."
+    lede: "Bardet–Biedl syndrome's {bbs.phenologs} phenologs nominate {bbs.genes_ranked:,} genes. Scoring these genes is the second half of the method"
+    lede_size: 15                 # one line at 15 pt; at 17 pt it wraps onto the figure
     figure: pooling
     notes: |
       About 1 minute (preprint Fig. 1C; the three panels follow that figure).
@@ -318,7 +324,7 @@ slides:
     kind: figure
     section: "Candidate genes"
     title: "Gene-disease scoring, the original way: naive Bayes"
-    lede: "The probability of the initial phenolog association being true, multiplied by the probability of the gene already being associated to the disease"
+    lede: "The probability of the initial phenolog association being true, multiplied by the fraction of the disease's known gene families that phenolog shares"
     figure: naive_bayes
     figure_dy: 0.094              # the lede runs to two lines: the figure was moved down by hand
     notes: |
@@ -330,7 +336,10 @@ slides:
       Additive (Woods 2013) just sums the weights. Its advantage is that it decomposes by phenolog, which is how the
       stacked-bar figures in the paper and on the dashboard are drawn (backup slide).
       Limits: the product saturates toward 1 as k grows, and the score is relative to one disease, so you cannot
-      merge candidates from different diseases into one list.
+      merge candidates from different diseases into one list. (These two points were lines at the bottom of the
+      slide until round 1; say them.)
+      The lede follows the code: each phenolog's weight is (1 - P) times shared families over the disease's
+      families (phenologs_utils.py, the naive Bayes product), so the second factor is not a per-gene probability.
       The weights on the slide are computed in the build from Bardet-Biedl's real top phenologs; "gene X" is hypothetical.
 
   - id: hypergeom_marbles
@@ -343,12 +352,12 @@ slides:
     notes: |
       The main score explainer: one real gene, {bbs.score_example.gene}, worked through {bbs.label}. Every number on
       the slide is the release's own. About 2 minutes.
-      1. Fill a bag with marbles. Every gene-phenotype annotation in the seven model species is one marble:
+      1. Pool the annotations: the bag. Every gene-phenotype annotation in the seven model species is one marble:
       {bbs.score_example.bag:,} of them. The three lines at the top are real annotations (mouse, zebrafish, worm).
       {bbs.score_example.gene}'s mouse ortholog {bbs.score_example.ortholog} is annotated to {bbs.score_example.own}
       mouse phenotypes, so {bbs.score_example.gene} owns {bbs.score_example.own} marbles. Only annotations of genes
       in a protein family shared with human are in the bag.
-      2. The disease draws from the bag. This is the phenolog table from two slides ago (the paper's Fig. 1C):
+      2. Sample from the bag via phenologs. This is the phenolog table from two slides ago (the paper's Fig. 1C):
       {bbs.label}'s {bbs.phenologs} significant phenologs, ranked by P. The new column is the marbles each one
       draws: every gene annotated to that model phenotype. The three annotations from panel 1 are on this list:
       notochord kinked is phenolog 2, male infertility is phenolog 20 and carries {bbs.score_example.ortholog}'s
@@ -357,14 +366,14 @@ slides:
       All {bbs.phenologs} phenologs pool into {bbs.score_example.pulled:,} marbles, spread across
       {bbs.genes_ranked:,} candidate genes. {bbs.score_example.drawn} of them are {bbs.score_example.gene}'s: it is
       on {bbs.score_example.drawn} of the {bbs.phenologs} phenologs, the "14 of 109" from the pooling slide.
-      3. Is that more than chance? Read the four numbers top to bottom. The bag holds {bbs.score_example.bag:,}
+      3. Test the significance. Read the four numbers top to bottom. The bag holds {bbs.score_example.bag:,}
       marbles and {bbs.score_example.own} are {bbs.score_example.gene}'s. We drew {bbs.score_example.pulled:,} and
       {bbs.score_example.drawn} are {bbs.score_example.gene}'s.
       To say out loud, not on the slide: we drew 1.6% of the bag, so a random draw that size would hold 1.6% of
       {bbs.score_example.gene}'s {bbs.score_example.own} marbles, about 0.6. We drew {bbs.score_example.drawn},
       24 times more.
       The score is the chance of drawing that many or more at random, the upper tail of the hypergeometric
-      distribution: 2.0 x 10^-16, rank 14 of {bbs.genes_ranked:,}. Smaller is stronger. It is the test behind gene
+      distribution: 2.0 x 10^-16, rank 14 of {bbs.genes_ranked:,} (the rank is not on the slide; say it). Smaller is stronger. It is the test behind gene
       set over-representation (GO enrichment), pointed at one gene.
       {bbs.score_example.gene} is not a known {bbs.label} gene; it is known for
       {bbs.score_example.known_for}.
@@ -385,16 +394,21 @@ slides:
   - id: time_split
     kind: figure
     section: "Evaluation"
-    title: "Can last year's graph predict this year's?"
-    lede: "Rank candidates on the 2025 graph, then check them against gene–disease pairs added by 2026."
-    figure: time_split
+    title: "Evaluation of each scoring method"
+    lede: "Predict gene–disease candidates from the 2025 version of the graph, and see how many overlap with newly added pairs from the 2026 version of the graph."
+    figure: time_split_simple
+    figure_dy: 0.094              # the lede runs to two lines
     notes: |
-      About 1 minute. Disease-gene discovery is continuous, so versioned KG releases give a natural time split.
-      Rebuild phenologs and rankings on Monarch KG {meta.kg_prior}; score against pairs added by {meta.kg_release}.
-      524 pairs were added. 402 are on diseases that had no gene a year earlier: the method needs a seed, so those are
-      untestable. Of the 122 left, 49 are the same gene moving to a parent, child or sibling Mondo term (MLH1 from
-      Lynch syndrome to Lynch syndrome 1): ontology refinement, not new biology.
-      That leaves a conservative 73 genuine new pairs across 43 diseases.
+      About 1 minute. Disease-gene discovery is continuous, so two versions of the graph a year apart give a
+      natural test.
+      Compute phenologs and score candidate genes on Monarch KG {meta.kg_prior}. Then take the gene-disease pairs
+      that Monarch KG {meta.kg_release} added: {evaluation.genuine} evaluable pairs across {evaluation.genuine_diseases} diseases.
+      For each new pair, look up the gene in that disease's 2025 candidate list. The count on the next slide is how
+      many of the {evaluation.genuine} fall within the top N candidates, for naive Bayes and the hypergeometric score,
+      against a random gene.
+      If asked why {evaluation.genuine}: {evaluation.new_pairs} pairs were added in all. {evaluation.not_testable} are on diseases that had no gene a
+      year earlier, so no phenolog could exist for them, and {evaluation.redundant} are the same gene moving to a parent, child or
+      sibling Mondo term. The breakdown is the first backup slide.
 
   - id: eval_results
     kind: figure
@@ -402,18 +416,26 @@ slides:
     title: "It predicts links it has never seen"
     lede: "The top 100 candidates per disease recover 9 of {evaluation.genuine} new pairs: 23.5 times a random gene."
     figure: eval_results
+    steps:                        # three slides, each adding to the last: click through, no animation
+      - {step: 1}                 # within a disease
+      - {step: 2}                 # + pooled across diseases
+      - {step: 3}                 # + the cross-validation note
     notes: |
-      About 2 minutes (preprint Fig. 3).
-      Left panel, per disease: recall of the 73 pairs within each disease's top N. Top 10: 2 (52x random). Top 20: 3.
-      Top 100: 9 of 73, 23.5-fold over a random gene, 95% CI 10.5 to 39.2, permutation P = 2e-4.
-      The ceiling is 41 of 73: the rest never surface in any candidate list.
+      About 2 minutes (preprint Fig. 3). Three clicks: the left plot, then the right plot, then the note.
+      Click 1, within a disease. The point of view: a disease is going to gain a new gene, and we ask whether that
+      gene was among the disease's top N candidates a year earlier. Recall of the 73 pairs within each disease's
+      top N. Top 10: 2 (52x random). Top 20: 3. Top 100: 9 of 73, 23.5-fold over a random gene, 95% CI 10.5 to 39.2,
+      permutation P = 2e-4. The ceiling is 41 of 73: the rest never surface in any candidate list.
       Within a disease hg and naive Bayes are indistinguishable (P = 0.32). Expected: same candidate pool.
-      Right panel, everything pooled into one list: only hg separates from random ordering (AUC 0.58 against 0.45).
-      In the top 10,000 pooled pairs, 0.7% of the list, 4 confirmed against 0.3 expected.
+      Click 2, pooled across diseases. A different point of view: no disease chosen in advance, every candidate
+      pair from every disease in one ranked list. Only hg separates from a random ordering (AUC 0.58; naive Bayes
+      0.45). In the top 10,000 pooled pairs, 0.7% of the list, 4 confirmed against 0.3 expected.
       One genuinely prospective hit: FAAP100 for Fanconi anemia. Absent from the 2025 graph, ranked near the top on
-      mouse phenologs alone, human link first reported April 2025.
-      Next: what the ranking looks like for one disease. The second kind of test, on the genes we already know
-      (leave-one-out and precision-recall), is the first two backup slides.
+      mouse phenologs alone, human link first reported April 2025. (It was a box on this slide until round 1.)
+      Click 3. We also ran the test the earlier papers used, leave-one-out cross validation (Woods et al. 2013):
+      hide a protein family's genes, recompute, and see where they rank. That and precision-recall on known genes
+      are the backup slides.
+      Next: what the ranking looks like for one disease.
 
   - id: bbs_model
     kind: figure
@@ -433,7 +455,11 @@ slides:
       is 0.54. The bar is the sum, the additive score of Woods 2013.
       The eleven longest bars are all known genes, and 13 of the top 16 families hold one. They rise to the top
       because they sit on nearly all ten phenologs, of both kinds.
-      Right: what the ten phenotypes are. This is the same split as on the rod-cone slide.
+      Right: what the ten phenotypes are, semantically similar on top. This is the same split as on the rod-cone slide.
+      Two of the mouse ones name a term that is annotated to the disease itself in HPO: obese and Obesity, retina
+      degeneration and Retinal dystrophy (two of the disease's {bbs.phenotypes_known} HPO terms; matched by meaning, I found no
+      formal MP-to-HP mapping for them in the Monarch API). Further down the list the same holds for kidney cyst
+      (27, Multiple renal cysts), male infertility (20, Infertility) and anosmia (37, Abnormality of the sense of smell).
       Semantically similar, all mouse: retina degeneration, obese, photoreceptor outer and inner segment
       degeneration, absent sperm flagellum. That is the patient from slide 3: retinal dystrophy, obesity,
       hypogonadism. And two of them are the cilium itself: the photoreceptor outer segment is a modified cilium and
@@ -455,7 +481,8 @@ slides:
       are families by the additive score over the top ten. They agree on the known genes.
       If asked for literature on the fish phenotypes: Bardet-Biedl proteins and planar cell polarity (Ross et al.
       2005, Nature Genetics), and convergent extension defects on bbs1 knockdown in zebrafish. Check both references
-      before quoting them; the reading of the five fish phenotypes as convergent extension is mine.
+      before quoting them; the reading of the five fish phenotypes as convergent extension is mine, and since
+      round 1 it is in these notes only, not on the slide.
       Which phenotypes count as non-obvious is my labelling (`obvious` under bbs.decomposition in data.yaml), and the
       two sentences in the boxes are why_nonobvious and why_similar there.
       The gene-by-gene list of the top 25 candidates, and the paper's 20 by 20 version of this figure, are in backup.
@@ -464,9 +491,10 @@ slides:
   - id: resource
     kind: figure
     section: "Resource"
-    title: "Browse and download everything"
-    lede: "Per-disease candidate rankings for {totals.diseases_with_phenologs:,} diseases, with known and novel pairs flagged."
+    title: "Phenologs GitHub Pages website for exploration and download"
+    title_size: 24                # the title is long: 28 pt would wrap
     figure: dashboard
+    figure_dy: -0.245             # no lede: the figure sits higher, as on the "Initial results" slide
     notes: |
       About 1 minute. Show the live site if the room has network: {meta.dashboard_url}
       Every disease, human phenotype, gene, model phenotype, protein family and species has a page.
@@ -478,29 +506,33 @@ slides:
     style: navy
     label: "PART 3 · Next steps"
     title: "Future directions"
+    sub: "Pre-print available:"
+    link: "https://doi.org/{meta.doi}"
 
   - id: future
     kind: cards
     section: "Next"
-    title: "Can we leverage this large dataset in meaningful ways?"
+    title: "Can we leverage this dataset in meaningful ways?"
     title_box: [0.667, 0.318, 10.993, 1.0]      # the title box as moved by hand
     columns: 2
     cards:
       - tag: "BEYOND PROTEIN-CODING"
         head: "Non-coding RNA genes"
-        body: "PANTHER families only cover protein-coding genes. An orthology layer for ncRNAs would bring their phenotypes into reach."
+        body: "PANTHER families only cover protein-coding genes. Can we link ncRNAs using this framework to help explore this largely untapped space?"
       - tag: "VARIANT PRIORITIZATION"
         head: "A candidate table for Exomiser"
         body: "Export gene–disease scores as a table a variant prioritizer can read as prior evidence in unsolved cases."
-      - tag: "PATIENT PROFILES"
-        head: "Put the phenotype network to work"
-        body: "{totals.phenotype_phenologs:,} HPO phenologs are barely explored. Score a patient's phenotype profile against them."
-      - tag: "BACK INTO THE GRAPH"
-        head: "Phenolog edges in the Monarch KG"
-        body: "Publish phenologs and candidate pairs as edges, rebuilt with every KG release."
+      - tag: "HPO TERMS"
+        head: "Explore human gene-phenotype network results"
+        body: "{totals.phenotype_phenologs:,} HPO phenologs have not been explored. Can we score a patient's phenotypic profile against this data?"
+      - tag: "OTHERS"
+        items:
+          - "Novel hypothesis generation"
+          - "Generalized method for cross species knowledge transfer"
+          - "How many “drug” related phenotypes are there?"
     notes: |
-      About 1.5 minutes. PLACEHOLDER CONTENT: these four come from the outline and the preprint discussion;
-      edit the cards in deck.yaml once the future directions are agreed.
+      About 1.5 minutes. The cards are as edited in round 1 (2026-11-16). The "Back into the graph" card
+      (phenolog edges in the Monarch KG, rebuilt with every release) was taken out then.
       ncRNA: Phil's figure belongs on this slide or the next (not in hand yet).
       Limitations worth saying here: the method needs a seed gene on the disease, and a gene with no ortholog
       in a model species is out of reach.
@@ -542,6 +574,20 @@ slides:
     style: white
     label: "BACKUP"
     title: "Backup slides"
+
+  - id: time_split_full          # the talk's version until round 1 (2026-11-16): all 524 added pairs, broken down
+    kind: figure
+    section: "Backup"
+    title: "Can last year's graph predict this year's?"
+    lede: "Rank candidates on the 2025 graph, then check them against gene–disease pairs added by 2026."
+    figure: time_split
+    notes: |
+      Backup for the evaluation slide: where the 73 pairs come from. Disease-gene discovery is continuous, so versioned KG releases give a natural time split.
+      Rebuild phenologs and rankings on Monarch KG {meta.kg_prior}; score against pairs added by {meta.kg_release}.
+      524 pairs were added. 402 are on diseases that had no gene a year earlier: the method needs a seed, so those are
+      untestable. Of the 122 left, 49 are the same gene moving to a parent, child or sibling Mondo term (MLH1 from
+      Lynch syndrome to Lynch syndrome 1): ontology refinement, not new biology.
+      That leaves a conservative 73 genuine new pairs across 43 diseases.
 
   - id: recover_known
     kind: figure
@@ -1010,6 +1056,63 @@ slides:
       The species sit in order of divergence from human, 87 million years to about 1.3 billion.
       The dashed arcs are the only thing that connects the networks: gene orthology, from PANTHER.
       Monarch collates all of this under one data model. The question is how to use it.
+
+  - id: bbs
+    skip: true                   # round 1 (2026-11-16): merged with the old slide 4 into bbs_gaps
+    kind: figure
+    section: "The problem"
+    title: "Example complex disease: Bardet–Biedl syndrome"
+    lede: "An autosomal recessive ciliopathy: about {bbs.prevalence} people, up to {bbs.prevalence_isolated} in isolated populations."
+    figure: bbs_overview
+    notes: |
+      About 1 minute.
+      Autosomal-recessive ciliopathy, roughly {bbs.prevalence}. Retinal dystrophy, obesity, postaxial polydactyly,
+      chronic kidney disease, hypogonadism, cognitive impairment. The Monarch KG annotates {bbs.phenotypes_known} HPO phenotypes
+      to the disease, so it touches most organ systems.
+      At least 24 genes in the literature (Niederlova 2019); {bbs.known_genes} in the Monarch KG. Sequencing all of them still
+      leaves about 1 in 5 clinically diagnosed patients without an identifiable pathogenic variant
+      (Forsythe and Beales 2013; Perea-Romero 2022).
+      The list of causal and modifier genes is incomplete, so a ranked list of candidates is a clinical need here,
+      and we will come back to this disease at every step.
+
+  - id: gaps
+    skip: true                   # round 1 (2026-11-16): merged with the old slide 3 into bbs_gaps; gaps_backup is the copy in backup
+    kind: figure
+    section: "The problem"
+    title: "Model organism gene–phenotype information\nmay help fill in the gaps"
+    figure: fill_gaps
+    notes: |
+      About 1 minute. The turn from the problem to an idea for it.
+      On the left, seven model organisms, each a curated network: circles are genes, squares are the phenotypes
+      those genes give when perturbed. On the right, what we care about: human diseases and human phenotypes, the
+      terms a patient like the Bardet-Biedl patient is described with.
+      The bars: {totals.model_annotations:,} non-human gene-phenotype edges, all seven species together (the colours
+      are the species), against {human.phenotype_annotations:,} human gene-phenotype edges and only
+      {human.gene_disease_pairs:,} human gene-disease edges.
+      The core idea of phenologs: can decades of gene-phenotyping in model organisms tell us about human disease
+      biology? That is the question mark.
+      How can we leverage this information? We need a way to compare these networks across species and get
+      something meaningful out. One way has been around since 2010: next slide.
+
+  - id: eval_results_old
+    skip: true                   # round 1 (2026-11-16): the one-slide version with the three boxes on the right
+    kind: figure
+    section: "Evaluation"
+    title: "It predicts links it has never seen"
+    lede: "The top 100 candidates per disease recover 9 of {evaluation.genuine} new pairs: 23.5 times a random gene."
+    figure: eval_results_tiles
+    notes: |
+      About 2 minutes (preprint Fig. 3).
+      Left panel, per disease: recall of the 73 pairs within each disease's top N. Top 10: 2 (52x random). Top 20: 3.
+      Top 100: 9 of 73, 23.5-fold over a random gene, 95% CI 10.5 to 39.2, permutation P = 2e-4.
+      The ceiling is 41 of 73: the rest never surface in any candidate list.
+      Within a disease hg and naive Bayes are indistinguishable (P = 0.32). Expected: same candidate pool.
+      Right panel, everything pooled into one list: only hg separates from random ordering (AUC 0.58 against 0.45).
+      In the top 10,000 pooled pairs, 0.7% of the list, 4 confirmed against 0.3 expected.
+      One genuinely prospective hit: FAAP100 for Fanconi anemia. Absent from the 2025 graph, ranked near the top on
+      mouse phenologs alone, human link first reported April 2025.
+      Next: what the ranking looks like for one disease. The second kind of test, on the genes we already know
+      (leave-one-out and precision-recall), is the first two backup slides.
 
   # ------------------------------------------------------------------------------------------
   - id: end

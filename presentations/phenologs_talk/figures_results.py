@@ -108,7 +108,7 @@ def fig_then_now(D, step=None):
              ("2026", now_c, "The Monarch KG and the Biolink model harmonize the annotation sets, and PANTHER protein "
                              "families resolve gene equivalence across species.")]
     c.panel(px, 0.1, pw, 3.62)
-    c.text(px + 0.3, 0.5, "What changed underneath", size=15, weight="bold")
+    c.text(px + 0.3, 0.5, "Methodological differences", size=15, weight="bold")
     yy = 1.02
     for head, dot, body in notes:
         yy = _note(c, px + 0.3, yy, pw - 0.6, head, body, dot=dot, size=14) + 0.08
@@ -144,12 +144,14 @@ def fig_pipeline_fdr(D, step=None):
 
 
 @figure("counts", "Table of significant phenologs per model species for the disease and phenotype networks, with "
-                  "log-scale bars, and totals of 61,243 and 2,187,518.")
+                  "log-scale bars and totals of 61,243 and 2,187,518, above the 3,966 human disease phenologs of "
+                  "McGary et al. 2010. Beside it, four counts: human disease terms and human phenotype terms with at "
+                  "least one phenolog, and the model organism phenotypes linked to each.")
 def fig_counts(D, step=None):
     c = Canvas()
-    t = D.totals
+    t, m = D.totals, D.history.mcgary2010
     sp_sorted = sorted(D.species, key=lambda s: -s.disease_phenologs)
-    cx1, cx2, bw = 2.35, 5.3, 1.75
+    cx1, cx2, bw, tx1 = 2.2, 4.75, 1.5, 7.2
     c.text(cx1, 0.22, "Disease phenologs", size=13.5, weight="bold")
     c.text(cx1, 0.48, "human disease ↔ model phenotype", size=10.5, color=T.MUTED)
     c.text(cx2, 0.22, "Phenotype phenologs", size=13.5, weight="bold")
@@ -160,28 +162,46 @@ def fig_counts(D, step=None):
         c.box(x, y - 0.13, max(0.08, bw * frac), 0.26, fill=color, edge=None, r=0.05)
         c.text(x + max(0.08, bw * frac) + 0.1, y, n(v), size=12.5, weight="bold")
 
-    y = 0.98
+    y, pitch = 0.95, 0.44
     for s in sp_sorted:
         c.badge(0.24, y, s.code, s.color, r=0.17)
         c.text(0.54, y, s.common, size=13, weight="bold")
         bar(cx1, y, s.disease_phenologs, 1.0, 5.0, s.color)
         bar(cx2, y, s.phenotype_phenologs, 2.0, 6.6, s.color)
-        y += 0.47
-    c.line(0.05, y - 0.16, 8.05, y - 0.16, color=T.NAVY, lw=1.4)
+        y += pitch
+    c.line(0.05, y - 0.16, tx1, y - 0.16, color=T.NAVY, lw=1.4)
     c.text(0.1, y + 0.14, "All seven species", size=13.5, weight="bold")
     c.text(cx1, y + 0.14, n(t.disease_phenologs), size=19, weight="bold")
     c.text(cx2, y + 0.14, n(t.phenotype_phenologs), size=19, weight="bold")
-    c.text(0.1, y + 0.58, f"{t.fdr_pct}% FDR, estimated per species from {n(t.randomized_trials)} randomized networks. "
-                          "Bars are on a log scale.", size=10.5, color=T.FAINT)
 
-    px, pw = 8.45, 3.55
-    mouse_share = 100 * D.sp.mouse.disease_phenologs / t.disease_phenologs
-    leaf = 100 * t.diseases_leaf / t.diseases_with_phenologs
-    _tile(c, px, 0.1, pw, 1.5, n(t.diseases_with_phenologs), "human diseases with a phenolog",
-          f"{leaf:.0f}% are leaf terms in Mondo", fill=T.NAVY, fg=T.WHITE, sub_fg=LIGHT)
-    _tile(c, px, 1.75, pw, 1.5, n(t.model_phenotypes_with_diseases), "model phenotypes linked to a disease")
-    _tile(c, px, 3.4, pw, 1.5, f"{mouse_share:.1f}%", "of disease phenologs are mouse",
-          "the other six species supply the rest")
+    # the earlier study, for scale: its phenologs between a model organism and human disease (it had no human phenotypes)
+    then = sum(mo.phenologs_with_human for mo in m.models)
+    assert m.phenologs_human_mouse == next(mo.phenologs_with_human for mo in m.models if mo.name == "mouse")
+    y2 = y + 0.62
+    c.line(0.05, y2 - 0.26, tx1, y2 - 0.26, color=T.RULE, lw=0.8)
+    c.text(0.1, y2, m.cite, size=13.5, weight="bold", color=T.MUTED)
+    c.text(cx1, y2, n(then), size=19, weight="bold", color=T.MUTED)
+    c.text(cx1 + c.measure(n(then), 19, "bold")[0] + 0.14, y2 + 0.02, f"{len(m.models)} model species", size=10.5,
+           color=T.MUTED)
+    c.text(0.1, c.h - 0.16, f"{t.fdr_pct}% FDR, estimated per species from {n(t.randomized_trials)} randomized networks. "
+                            "Bars are on a log scale.", size=10.5, color=T.FAINT)
+
+    # how many terms on each side take part: the disease network (navy), then the same two counts for the phenotype network
+    px = 7.5
+    pw, th, gap = c.w - px, 1.1, 0.13
+    tiles = [(t.diseases_with_phenologs, "human disease terms with\n≥ 1 phenolog association", True),
+             (t.model_phenotypes_with_diseases, "model organism phenotypes\nlinked to ≥ 1 human disease", True),
+             (t.hp_terms_with_phenologs, "human phenotype terms with\n≥ 1 phenolog association", False),
+             (t.model_phenotypes_with_hp, "model organism phenotypes\nlinked to ≥ 1 human phenotype", False)]
+    num_w = max(c.measure(n(v), 28, "bold")[0] for v, _, _ in tiles)
+    cap_x = px + 0.28 + num_w + 0.28
+    size = min(c.fit(line, px + pw - 0.2 - cap_x, 12.5, "bold") for _, cap, _ in tiles for line in cap.split("\n"))
+    for i, (v, cap, disease) in enumerate(tiles):
+        ty = 0.1 + i * (th + gap)
+        c.box(px, ty, pw, th, fill=T.NAVY if disease else T.TINT, edge=None, r=0.12)
+        fg = T.WHITE if disease else T.INK
+        c.text(px + 0.28, ty + th / 2 + 0.01, n(v), size=28, weight="bold", color=fg)
+        c.text(cap_x, ty + th / 2, cap, size=size, weight="bold", color=fg, linespacing=1.25)
     return c
 
 
@@ -308,14 +328,12 @@ def fig_pooling(D, step=None):
 
     # the strip: the question the "?" column asks, and the three ways to answer it
     c.box(0.0, sy, T.FIG_W, sh, fill=T.NAVY, edge=None, r=0.14, zorder=0)
-    c.text(0.22, sy + 0.27, "?", size=13, weight="bold", color=T.ACCENT)
-    c.text(0.22 + c.measure("?", 13, "bold")[0] + 0.12, sy + 0.27, "Turn it into a score", size=12.5, weight="bold",
-           color=LIGHT)
+    c.text(0.22, sy + 0.27, "Gene scoring / ranking problem", size=12.5, weight="bold", color=LIGHT)
     big = n(b.genes_ranked)
     c.text(0.22, sy + 0.73, big, size=26, weight="bold", color=T.WHITE)
     tx = 0.22 + c.measure(big, 26, "bold")[0] + 0.18
     c.text(tx, sy + 0.62, "genes pooled for this disease", size=12.5, weight="bold", color=T.WHITE)
-    c.text(tx, sy + 0.85, "Which ones do we believe?", size=12.5, color=LIGHT)
+    c.text(tx, sy + 0.85, "Which are most likely?", size=12.5, color=LIGHT)
     pw, gap, pill_h, cy = 2.25, 0.12, 0.64, sy + sh / 2
     px = T.FIG_W - 0.22 - 3 * pw - 2 * gap
     c.arrow(px - 0.62, cy, px - 0.14, cy, color=LIGHT, lw=1.6, head=0.11)
@@ -338,49 +356,44 @@ def fig_naive_bayes(D, step=None):
     nb = 1 - float(np.prod([1 - x for x in weights]))
     add = sum(weights)
 
-    gx, gy = 1.05, 2.0
+    gx, gy = 1.05, 2.5
     g = c.pill(gx, gy, "candidate\ngene X", size=14, weight="bold", w=1.7, h=0.86, edge=T.ACCENT, fill=T.ACCENT_TINT,
                lw=2.2, r=0.26)
     c.text(gx, gy + 0.72, "an ortholog carries\nthree of the disease's\nphenologs", size=10.5, color=T.MUTED, ha="center",
            va="top")
 
-    cx, cw, ch = 2.55, 4.85, 1.02
-    ys = [0.2, 1.49, 2.78]
-    nbx, bus = 8.05, cx + cw + 0.3
+    cx, cw, ch = 2.55, 4.85, 1.3
+    ys = [0.25, 1.85, 3.45]
+    nbx, bus, rw, rh = 8.05, cx + cw + 0.3, 3.95, 2.05
+    r1, r2 = ys[0], ys[-1] + ch - rh                   # the two result boxes: top with the first card, bottom with the last
     for w, wt, y in zip(wit, weights, ys):
         sp = D.sp[w.species]
         c.scurve(g.right, gy, cx, y + ch / 2, color=T.ACCENT, lw=1.6)
         c.box(cx, y, cw, ch, fill=T.WHITE, edge=T.RULE, lw=1.3, r=0.12)
-        c.badge(cx + 0.32, y + 0.34, sp.code, sp.color, r=0.17)
-        c.text(cx + 0.6, y + 0.34, w.label, size=13, weight="bold")
-        c.text(cx + 0.14, y + 0.74, f"shares {w.c} of the disease's {w.m} families  ×  (1 − P)", size=11, color=T.MUTED)
-        c.text(cx + cw - 0.2, y + ch / 2, f"{wt:.2f}", size=21, weight="bold", ha="right", color=T.CAROLINA_DARK)
+        c.badge(cx + 0.36, y + 0.45, sp.code, sp.color, r=0.19)
+        c.text(cx + 0.68, y + 0.45, w.label, size=14.5, weight="bold")
+        c.text(cx + 0.18, y + 0.93, f"shares {w.c} of the disease's {w.m} families  ×  (1 − P)", size=12, color=T.MUTED)
+        c.text(cx + cw - 0.22, y + ch / 2, f"{wt:.2f}", size=24, weight="bold", ha="right", color=T.CAROLINA_DARK)
         c.line(cx + cw, y + ch / 2, bus, y + ch / 2, color=T.FAINT, lw=1.5)
     c.line(bus, ys[0] + ch / 2, bus, ys[-1] + ch / 2, color=T.FAINT, lw=1.5)
-    c.arrow(bus, 1.0, nbx - 0.05, 1.0, color=T.FAINT, lw=1.5)
-    c.arrow(bus, 2.98, nbx - 0.05, 2.98, color=T.FAINT, lw=1.5)
+    c.arrow(bus, r1 + rh / 2, nbx - 0.05, r1 + rh / 2, color=T.FAINT, lw=1.5)
+    c.arrow(bus, r2 + rh / 2, nbx - 0.05, r2 + rh / 2, color=T.FAINT, lw=1.5)
 
-    rw = 3.95
-    c.box(nbx, 0.2, rw, 1.6, fill=T.NAVY, edge=None, r=0.12)
-    c.text(nbx + 0.25, 0.5, "naive Bayes", size=14, weight="bold", color=T.WHITE)
-    c.text(nbx + rw - 0.25, 0.5, "McGary 2010 · Woods 2013", size=9.5, color=LIGHT, ha="right")
+    c.box(nbx, r1, rw, rh, fill=T.NAVY, edge=None, r=0.12)
+    c.text(nbx + 0.28, r1 + 0.38, "naive Bayes", size=15, weight="bold", color=T.WHITE)
+    c.text(nbx + rw - 0.28, r1 + 0.38, "McGary 2010 · Woods 2013", size=10, color=LIGHT, ha="right")
     expr = "1 − " + "".join(f"(1 − {x:.2f})" for x in weights)
-    c.text(nbx + 0.25, 0.98, expr, size=c.fit(expr, rw - 0.5, 13), color=LIGHT)
-    c.text(nbx + 0.25, 1.42, f"= {nb:.2f}", size=22, weight="bold", color=T.WHITE)
+    c.text(nbx + 0.28, r1 + 1.0, expr, size=c.fit(expr, rw - 0.56, 14), color=LIGHT)
+    c.text(nbx + 0.28, r1 + 1.58, f"= {nb:.2f}", size=26, weight="bold", color=T.WHITE)
 
-    c.box(nbx, 2.18, rw, 1.6, fill=T.WHITE, edge=T.NAVY, lw=1.5, r=0.12)
-    c.text(nbx + 0.25, 2.48, "additive", size=14, weight="bold")
-    c.text(nbx + rw - 0.25, 2.48, "Woods 2013", size=9.5, color=T.MUTED, ha="right")
-    c.text(nbx + 0.25, 2.96, " + ".join(f"{x:.2f}" for x in weights), size=13, color=T.MUTED)
-    c.text(nbx + 0.25, 3.4, f"= {add:.2f}", size=22, weight="bold")
-    c.text(nbx + 1.75, 3.42, "splits by phenolog,\nso it can be drawn", size=10, color=T.MUTED)
-
-    c.line(0.1, 4.12, 11.9, 4.12, color=T.RULE, lw=0.8)
-    c.circle(0.22, 4.42, 0.06, fill=T.NAVY, edge=None)
-    c.text(0.4, 4.42, "Each phenolog is an independent witness. The gene is a candidate unless every witness is wrong.", size=12.5)
-    c.circle(0.22, 4.8, 0.06, fill=T.ACCENT, edge=None)
-    c.text(0.4, 4.8, "Scores crowd toward 1 as phenologs are added, and a score for one disease says nothing about another.",
-           size=12.5, color=T.ACCENT, weight="bold")
+    c.box(nbx, r2, rw, rh, fill=T.WHITE, edge=T.NAVY, lw=1.5, r=0.12)
+    c.text(nbx + 0.28, r2 + 0.38, "additive", size=15, weight="bold")
+    c.text(nbx + rw - 0.28, r2 + 0.38, "Woods 2013", size=10, color=T.MUTED, ha="right")
+    c.text(nbx + 0.28, r2 + 1.0, " + ".join(f"{x:.2f}" for x in weights), size=14, color=T.MUTED)
+    total = f"= {add:.2f}"
+    c.text(nbx + 0.28, r2 + 1.58, total, size=26, weight="bold")
+    c.text(nbx + 0.28 + c.measure(total, 26, "bold")[0] + 0.3, r2 + 1.6, "visualization friendly", size=11.5,
+           color=T.MUTED)
     return c
 
 
@@ -583,6 +596,29 @@ def _marble_row(c, x, y, text, colour, r=0.075, size=11, text_color=T.MUTED, wei
     return x + 2 * r + 0.1 + tw
 
 
+def _panel_head(c, x, y, w, tag, title, size=12.5, floor=10.5):
+    """A numbered panel header that may run to two lines, split where the two lines come out most even.
+    Returns the number of lines used."""
+    c.text(x + 0.2, y + 0.28, tag, size=12.5, weight="bold", color=T.NAVY)
+    tx = x + 0.2 + c.measure(tag, 12.5, "bold")[0] + 0.12
+    room = x + w - 0.18 - tx
+    words = title.split(" ")
+    while True:
+        if c.measure(title, size, "bold")[0] <= room:
+            lines = [title]
+            break
+        splits = [(" ".join(words[:k]), " ".join(words[k:])) for k in range(1, len(words))]
+        width = lambda pair: max(c.measure(s, size, "bold")[0] for s in pair)
+        best = min(splits, key=width)
+        if width(best) <= room or size <= floor:
+            lines = list(best)
+            break
+        size -= 0.5
+    for k, line in enumerate(lines):
+        c.text(tx, y + 0.28 + 0.215 * k, line, size=size, weight="bold", color=T.MUTED)
+    return len(lines)
+
+
 @figure("marbles", "The hypergeometric score as a bag of marbles, worked through for one gene and Bardet-Biedl syndrome "
                    "in three panels. One: model organism gene-phenotype annotations drop into a bag, one marble each, "
                    "401,464 in all; the gene ARL2BP owns 36 of them. Two: the disease's 109 significant phenologs "
@@ -607,9 +643,10 @@ def fig_marbles(D, step=None):
     assert [r.rank for r in ex.phenolog_rows] == sorted(r.rank for r in ex.phenolog_rows)
 
     # 1: what goes into the bag
-    c.panel(x1, y0, w1, ph, tag="1", title="Fill a bag with marbles")
+    c.panel(x1, y0, w1, ph)
+    dy = 0.2 * (_panel_head(c, x1, y0, w1, "1", f"Pool all {len(D.species)} model organism gene–phenotype annotations together") - 1)
     cx1, mx = x1 + w1 / 2, x1 + w1 - 0.36
-    y = y0 + 0.7
+    y = y0 + 0.7 + dy
     for k, a in enumerate(ex.annotations):
         sp = D.sp[a.species]
         c.badge(x1 + 0.34, y, sp.code, sp.color, r=0.125)
@@ -637,17 +674,18 @@ def fig_marbles(D, step=None):
     _marble(c, x1 + 0.33, cap_y + 0.28, 0.075, T.ACCENT)
 
     # 2: the disease's phenologs as the paper's Fig. 1C lists them, and what they pool into
-    c.panel(x2, y0, w2, ph, tag="2", title="The disease draws from the bag")
+    c.panel(x2, y0, w2, ph)
+    dy = 0.2 * (_panel_head(c, x2, y0, w2, "2", "Sample from this bag of annotations via phenologs") - 1)
     tx2, rx2 = x2 + 0.22, x2 + w2 - 0.22
-    c.text(tx2, y0 + 0.72, b.label, size=12, weight="bold")
+    c.text(tx2, y0 + 0.72 + dy, b.label, size=12, weight="bold")
     chip_x = rx2
     for key, cnt in reversed(list(b.by_species.items())):
         sp = D.sp[key]
-        c.text(chip_x, y0 + 0.72, f"{cnt}", size=10.5, weight="bold", ha="right")
+        c.text(chip_x, y0 + 0.72 + dy, f"{cnt}", size=10.5, weight="bold", ha="right")
         chip_x -= c.measure(f"{cnt}", 10.5, "bold")[0] + 0.19
-        c.badge(chip_x, y0 + 0.72, sp.code, sp.color, r=0.115)
+        c.badge(chip_x, y0 + 0.72 + dy, sp.code, sp.color, r=0.115)
         chip_x -= 0.115 + 0.16
-    hy, pcol, mcx = y0 + 1.04, rx2 - 0.9, rx2 - 0.64
+    hy, pcol, mcx = y0 + 1.04 + dy, rx2 - 0.9, rx2 - 0.64
     c.text(tx2, hy, f"{n(b.phenologs)} significant phenologs, ranked by P", size=9.5, color=T.FAINT)
     c.text(pcol - 0.36, hy, "P", size=9.5, color=T.FAINT, ha="center")
     c.text(rx2, hy, "marbles drawn", size=9.5, color=T.FAINT, ha="right")
@@ -657,7 +695,7 @@ def fig_marbles(D, step=None):
             c.circle(x, y + dy, 0.012, fill=T.FAINT, edge=None)
 
     lab_size = min(c.fit(r.label, pcol - 0.86 - (tx2 + 0.32), 10.5, "bold") for r in ex.phenolog_rows)
-    y, prev = y0 + 1.34, None
+    y, prev = y0 + 1.34 + dy, None
     for row in ex.phenolog_rows:
         if prev is not None and row.rank != prev + 1:              # a gap in the ranked list
             vdots(tx2 + 0.12, y - 0.07)
@@ -670,7 +708,7 @@ def fig_marbles(D, step=None):
             _marble(c, mcx + k * 0.09, y, 0.042, T.ACCENT if row.get("ours") and k == 0 else OTHER_MARBLES[k + 1])
         c.text(rx2, y, n(row.marbles), size=11, weight="bold", ha="right")
         prev = row.rank
-        y += 0.3
+        y += 0.3 - dy / 8
     vdots(tx2 + 0.12, y - 0.07)
     c.text(tx2 + 0.32, y - 0.07, f"… {n(b.phenologs - len(ex.phenolog_rows))} more", size=10.5, color=T.FAINT,
            style="italic")
@@ -682,28 +720,25 @@ def fig_marbles(D, step=None):
     c.text(tx2, y + 0.76, f"{n(ex.pulled)} marbles", size=19, weight="bold")
     c.text(tx2, y + 1.09, f"spread across {n(b.genes_ranked)}", size=10.5, color=T.MUTED)
     c.text(tx2, y + 1.3, "candidate genes", size=10.5, color=T.MUTED)
-    _marble_row(c, tx2, y + 1.68, f"{ex.drawn} are {ex.gene}'s", T.ACCENT, size=11.5, text_color=T.INK, weight="bold")
+    _marble_row(c, tx2, y + 1.68, f"{ex.drawn} link to {ex.gene}", T.ACCENT, size=11.5, text_color=T.INK, weight="bold")
 
     # 3: the score, from the four numbers: the bag and the gene's share of it, the draw and the gene's share of that
-    c.panel(x3, y0, w3, ph, tag="3", title="Is that more than chance?")
+    c.panel(x3, y0, w3, ph)
+    dy = 0.2 * (_panel_head(c, x3, y0, w3, "3", "Test the significance of how often each gene shows up") - 1)
     tx, rx = x3 + 0.22, x3 + w3 - 0.22
-    y = y0 + 1.0
+    y = y0 + 1.0 + dy
     for lab, total, own in (("marbles in the bag", ex.bag, ex.own), ("marbles drawn", ex.pulled, ex.drawn)):
         c.text(tx, y, lab, size=11.5, color=T.MUTED)
         c.text(rx, y, n(total), size=13, weight="bold", ha="right")
         _marble(c, tx + 0.07, y + 0.36, 0.07, T.ACCENT)
-        c.text(tx + 0.23, y + 0.36, f"{ex.gene}'s", size=11.5)
+        c.text(tx + 0.23, y + 0.36, ex.gene, size=11.5)
         c.text(rx, y + 0.36, n(own), size=13, weight="bold", ha="right")
-        y += 1.06
-    c.line(tx, y - 0.22, rx, y - 0.22, color=T.RULE, lw=1.2)
+        y += 1.1
+    c.line(tx, y - 0.24, rx, y - 0.24, color=T.RULE, lw=1.2)
     head = f"Chance of drawing {ex.drawn} or more at random"
-    c.text(tx, y + 0.18, head, size=c.fit(head, w3 - 0.44, 11.5, "bold"), weight="bold")
-    ptxt = f"P = {_p_text(p, bold=True)}"
-    c.text(tx, y + 0.66, ptxt, size=20, weight="bold", color=T.ACCENT_DARK)
-    c.text(tx + c.measure(ptxt, 20, "bold")[0] + 0.15, y + 0.69, "the score", size=12, weight="bold", color=T.ACCENT_DARK)
-    for k, line in enumerate(("The smaller it is, the stronger the candidate.",
-                              f"{ex.gene}: rank {cand.rank} of {n(b.genes_ranked)} candidate genes.")):
-        c.text(tx, y + 1.08 + k * 0.23, line, size=c.fit(line, w3 - 0.44, 10.5), color=T.MUTED)
+    c.text(tx, y + 0.2, head, size=c.fit(head, w3 - 0.44, 11.5, "bold"), weight="bold")
+    c.text(tx, y + 0.72, f"P = {_p_text(p, bold=True)}", size=20, weight="bold", color=T.ACCENT_DARK)
+    c.text(tx, y + 1.12, "hypergeometric test", size=12, weight="bold", color=T.ACCENT_DARK)
 
     ay = y0 + ph / 2
     c.arrow(x1 + w1 + 0.04, ay, x2 - 0.04, ay, color=T.MUTED, lw=1.8, head=0.12)
@@ -784,6 +819,85 @@ def fig_marbles_two_genes(D, step=None):
 # =============================================================================================
 # 6. Evaluation
 # =============================================================================================
+@figure("time_split_simple", "How the scores were evaluated. Left: the 2025 Monarch KG, from which phenologs are computed "
+                             "and candidate genes scored, with one disease's ranked candidate list. Right: the 2026 "
+                             "Monarch KG, with the 73 evaluable gene-disease pairs added since. One of the new pairs "
+                             "is traced back to its place in the 2025 list. Below: the count taken, how many of the "
+                             "73 new pairs fall within their disease's top N candidates, for naive Bayes, "
+                             "hypergeometric and a random gene.")
+def fig_time_split_simple(D, step=None):
+    c = Canvas()
+    e, m = D.evaluation, D.meta
+    lx, rx, bw, y0, hh = 0.3, 6.8, 4.9, 0.1, 1.1
+
+    def vdots(x, y):
+        for dy in (-0.07, 0.0, 0.07):
+            c.circle(x, y + dy, 0.014, fill=T.FAINT, edge=None)
+
+    # the two versions of the graph
+    c.box(lx, y0, bw, hh, fill=T.TINT, edge=None, r=0.12)
+    c.text(lx + 0.25, y0 + 0.36, f"Monarch KG {m.kg_prior}", size=15, weight="bold")
+    a = "compute phenologs, score candidate genes per disease"
+    c.text(lx + 0.25, y0 + 0.76, a, size=c.fit(a, bw - 0.5, 12), color=T.MUTED)
+    c.box(rx, y0, bw, hh, fill=T.NAVY, edge=None, r=0.12)
+    c.text(rx + 0.25, y0 + 0.36, f"Monarch KG {m.kg_release}", size=15, weight="bold", color=T.WHITE)
+    b = f"{n(e.genuine)} evaluable gene–disease pairs added, across {n(e.genuine_diseases)} diseases"
+    c.text(rx + 0.25, y0 + 0.76, b, size=c.fit(b, bw - 0.5, 12), color=LIGHT)
+    c.arrow(lx + bw + 0.15, y0 + hh / 2 + 0.1, rx - 0.15, y0 + hh / 2 + 0.1, color=T.MUTED, lw=2.0, head=0.14)
+    c.text((lx + bw + rx) / 2, y0 + hh / 2 - 0.13, "one year", size=12.5, weight="bold", color=T.MUTED, ha="center")
+
+    # one disease's candidates in 2025, and the pairs that 2026 added
+    cy, chh, pitch = y0 + hh + 0.28, 2.42, 0.36
+    r0 = cy + 0.74
+    hot = r0 + 2 * pitch                                # the row both cards highlight
+    c.box(lx, cy, bw, chh, fill=T.WHITE, edge=T.RULE, lw=1.2, r=0.12)
+    c.text(lx + 0.25, cy + 0.31, "Candidate genes for one disease, ranked by score", size=11.5, weight="bold", color=T.MUTED)
+    hw = 2.75
+    c.box(lx + 0.2, hot - 0.15, hw, 0.3, fill=T.ACCENT_TINT, edge=T.ACCENT, lw=1.4, r=0.08)
+    for k, gene in enumerate(["gene A", "gene B", "gene C", "gene D"]):
+        y = r0 + k * pitch
+        c.text(lx + 0.4, y, str(k + 1), size=11.5, color=T.MUTED)
+        c.text(lx + 0.85, y, gene, size=12.5, weight="bold", color=T.ACCENT_DARK if y == hot else T.INK)
+    cut = r0 + 3 * pitch + 0.24
+    c.line(lx + 0.2, cut, lx + bw - 0.25, cut, color=T.MUTED, lw=1.2, ls=(0, (4, 3)), zorder=5)
+    c.text(lx + bw - 0.25, cut - 0.15, "top N candidates", size=10.5, weight="bold", color=T.MUTED, ha="right")
+    vdots(lx + 0.45, cut + 0.19)
+
+    c.box(rx, cy, bw, chh, fill=T.WHITE, edge=T.RULE, lw=1.2, r=0.12)
+    c.text(rx + 0.25, cy + 0.31, "Gene–disease pairs added by 2026", size=11.5, weight="bold", color=T.MUTED)
+    c.box(rx + 0.2, hot - 0.15, 3.35, 0.3, fill=T.ACCENT_TINT, edge=T.ACCENT, lw=1.4, r=0.08)
+    for k, (gene, dis) in enumerate([("gene K", "another disease"), ("gene R", "another disease"), ("gene C", "this disease")]):
+        y = r0 + k * pitch
+        on = y == hot
+        c.text(rx + 0.4, y, gene, size=12.5, weight="bold", color=T.ACCENT_DARK if on else T.INK)
+        c.text(rx + 1.3, y, "–", size=12.5, color=T.MUTED)
+        c.text(rx + 1.55, y, dis, size=12.5, color=T.ACCENT_DARK if on else T.MUTED, weight="bold" if on else "normal")
+    vdots(rx + 0.45, cut + 0.02)
+    c.text(rx + 0.75, cut + 0.02, f"{n(e.genuine)} pairs", size=11, color=T.FAINT, style="italic")
+
+    c.arrow(rx + 0.12, hot, lx + 0.2 + hw + 0.1, hot, color=T.ACCENT, lw=1.6, head=0.12, ls=(0, (4, 3)))
+    c.text((lx + bw + rx) / 2, hot - 0.2, "in the top N?", size=11.5, weight="bold", color=T.ACCENT_DARK, ha="center")
+
+    # what is counted, and for which scores
+    sy = cy + chh + 0.24
+    sh = c.h - sy - 0.14                                # clear of the footer under a two-line lede
+    c.box(0.0, sy, T.FIG_W, sh, fill=T.NAVY, edge=None, r=0.14, zorder=0)
+    big = n(e.genuine)
+    c.text(0.3, sy + sh / 2, big, size=28, weight="bold", color=T.WHITE)
+    tx = 0.3 + c.measure(big, 28, "bold")[0] + 0.2
+    c.text(tx, sy + sh / 2 - 0.15, "newly added gene–disease pairs", size=12.5, weight="bold", color=T.WHITE)
+    c.text(tx, sy + sh / 2 + 0.13, "How many are in their disease's top N candidates?", size=12.5, color=LIGHT)
+    pw, gap, pill_h, my = 1.9, 0.1, 0.62, sy + sh / 2
+    px = T.FIG_W - 0.2 - 3 * pw - 2 * gap
+    for i, (name, who, ours) in enumerate([("naive Bayes", "McGary 2010, Woods 2013", False),
+                                           ("hypergeometric", "this work", True), ("random gene", "for comparison", False)]):
+        x = px + i * (pw + gap)
+        c.box(x, my - pill_h / 2, pw, pill_h, fill=T.ACCENT if ours else "#24406B", edge=None, r=0.1)
+        c.text(x + 0.15, my - 0.11, name, size=12, weight="bold", color=T.WHITE)
+        c.text(x + 0.15, my + 0.14, who, size=9.5, color=T.WHITE if ours else LIGHT)
+    return c
+
+
 @figure("time_split", "Two snapshots of the Monarch KG a year apart. Of 524 gene-disease pairs added, 402 are not "
                       "testable, 49 are redundant within Mondo, and 73 are genuine new pairs used for evaluation.")
 def fig_time_split(D, step=None):
@@ -827,9 +941,48 @@ def fig_time_split(D, step=None):
     return c
 
 
-@figure("eval_results", "Published recall curves for the temporal validation, per disease and pooled, beside the "
-                        "headline numbers: 9 of 73 new pairs in the top 100, 23.5 times random, and FAAP100.")
+@figure("eval_results", "The published recall curves for the temporal validation, each under the question it answers. "
+                        "Left, within a disease: recall of the 73 new pairs within each disease's top N candidates; "
+                        "the hypergeometric score and naive Bayes perform the same. Right, pooled across diseases: "
+                        "every candidate pair in one ranked list; only the hypergeometric score beats a random "
+                        "ordering. A note says the scores were also tested by leave-one-out cross validation, after "
+                        "Woods et al. 2013.")
 def fig_eval_results(D, step=None):
+    """Three builds: 1 the per-disease panel, 2 the pooled panel beside it, 3 the cross-validation note."""
+    step = 3 if step is None else step
+    c = Canvas()
+    e, L = D.evaluation, D.history.woods2013
+    cw, gap, hh, ih = 5.85, 0.3, 0.9, 3.2
+    cols = [("fig3a", "Within a disease", "A disease gains a new gene: is it in that disease's top N candidates?",
+             f"hg and naive Bayes perform the same (P = {e.hg_vs_nb_p})"),
+            ("fig3b", "Pooled across diseases", "All diseases in one ranked list: are the new pairs near the top?",
+             f"only hg beats a random ordering (AUC {e.pooled_auc_hg} vs {e.pooled_auc_nb} for naive Bayes)")]
+    for k, (crop, head, ask, result) in enumerate(cols):
+        if k + 1 > step:
+            continue
+        x = k * (cw + gap)
+        c.box(x, 0.05, cw, hh, fill=T.TINT, edge=None, r=0.12)
+        c.text(x + 0.25, 0.33, head, size=14, weight="bold")
+        c.text(x + 0.25, 0.65, ask, size=c.fit(ask, cw - 0.5, 12), color=T.MUTED)
+        img = paper.crop(crop, CROP_DIR)
+        from PIL import Image
+        iw_, ih_ = Image.open(img).size
+        b = c.image(img, x + (cw - ih * iw_ / ih_) / 2, 0.05 + hh + 0.1, h=ih)
+        c.text(x + cw / 2, b.bottom + 0.2, result, size=c.fit(result, cw - 0.2, 12, "bold"), weight="bold", ha="center")
+    by, bh = c.h - 0.44, 0.4
+    c.text(0.05, by + bh / 2, f"hg: hypergeometric score. k = {n(D.totals.k_phenologs)} phenologs per disease, "
+                              f"{n(e.genuine)} new pairs.", size=10.5, color=T.FAINT)
+    if step >= 3:
+        x = cw + gap
+        c.box(x, by, cw, bh, fill=T.WHITE, edge=T.NAVY, lw=1.4, r=0.1)
+        note = f"Also tested by leave-one-out cross validation ({L.cite})"
+        c.text(x + cw / 2, by + bh / 2, note, size=c.fit(note, cw - 0.4, 11.5, "bold"), weight="bold", ha="center")
+    return c
+
+
+@figure("eval_results_tiles", "Published recall curves for the temporal validation, per disease and pooled, beside the "
+                              "headline numbers: 9 of 73 new pairs in the top 100, 23.5 times random, and FAAP100.")
+def fig_eval_results_tiles(D, step=None):
     c = Canvas()
     e = D.evaluation
     r100 = next(r for r in e.recall if r.n == 100)
@@ -1183,12 +1336,15 @@ def fig_bbs_decomposition(D, step=None):
     xb = xa + wa + 0.2
     wb, bgap = c.w - xb - 0.02, 0.14
     bh = (ph - bgap) / 2
-    kinds = ((False, "Non-obvious", T.ACCENT_TINT, T.ACCENT, T.ACCENT_DARK, T.INK, dec.why_nonobvious, "embryo"),
-             (True, "Semantically similar", T.WHITE, T.NAVY, T.INK, T.MUTED, dec.why_similar, ""))
+    kinds = ((True, "Semantically similar", T.WHITE, T.NAVY, T.INK, T.MUTED, dec.why_similar, ""),
+             (False, "Non-obvious", T.ACCENT_TINT, T.ACCENT, T.ACCENT_DARK, T.INK, dec.why_nonobvious, "embryo"))
     lab_w = wb - 0.7 - 0.25 - 0.45
     lab_size = min(c.fit(p.label, lab_w, 12, min_size=9.0) for p in dec.phenologs)
+    lines = [c.wrap(kd[6], wb - 0.5, 11).count("\n") + 1 for kd in kinds]
+    shift = 0.095 * (lines[1] - lines[0])               # the box with the longer sentence gets the room
+    tops, heights = (y0, y0 + bh - shift + bgap), (bh - shift, bh + shift)
     for k, (obvious, head, fill, edge, head_col, why_col, why, what) in enumerate(kinds):
-        by = y0 + k * (bh + bgap)
+        by, bh = tops[k], heights[k]
         rows = [p for p in dec.phenologs if p.obvious == obvious]
         assert len({p.species for p in rows}) == 1, "the two lists are drawn as one species each"
         sp = D.sp[rows[0].species]
@@ -1203,6 +1359,9 @@ def fig_bbs_decomposition(D, step=None):
             c.box(xb + 0.25, y - 0.095, 0.32, 0.19, fill=colour[p.rank], edge=None, r=0.03)
             c.text(xb + 0.41, y + 0.004, str(p.rank), size=9, weight="bold", color=T.WHITE, ha="center")
             c.text(xb + 0.7, y, p.label, size=lab_size)
+            if p.get("hpo"):                            # the disease's own HPO term for the same thing
+                c.text(xb + 0.7 + c.measure(p.label, lab_size)[0] + 0.16, y, f"↔ HPO: {p.hpo}", size=10,
+                       weight="bold", color=T.CAROLINA_DARK)
             c.text(xb + wb - 0.25, y, f"{p.shared}", size=12, weight="bold", ha="right")
         c.text(xb + 0.25, by + 0.68 + (len(rows) - 1) * 0.265 + 0.2, c.wrap(why, wb - 0.5, 11), size=11, color=why_col,
                va="top", linespacing=1.25)
@@ -1241,13 +1400,13 @@ def fig_dashboard(D, step=None):
 
     t = D.totals
     px, pw = 8.0, 4.0
-    c.text(px, 0.3, "In the release", size=15, weight="bold")
+    c.text(px, 0.3, "Release content", size=15, weight="bold")
     yy = 0.8
-    for head, body in [(f"{n(t.disease_phenologs)} disease phenologs", "every significant pair, with its overlap and P"),
+    for head, body in [(f"{n(t.disease_phenologs)} disease phenologs", "every significant pair and its p-value"),
                        (f"{n(t.ranked_pairs)} ranked gene–disease pairs",
-                        f"across {n(t.diseases_with_phenologs)} diseases, known and novel flagged"),
+                        f"across {n(t.diseases_with_phenologs)} diseases, known and novel labeled"),
                        (f"{n(t.phenotype_phenologs)} phenotype phenologs", "top 100 candidate genes per HPO term"),
-                       ("Parquet tables and a DuckDB one-liner", "one release per Monarch KG version")]:
+                       ("Parquet tables", "one release per Monarch KG version")]:
         yy = _note(c, px, yy, pw, head, body)
     c.box(px, 4.05, pw, 0.9, fill=T.NAVY, edge=None, r=0.12)
     c.text(px + 0.22, 4.34, D.meta.dashboard_url, size=c.fit(D.meta.dashboard_url, pw - 0.44, 12.5, "bold"), weight="bold",
