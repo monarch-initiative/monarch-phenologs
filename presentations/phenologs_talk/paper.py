@@ -26,7 +26,7 @@ CROPS = {
     "fig4abc": (13, (0.118, 0.190, 0.880, 0.368)),  # species contributions
     "fig4d": (13, (0.118, 0.388, 0.845, 0.818)),    # Carney complex additive decomposition
     "fig5": (15, (0.118, 0.262, 0.880, 0.860)),     # Bardet-Biedl additive decomposition
-    "figS3": (27, (0.090, 0.078, 0.905, 0.482)),    # FDR cutoff histogram
+    "figS3": (27, (0.090, 0.078, 0.925, 0.482)),    # FDR cutoff histogram
     "figS7ab": (35, (0.086, 0.066, 0.935, 0.468)),  # leave-one-out heatmaps
     "figS7cd": (35, (0.086, 0.482, 0.935, 0.800)),  # recall and AUPRC, hg vs nb (complete model, no genes withheld)
     "figS7c": (35, (0.086, 0.482, 0.492, 0.800)),   # recall of known genes within the top N

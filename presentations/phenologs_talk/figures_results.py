@@ -143,6 +143,30 @@ def fig_pipeline_fdr(D, step=None):
     return c
 
 
+@figure("fdr_published", "Published histogram of hypergeometric P values for human against mouse phenotype pairs: "
+                         "real data in blue and permuted networks in grey, with a dashed line at the P-value cutoff "
+                         "where permuted pairs are 5% of real ones (preprint Fig. S3). Beside it, how the cutoff is "
+                         "computed.")
+def fig_fdr_published(D, step=None):
+    c = Canvas()
+    t, mouse = D.totals, D.sp.mouse
+    b = c.image(paper.crop("figS3", CROP_DIR), 0.0, 0.05, w=7.6)
+    px = b.right + 0.4
+    pw = c.w - px
+    c.text(px, 0.3, "How the cutoff is computed", size=15, weight="bold")
+    yy = 0.85
+    for head, body in [(f"{n(t.randomized_trials)} permuted networks",
+                        "per species pair: the same tests are run again on permuted gene–phenotype links"),
+                       ("Real against permuted",
+                        "at each P-value cutoff, count the real pairs and the permuted pairs (averaged per trial) that pass"),
+                       (f"{t.fdr_pct}% FDR cutoff",
+                        f"the largest P value where permuted pairs are at most {t.fdr_pct}% of real pairs"),
+                       (f"Human vs. mouse: P ≤ {sci(mouse.p_cutoff)}",
+                        f"{n(mouse.disease_phenologs)} disease phenologs kept, realised FDR {mouse.realised_fdr}%")]:
+        yy = _note(c, px, yy, pw, head, body)
+    return c
+
+
 @figure("counts", "Table of significant phenologs per model species for the disease and phenotype networks, with "
                   "log-scale bars and totals of 61,243 and 2,187,518, above the 3,966 human disease phenologs of "
                   "McGary et al. 2010. Beside it, four counts: human disease terms and human phenotype terms with at "
@@ -629,6 +653,8 @@ def _panel_head(c, x, y, w, tag, title, size=12.5, floor=10.5):
                    "drawn, 14 of them ARL2BP's; the chance of drawing 14 or more at random, 2.0 x 10^-16, is the "
                    "score.")
 def fig_marbles(D, step=None):
+    """Three builds, one panel more each time."""
+    step = 3 if step is None else step
     c = Canvas()
     b, ex = D.bbs, D.bbs.score_example
     cand = next(g for g in b.candidates if g.gene == ex.gene)
@@ -672,6 +698,11 @@ def fig_marbles(D, step=None):
     own = c.wrap(f"{ex.gene} is associated with {ex.own} model organism phenotypes: {ex.own} marbles.", w1 - 0.78, 10.5)
     c.text(x1 + 0.5, cap_y + 0.19, own, size=10.5, color=T.MUTED, va="top", linespacing=1.25)
     _marble(c, x1 + 0.33, cap_y + 0.28, 0.075, T.ACCENT)
+
+    ay = y0 + ph / 2                                               # the arrows from one panel to the next
+    if step < 2:
+        return c
+    c.arrow(x1 + w1 + 0.04, ay, x2 - 0.04, ay, color=T.MUTED, lw=1.8, head=0.12)
 
     # 2: the disease's phenologs as the paper's Fig. 1C lists them, and what they pool into
     c.panel(x2, y0, w2, ph)
@@ -722,6 +753,10 @@ def fig_marbles(D, step=None):
     c.text(tx2, y + 1.3, "candidate genes", size=10.5, color=T.MUTED)
     _marble_row(c, tx2, y + 1.68, f"{ex.drawn} link to {ex.gene}", T.ACCENT, size=11.5, text_color=T.INK, weight="bold")
 
+    if step < 3:
+        return c
+    c.arrow(x2 + w2 + 0.04, ay, x3 - 0.04, ay, color=T.MUTED, lw=1.8, head=0.12)
+
     # 3: the score, from the four numbers: the bag and the gene's share of it, the draw and the gene's share of that
     c.panel(x3, y0, w3, ph)
     dy = 0.2 * (_panel_head(c, x3, y0, w3, "3", "Test the significance of how often each gene shows up") - 1)
@@ -739,10 +774,6 @@ def fig_marbles(D, step=None):
     c.text(tx, y + 0.2, head, size=c.fit(head, w3 - 0.44, 11.5, "bold"), weight="bold")
     c.text(tx, y + 0.72, f"P = {_p_text(p, bold=True)}", size=20, weight="bold", color=T.ACCENT_DARK)
     c.text(tx, y + 1.12, "hypergeometric test", size=12, weight="bold", color=T.ACCENT_DARK)
-
-    ay = y0 + ph / 2
-    c.arrow(x1 + w1 + 0.04, ay, x2 - 0.04, ay, color=T.MUTED, lw=1.8, head=0.12)
-    c.arrow(x2 + w2 + 0.04, ay, x3 - 0.04, ay, color=T.MUTED, lw=1.8, head=0.12)
     return c
 
 
@@ -819,82 +850,53 @@ def fig_marbles_two_genes(D, step=None):
 # =============================================================================================
 # 6. Evaluation
 # =============================================================================================
-@figure("time_split_simple", "How the scores were evaluated. Left: the 2025 Monarch KG, from which phenologs are computed "
-                             "and candidate genes scored, with one disease's ranked candidate list. Right: the 2026 "
-                             "Monarch KG, with the 73 evaluable gene-disease pairs added since. One of the new pairs "
-                             "is traced back to its place in the 2025 list. Below: the count taken, how many of the "
-                             "73 new pairs fall within their disease's top N candidates, for naive Bayes, "
-                             "hypergeometric and a random gene.")
+@figure("time_split_simple", "How the scores were evaluated. Two versions of the Monarch KG one year apart: on the 2025 "
+                             "version phenologs are computed and candidate genes scored per disease; the 2026 version "
+                             "adds new gene-disease pairs. Below: 73 newly added gene-disease pairs across 43 "
+                             "diseases can be evaluated; for each, the rank of the gene in that disease's predictions "
+                             "from one year ago. Scoring methods evaluated: naive Bayes, hypergeometric, and a random "
+                             "gene for comparison.")
 def fig_time_split_simple(D, step=None):
     c = Canvas()
     e, m = D.evaluation, D.meta
-    lx, rx, bw, y0, hh = 0.3, 6.8, 4.9, 0.1, 1.1
-
-    def vdots(x, y):
-        for dy in (-0.07, 0.0, 0.07):
-            c.circle(x, y + dy, 0.014, fill=T.FAINT, edge=None)
+    bw, y0, hh = 5.0, 0.42, 1.5
+    lx, rx = 0.0, c.w - bw
 
     # the two versions of the graph
-    c.box(lx, y0, bw, hh, fill=T.TINT, edge=None, r=0.12)
-    c.text(lx + 0.25, y0 + 0.36, f"Monarch KG {m.kg_prior}", size=15, weight="bold")
+    c.box(lx, y0, bw, hh, fill=T.TINT, edge=None, r=0.14)
+    c.text(lx + 0.32, y0 + 0.52, f"Monarch KG {m.kg_prior}", size=18, weight="bold")
     a = "compute phenologs, score candidate genes per disease"
-    c.text(lx + 0.25, y0 + 0.76, a, size=c.fit(a, bw - 0.5, 12), color=T.MUTED)
-    c.box(rx, y0, bw, hh, fill=T.NAVY, edge=None, r=0.12)
-    c.text(rx + 0.25, y0 + 0.36, f"Monarch KG {m.kg_release}", size=15, weight="bold", color=T.WHITE)
-    b = f"{n(e.genuine)} evaluable gene–disease pairs added, across {n(e.genuine_diseases)} diseases"
-    c.text(rx + 0.25, y0 + 0.76, b, size=c.fit(b, bw - 0.5, 12), color=LIGHT)
-    c.arrow(lx + bw + 0.15, y0 + hh / 2 + 0.1, rx - 0.15, y0 + hh / 2 + 0.1, color=T.MUTED, lw=2.0, head=0.14)
-    c.text((lx + bw + rx) / 2, y0 + hh / 2 - 0.13, "one year", size=12.5, weight="bold", color=T.MUTED, ha="center")
+    c.text(lx + 0.32, y0 + 1.02, a, size=c.fit(a, bw - 0.64, 13), color=T.MUTED)
+    c.box(rx, y0, bw, hh, fill=T.NAVY, edge=None, r=0.14)
+    c.text(rx + 0.32, y0 + 0.52, f"Monarch KG {m.kg_release}", size=18, weight="bold", color=T.WHITE)
+    c.text(rx + 0.32, y0 + 1.02, "newly added gene–disease pairs", size=13, color=LIGHT)
+    c.arrow(lx + bw + 0.2, y0 + hh / 2 + 0.12, rx - 0.2, y0 + hh / 2 + 0.12, color=T.MUTED, lw=2.2, head=0.15)
+    c.text(c.w / 2, y0 + hh / 2 - 0.16, "one year", size=13.5, weight="bold", color=T.MUTED, ha="center")
 
-    # one disease's candidates in 2025, and the pairs that 2026 added
-    cy, chh, pitch = y0 + hh + 0.28, 2.42, 0.36
-    r0 = cy + 0.74
-    hot = r0 + 2 * pitch                                # the row both cards highlight
-    c.box(lx, cy, bw, chh, fill=T.WHITE, edge=T.RULE, lw=1.2, r=0.12)
-    c.text(lx + 0.25, cy + 0.31, "Candidate genes for one disease, ranked by score", size=11.5, weight="bold", color=T.MUTED)
-    hw = 2.75
-    c.box(lx + 0.2, hot - 0.15, hw, 0.3, fill=T.ACCENT_TINT, edge=T.ACCENT, lw=1.4, r=0.08)
-    for k, gene in enumerate(["gene A", "gene B", "gene C", "gene D"]):
-        y = r0 + k * pitch
-        c.text(lx + 0.4, y, str(k + 1), size=11.5, color=T.MUTED)
-        c.text(lx + 0.85, y, gene, size=12.5, weight="bold", color=T.ACCENT_DARK if y == hot else T.INK)
-    cut = r0 + 3 * pitch + 0.24
-    c.line(lx + 0.2, cut, lx + bw - 0.25, cut, color=T.MUTED, lw=1.2, ls=(0, (4, 3)), zorder=5)
-    c.text(lx + bw - 0.25, cut - 0.15, "top N candidates", size=10.5, weight="bold", color=T.MUTED, ha="right")
-    vdots(lx + 0.45, cut + 0.19)
-
-    c.box(rx, cy, bw, chh, fill=T.WHITE, edge=T.RULE, lw=1.2, r=0.12)
-    c.text(rx + 0.25, cy + 0.31, "Gene–disease pairs added by 2026", size=11.5, weight="bold", color=T.MUTED)
-    c.box(rx + 0.2, hot - 0.15, 3.35, 0.3, fill=T.ACCENT_TINT, edge=T.ACCENT, lw=1.4, r=0.08)
-    for k, (gene, dis) in enumerate([("gene K", "another disease"), ("gene R", "another disease"), ("gene C", "this disease")]):
-        y = r0 + k * pitch
-        on = y == hot
-        c.text(rx + 0.4, y, gene, size=12.5, weight="bold", color=T.ACCENT_DARK if on else T.INK)
-        c.text(rx + 1.3, y, "–", size=12.5, color=T.MUTED)
-        c.text(rx + 1.55, y, dis, size=12.5, color=T.ACCENT_DARK if on else T.MUTED, weight="bold" if on else "normal")
-    vdots(rx + 0.45, cut + 0.02)
-    c.text(rx + 0.75, cut + 0.02, f"{n(e.genuine)} pairs", size=11, color=T.FAINT, style="italic")
-
-    c.arrow(rx + 0.12, hot, lx + 0.2 + hw + 0.1, hot, color=T.ACCENT, lw=1.6, head=0.12, ls=(0, (4, 3)))
-    c.text((lx + bw + rx) / 2, hot - 0.2, "in the top N?", size=11.5, weight="bold", color=T.ACCENT_DARK, ha="center")
-
-    # what is counted, and for which scores
-    sy = cy + chh + 0.24
-    sh = c.h - sy - 0.14                                # clear of the footer under a two-line lede
-    c.box(0.0, sy, T.FIG_W, sh, fill=T.NAVY, edge=None, r=0.14, zorder=0)
+    # what is compared, and the scoring methods it is done for
+    sy, sh = y0 + hh + 0.55, 2.35
+    c.box(0.0, sy, c.w, sh, fill=T.NAVY, edge=None, r=0.14, zorder=0)
+    pw, gap, pill_h = 1.85, 0.1, 0.72
+    px = c.w - 0.3 - 3 * pw - 2 * gap
     big = n(e.genuine)
-    c.text(0.3, sy + sh / 2, big, size=28, weight="bold", color=T.WHITE)
-    tx = 0.3 + c.measure(big, 28, "bold")[0] + 0.2
-    c.text(tx, sy + sh / 2 - 0.15, "newly added gene–disease pairs", size=12.5, weight="bold", color=T.WHITE)
-    c.text(tx, sy + sh / 2 + 0.13, "How many are in their disease's top N candidates?", size=12.5, color=LIGHT)
-    pw, gap, pill_h, my = 1.9, 0.1, 0.62, sy + sh / 2
-    px = T.FIG_W - 0.2 - 3 * pw - 2 * gap
+    c.text(0.4, sy + sh / 2, big, size=44, weight="bold", color=T.WHITE)
+    tx = 0.4 + c.measure(big, 44, "bold")[0] + 0.3
+    tw = px - 0.45 - tx
+    head = c.wrap(f"newly added gene–disease pairs that can be evaluated, across {n(e.genuine_diseases)} diseases", tw, 13.5, "bold")
+    sub = c.wrap("For each pair, find the rank of the gene in that disease's predictions from one year ago.", tw, 12)
+    hl, sl = head.count("\n") + 1, sub.count("\n") + 1
+    ty = sy + sh / 2 - (0.25 * hl + 0.12 + 0.22 * sl) / 2
+    c.text(tx, ty, head, size=13.5, weight="bold", color=T.WHITE, va="top", linespacing=1.25)
+    c.text(tx, ty + 0.25 * hl + 0.12, sub, size=12, color=LIGHT, va="top", linespacing=1.25)
+    c.line(px - 0.25, sy + 0.35, px - 0.25, sy + sh - 0.35, color="#3B5580", lw=1.2, zorder=3)
+    my = sy + sh / 2 + 0.2
+    c.text(px, my - pill_h / 2 - 0.28, "Scoring methods evaluated", size=12.5, weight="bold", color=T.WHITE)
     for i, (name, who, ours) in enumerate([("naive Bayes", "McGary 2010, Woods 2013", False),
                                            ("hypergeometric", "this work", True), ("random gene", "for comparison", False)]):
         x = px + i * (pw + gap)
         c.box(x, my - pill_h / 2, pw, pill_h, fill=T.ACCENT if ours else "#24406B", edge=None, r=0.1)
-        c.text(x + 0.15, my - 0.11, name, size=12, weight="bold", color=T.WHITE)
-        c.text(x + 0.15, my + 0.14, who, size=9.5, color=T.WHITE if ours else LIGHT)
+        c.text(x + 0.15, my - 0.13, name, size=12.5, weight="bold", color=T.WHITE)
+        c.text(x + 0.15, my + 0.15, who, size=9.5, color=T.WHITE if ours else LIGHT)
     return c
 
 
@@ -941,42 +943,45 @@ def fig_time_split(D, step=None):
     return c
 
 
-@figure("eval_results", "The published recall curves for the temporal validation, each under the question it answers. "
-                        "Left, within a disease: recall of the 73 new pairs within each disease's top N candidates; "
-                        "the hypergeometric score and naive Bayes perform the same. Right, pooled across diseases: "
-                        "every candidate pair in one ranked list; only the hypergeometric score beats a random "
-                        "ordering. A note says the scores were also tested by leave-one-out cross validation, after "
-                        "Woods et al. 2013.")
+@figure("eval_results", "The published recall curves for the temporal validation, each under its headline. Left, "
+                        "looking at genes within each of the 43 diseases: the top 100 candidates per disease recover "
+                        "9 of 73 new pairs, 23.5 times a random gene; the hypergeometric score and naive Bayes "
+                        "perform the same. Right, pooled across all gene-disease pairs: the top 10,000 predictions, "
+                        "0.7% of the list, recover 4 new pairs, 14 times a random ordering; the hypergeometric score "
+                        "can rank each gene-disease association across the entire set of predictions, AUC 0.58 "
+                        "against 0.45 for naive Bayes.")
 def fig_eval_results(D, step=None):
-    """Three builds: 1 the per-disease panel, 2 the pooled panel beside it, 3 the cross-validation note."""
-    step = 3 if step is None else step
-    c = Canvas()
-    e, L = D.evaluation, D.history.woods2013
-    cw, gap, hh, ih = 5.85, 0.3, 0.9, 3.2
-    cols = [("fig3a", "Within a disease", "A disease gains a new gene: is it in that disease's top N candidates?",
+    """Two builds: 1 the per-disease panel, 2 the pooled panel beside it. The slide has no lede: each panel's
+    header carries its own headline (round 2 edits)."""
+    from PIL import Image
+    step = 2 if step is None else step
+    c = Canvas(h=T.FIG_H_TALL)
+    e = D.evaluation
+    top = next(r for r in e.recall if r.n == 100)
+    bold = {"weight": "bold"}
+    cw, gap, hh, ih = 5.85, 0.3, 1.22, 3.42
+    cols = [("fig3a", f"Looking at genes within each of the {n(e.genuine_diseases)} diseases",
+             [(f"The top {top.n} candidates per disease recover", None), (f"{top.hits} of {n(e.genuine)} new pairs:", bold),
+              (f"{top.fold:g} times a random gene.", None)],
              f"hg and naive Bayes perform the same (P = {e.hg_vs_nb_p})"),
-            ("fig3b", "Pooled across diseases", "All diseases in one ranked list: are the new pairs near the top?",
-             f"only hg beats a random ordering (AUC {e.pooled_auc_hg} vs {e.pooled_auc_nb} for naive Bayes)")]
-    for k, (crop, head, ask, result) in enumerate(cols):
+            ("fig3b", "Pooled across all gene–disease pairs",
+             [(f"The top {n(e.pooled_top)} predictions ({e.pooled_top_pct}% of the list) recover", None),
+              (f"{e.pooled_hits} new pairs:", bold), (f"{e.pooled_fold:g} times a random ordering.", None)],
+             "hg can rank each gene–disease association across the entire\n"
+             f"set of predictions (AUC {e.pooled_auc_hg} vs {e.pooled_auc_nb} for naive Bayes)")]
+    for k, (crop, head, headline, result) in enumerate(cols):
         if k + 1 > step:
             continue
         x = k * (cw + gap)
         c.box(x, 0.05, cw, hh, fill=T.TINT, edge=None, r=0.12)
-        c.text(x + 0.25, 0.33, head, size=14, weight="bold")
-        c.text(x + 0.25, 0.65, ask, size=c.fit(ask, cw - 0.5, 12), color=T.MUTED)
+        c.text(x + 0.25, 0.36, head, size=c.fit(head, cw - 0.5, 14, "bold"), weight="bold")
+        c.rich(x + 0.25, 0.86, headline, cw - 0.5, size=12.5)
         img = paper.crop(crop, CROP_DIR)
-        from PIL import Image
         iw_, ih_ = Image.open(img).size
         b = c.image(img, x + (cw - ih * iw_ / ih_) / 2, 0.05 + hh + 0.1, h=ih)
-        c.text(x + cw / 2, b.bottom + 0.2, result, size=c.fit(result, cw - 0.2, 12, "bold"), weight="bold", ha="center")
-    by, bh = c.h - 0.44, 0.4
-    c.text(0.05, by + bh / 2, f"hg: hypergeometric score. k = {n(D.totals.k_phenologs)} phenologs per disease, "
-                              f"{n(e.genuine)} new pairs.", size=10.5, color=T.FAINT)
-    if step >= 3:
-        x = cw + gap
-        c.box(x, by, cw, bh, fill=T.WHITE, edge=T.NAVY, lw=1.4, r=0.1)
-        note = f"Also tested by leave-one-out cross validation ({L.cite})"
-        c.text(x + cw / 2, by + bh / 2, note, size=c.fit(note, cw - 0.4, 11.5, "bold"), weight="bold", ha="center")
+        c.text(x + cw / 2, b.bottom + 0.12, result, size=12, weight="bold", ha="center", va="top", linespacing=1.25)
+    c.text(0.05, c.h - 0.1, f"hg: hypergeometric score. k = {n(D.totals.k_phenologs)} phenologs per disease, "
+                            f"{n(e.genuine)} new pairs.", size=10, color=T.FAINT)
     return c
 
 
@@ -1276,7 +1281,23 @@ def fig_bbs_ranking(D, step=None):
     return c
 
 
-@figure("bbs_decomposition", "Two parts. Left: for Bardet-Biedl syndrome, sixteen protein families as stacked bars, one "
+# The preprint's Fig. 5 gives each phenolog a matplotlib "tab20" colour, assigned alphabetically over that figure's
+# top 20 phenologs. The ten phenologs on the talk slide are all among those twenty, so they keep the same colours.
+FIG5_COLOURS = {"gastrulation disrupted": "#ff9896", "notochord kinked": "#8c564b", "somite increased width": "#9edae5",
+                "retina degeneration": "#bcbd22", "obese": "#c49c94",
+                "anterior-posterior axis whole organism decreased length": "#ffbb78",
+                "notochord increased width": "#c5b0d5", "photoreceptor outer segment degeneration": "#f7b6d2",
+                "absent sperm flagellum": "#ff7f0e", "photoreceptor inner segment degeneration": "#e377c2"}
+
+
+def _ink_on(hex_colour):
+    """Text colour that reads on a fill: white on the dark ones, ink otherwise."""
+    r, g, b = (int(hex_colour[i:i + 2], 16) / 255 for i in (1, 3, 5))
+    return T.WHITE if 0.2126 * r + 0.7152 * g + 0.0722 * b < 0.33 else T.INK
+
+
+@figure("bbs_decomposition", "Two parts. Left, in the style of the published figure: for Bardet-Biedl syndrome, "
+                             "sixteen protein families as stacked bars on an additive score axis, one coloured "
                              "block per top-10 phenolog that carries the family; the eleven highest bars are all known "
                              "Bardet-Biedl genes (BBS7, BBS10, BBS1, BBS4 and others). Right: the ten phenologs in two "
                              "lists. Non-obvious, zebrafish embryo: gastrulation disrupted, notochord kinked, somite "
@@ -1289,55 +1310,68 @@ def fig_bbs_decomposition(D, step=None):
     phs = {p.rank: p for p in dec.phenologs}
     assert sorted(phs) == list(range(1, len(phs) + 1))
     weight = {r: p.shared / b.families * (1 - p.p) for r, p in phs.items()}      # the additive score's term
-    colour = {r: T.NAVY if p.obvious else T.ACCENT for r, p in phs.items()}
+    assert all(p.label in FIG5_COLOURS for p in dec.phenologs), "a phenolog has no colour from the preprint's Fig. 5"
+    colour = {r: FIG5_COLOURS[p.label] for r, p in phs.items()}
     order = [p.rank for p in dec.phenologs if not p.obvious] + [p.rank for p in dec.phenologs if p.obvious]
     fams = dec.families
     totals = [sum(weight[r] for r in f.ranks) for f in fams]
     assert all(t0 >= t1 - 1e-9 for t0, t1 in zip(totals, totals[1:])), "bbs.decomposition.families is not in score order"
     y0, ph = 0.05, T.FIG_H - 0.1
 
-    # a) the decomposition: one bar per protein family, one block per phenolog that carries it
+    # a) the decomposition, drawn like the preprint's Fig. 5 (round 2 edits): white ground, one colour per phenolog,
+    #    the family on the left and its genes at the end of the bar, with fewer phenologs and families than published
     xa, wa = 0.0, 6.42
-    c.panel(xa, y0, wa, ph, title=f"Top {len(phs)} phenologs, stacked by protein family (additive score)")
-    lx = xa + 0.22
-    for lab, col in (("non-obvious", T.ACCENT), ("semantically similar", T.NAVY)):
-        c.box(lx, y0 + 0.55, 0.22, 0.14, fill=col, edge=None, r=0.03)
-        c.text(lx + 0.29, y0 + 0.62, lab, size=10.5, color=T.MUTED)
-        lx += 0.29 + c.measure(lab, 10.5)[0] + 0.22
-    c.text(lx, y0 + 0.62, "number: phenolog rank", size=10.5, color=T.FAINT)
-    c.text(xa + wa - 0.22, y0 + 0.62, "bold: known gene", size=10.5, color=T.FAINT, ha="right")
+    c.box(xa + 0.01, y0, wa - 0.02, ph, fill=T.WHITE, edge=T.RULE, lw=1.2, r=0.12, zorder=0)
+    c.text(xa + 0.22, y0 + 0.3, f"Additive decomposition (top {len(phs)} phenologs, top {len(fams)} protein families)",
+           size=12.5, weight="bold")
+    c.text(xa + 0.22, y0 + 0.56, "number in a block: phenolog rank   ·   bold: known gene", size=10, color=T.FAINT)
 
-    lab_x, bar_x = xa + 1.76, xa + 1.9
-    scale = (xa + wa - 0.26 - bar_x) / totals[0]
-    row0, pitch, bar_h, gap = y0 + 0.95, 0.24, 0.18, 0.022
-    for i, f in enumerate(fams):
-        y = row0 + i * pitch
+    def names(f):
+        """A family's genes as (known, the rest): the known ones are set in bold."""
         known, other = list(f.get("known", [])), list(f.get("other", []))
         rest = f.get("n_other", len(other)) - len(other)
         tail = ", ".join(other) + (f" +{rest}" if rest else "")
-        if known and tail:
-            tail = ", " + tail
-        if tail:
-            c.text(lab_x, y, tail, size=11.5, color=T.MUTED, ha="right")
-        if known:
-            c.text(lab_x - c.measure(tail, 11.5)[0], y, ", ".join(known), size=11.5, weight="bold", ha="right")
+        return ", ".join(known), (", " + tail if known and tail else tail)
+
+    gs = 10.5
+    id_x, bar_x = xa + 1.1, xa + 1.2
+    avail = xa + wa - 0.18 - bar_x
+    scale = min((avail - 0.1 - c.measure(k, gs, "bold")[0] - c.measure(t_, gs)[0]) / tot
+                for (k, t_), tot in zip(map(names, fams), totals))
+    row0, pitch, bar_h, gap = y0 + 0.88, 0.208, 0.158, 0.018
+    axis_y = row0 + (len(fams) - 1) * pitch + pitch / 2 + 0.05
+    for tick in range(int(avail / scale) + 1):                       # the score axis, with the paper's dashed grid
+        x = bar_x + tick * scale
+        if tick:
+            c.line(x, row0 - pitch / 2, x, axis_y, color=T.RULE, lw=0.9, ls=(0, (3, 2.5)), zorder=1)
+        c.line(x, axis_y, x, axis_y + 0.05, color=T.INK, lw=0.9)
+        c.text(x, axis_y + 0.17, str(tick), size=9.5, ha="center")
+    c.line(bar_x, row0 - pitch / 2, bar_x, axis_y, color=T.INK, lw=0.9, zorder=3)
+    c.line(bar_x, axis_y, bar_x + avail, axis_y, color=T.INK, lw=0.9, zorder=3)
+    c.text(bar_x + avail / 2, axis_y + 0.38, "Additive prediction score", size=10.5, ha="center")
+    for i, f in enumerate(fams):
+        y = row0 + i * pitch
+        c.text(id_x, y, f.family, size=9, color=T.MUTED, ha="right")
         x = bar_x
         for r in order:
             if r in f.ranks:
                 w = weight[r] * scale
-                c.box(x, y - bar_h / 2, w - gap, bar_h, fill=colour[r], edge=None, r=0.025)
-                c.text(x + (w - gap) / 2, y + 0.004, str(r), size=9, weight="bold", color=T.WHITE, ha="center")
+                c.rect(x, y - bar_h / 2, w - gap, bar_h, fill=colour[r])
+                c.text(x + (w - gap) / 2, y + 0.004, str(r), size=8.5, weight="bold", color=_ink_on(colour[r]), ha="center")
                 x += w
+        known, tail = names(f)
+        c.text(x + 0.06, y, known, size=gs, weight="bold")
+        c.text(x + 0.06 + c.measure(known, gs, "bold")[0], y, tail, size=gs, color=T.MUTED)
     with_known = sum(1 for f in fams if f.get("known"))
-    yb = row0 + (len(fams) - 1) * pitch
-    c.text(xa + 0.22, yb + 0.3, f"{with_known} of the top {len(fams)} families hold a known {b.label} gene.", size=12, weight="bold")
+    c.text(xa + 0.22, y0 + ph - 0.24, f"{with_known} of the top {len(fams)} families hold a known {b.label} gene.", size=12,
+           weight="bold")
 
     # b) what the ten phenotypes are: the two kinds of counterpart, as on the rod-cone slide
     xb = xa + wa + 0.2
     wb, bgap = c.w - xb - 0.02, 0.14
     bh = (ph - bgap) / 2
     kinds = ((True, "Semantically similar", T.WHITE, T.NAVY, T.INK, T.MUTED, dec.why_similar, ""),
-             (False, "Non-obvious", T.ACCENT_TINT, T.ACCENT, T.ACCENT_DARK, T.INK, dec.why_nonobvious, "embryo"))
+             (False, "Non-obvious", T.WHITE, T.ACCENT, T.ACCENT_DARK, T.MUTED, dec.why_nonobvious, "embryo"))
     lab_w = wb - 0.7 - 0.25 - 0.45
     lab_size = min(c.fit(p.label, lab_w, 12, min_size=9.0) for p in dec.phenologs)
     lines = [c.wrap(kd[6], wb - 0.5, 11).count("\n") + 1 for kd in kinds]
@@ -1357,7 +1391,7 @@ def fig_bbs_decomposition(D, step=None):
         for j, p in enumerate(rows):
             y = by + 0.68 + j * 0.265
             c.box(xb + 0.25, y - 0.095, 0.32, 0.19, fill=colour[p.rank], edge=None, r=0.03)
-            c.text(xb + 0.41, y + 0.004, str(p.rank), size=9, weight="bold", color=T.WHITE, ha="center")
+            c.text(xb + 0.41, y + 0.004, str(p.rank), size=9, weight="bold", color=_ink_on(colour[p.rank]), ha="center")
             c.text(xb + 0.7, y, p.label, size=lab_size)
             if p.get("hpo"):                            # the disease's own HPO term for the same thing
                 c.text(xb + 0.7 + c.measure(p.label, lab_size)[0] + 0.16, y, f"↔ HPO: {p.hpo}", size=10,

@@ -92,9 +92,17 @@ PowerPoint look alike.
 - Round 1 of edits (Notion, 2026-11-16) is applied. The old slides 3 and 4 (`bbs`, `gaps`) are one slide,
   `bbs_gaps` (figure `bbs_fill_gaps`). `time_split` is a simpler drawing (`time_split_simple`) that only mentions
   the 73 evaluable pairs; the version with all 524 pairs is the first backup slide (`time_split_full`).
-  `eval_results` is three slides, each adding to the last (left plot, right plot, the cross-validation note); its
-  earlier one-slide layout is the figure `eval_results_tiles`, parked as `eval_results_old`. The "9 of 73" tile and
-  the FAAP100 box are no longer on the slide; both are in its notes.
+  The earlier one-slide layout of `eval_results` is the figure `eval_results_tiles`, parked as `eval_results_old`.
+  The FAAP100 box is no longer on the slide; it is in the notes.
+- Round 2 of edits (Notion, 2026-11-17) is applied. Five slides are shown in steps, each slide adding to the last
+  (`steps:` in `deck.yaml`, `BUILDS` in `render_figures.py`): `idea` (networks, then the worked example),
+  `kg_components` (one panel per step), `concept` (panel a, then b), `hypergeom_marbles` (one panel per step) and
+  `eval_results` (left plot, then right plot). `time_split` no longer has the ranked-list example in the middle.
+  `eval_results` has no lede: each panel's header carries its headline. Its left panel is titled "within each of
+  the 43 diseases" where the edit list said 73: the 73 new pairs fall on 43 diseases. The note about leave-one-out
+  cross validation is off the slide. `fdr_plot` (preprint Fig. S3) is a new backup slide.
+- On `bbs_gaps`, "3.5× more model organism annotations" is the non-human gene-phenotype edges over the human
+  gene-phenotype edges (the first two bars), computed in the figure.
 - On `bbs_model`, "↔ HPO" marks a mouse phenotype whose meaning matches a term annotated to the disease in HPO
   (obese and Obesity, retina degeneration and Retinal dystrophy). The match is by meaning against the disease's
   95 HPO terms from the Monarch API, not a formal MP-to-HP mapping.
@@ -107,7 +115,7 @@ PowerPoint look alike.
   problem, Bardet-Biedl with the model organism data that could fill the gap (`bbs_gaps`), the three papers (`mcgary`), the
   idea as a cartoon (`idea`); Part 1 (`kg_components`, `then_now`, `concept`, `rodcone_tree`, `counts`); Part 2
   (`pooling`, `naive_bayes`, `hypergeom_marbles`, `time_split`, `eval_results`, `bbs_model`, `resource`); Part 3
-  (`future`), `thanks`. 37 slides, 24 before the backup divider.
+  (`future`), `thanks`. 43 slides, 29 before the backup divider.
 - The lede on `bbs_model` was typed with two placeholders ("ranks below XYZ except for one at rank XYZ"). They are
   filled from `bbs.known_ranks` in `data.yaml`: 25 of the 26 known genes rank 233 or better, SCAPER is at 1,228.
 - The footer names a slide's section. It follows where the slide now sits: `bbs_gaps` says "The problem", and
@@ -122,13 +130,14 @@ PowerPoint look alike.
   `paper.py` if only one panel is wanted. The leave-one-out heatmaps (Fig. S7A and B) are the backup slide `loo`.
 - `bbs_model` (figure `bbs_decomposition`) is the slide on how well the method models one disease, and why. Left:
   the dashboard's additive decomposition for Bardet-Biedl syndrome at "top phenologs = 10", 16 protein families as
-  stacked bars. Right: the ten phenologs in two lists, semantically similar (mouse) on top and non-obvious
+  stacked bars, drawn since round 2 in the style of the preprint's Fig. 5 (white ground, family ids on the left,
+  genes at the bar ends, score axis) with that figure's colour for each phenolog (`FIG5_COLOURS`). Right: the ten phenologs in two lists, semantically similar (mouse) on top and non-obvious
   (zebrafish embryo) below, the same split as on `rodcone_tree`. Everything drawn is `bbs.decomposition` in `data.yaml`, read from the
   release's `phenologs` and `additive` tables through the dashboard's database; the block widths and bar lengths are
   computed from it. Which phenotypes are non-obvious (`obvious:`) and the two sentences in the boxes are judgement
   calls, and reading the five fish phenotypes as convergent extension is an interpretation (see the slide's notes).
   The gene-by-gene top 25 it replaced (`bbs_ranking`) is in backup.
-- Backup holds what left the main flow: `time_split_full`, `recover_known`, `precision`, `loo`, `bbs_ranking`, `additive`,
+- Backup holds what left the main flow: `fdr_plot`, `time_split_full`, `recover_known`, `precision`, `loo`, `bbs_ranking`, `additive`,
   `carney`, `top_species`, `species`, `networks`, and the old slide 4 (`gaps_backup`), as in the hand-edited deck.
 - On `idea`: the network sizes follow the 2010 association counts on a log scale; "≈ 110×" is the four model
   organisms' 210,619 associations over the 1,923 human ones; the Venn (1 | 2 | 3) and the candidate genes are from
@@ -152,7 +161,8 @@ PowerPoint look alike.
   ones is an interpretation, see its notes.
 - "Then and now" compares with McGary et al. 2010 only: Woods et al. 2013 does not state its totals. The 2010 paper
   had no human phenotype annotations, so those two rows have no "then" bar.
-- The significance slide (`fdr`) is parked, so the deck states the 5% FDR without showing how it is set.
+- The significance slide with the pipeline steps (`fdr`) is parked; the backup slide `fdr_plot` shows how the 5% FDR
+  cutoff is set, with the preprint's Fig. S3.
 - The 2010 paper's facts (`history.mcgary2010` in `data.yaml`) were read from the main text on PMC, not the supplement.
 - The score explainer is `hypergeom_marbles` (figure `marbles`): a bag of marbles in three panels, worked through
   for one real gene (ARL2BP) and Bardet-Biedl syndrome. Panel 2 is the phenolog table of the preprint's Fig. 1C with

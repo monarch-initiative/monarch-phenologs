@@ -33,7 +33,7 @@ slides:
   # ------------------------------------------------------------------------------------------
   # The talk
   # The order is the deck's as rearranged by hand on 2026-11-16 (kept in hand_edited/), with the round 1 edits
-  # from Notion ("Presentation edits round1", 2026-11-16) applied on top.
+  # from Notion ("Presentation edits round1", 2026-11-16) and round 2 (2026-11-17) applied on top.
   # ------------------------------------------------------------------------------------------
   - id: cover
     kind: cover
@@ -82,7 +82,8 @@ slides:
       genes give when perturbed.
       The bars: {totals.model_annotations:,} non-human gene-phenotype edges, all seven species together (the colours
       are the species), against {human.phenotype_annotations:,} human gene-phenotype edges and only
-      {human.gene_disease_pairs:,} human gene-disease edges.
+      {human.gene_disease_pairs:,} human gene-disease edges. The line under the question, "3.5x more model organism
+      annotations", is the first bar over the second.
       The question mark is the core idea of phenologs: can decades of gene-phenotyping in model organisms tell us
       about a human disease like this one?
       How can we leverage this information? We need a way to compare these networks across species and get
@@ -118,7 +119,11 @@ slides:
     title: "Phenologs: comparing gene-networks across species"
     lede: "Decades of model organism gene–phenotype data can be linked to human disease through gene orthology."
     figure: phenolog_idea
+    steps:                        # two slides: click through, no animation (round 2)
+      - {step: 1}                 # the species networks
+      - {step: 2}                 # + the worked example on the right, the arrow to it and the orange "48"
     notes: |
+      Two clicks: the networks first, then the example on the right.
       About 2 minutes. The idea of the 2010 paper, close to first principles. Left first, then the example.
       Left. Model organisms have decades of mutants, knockouts and screens behind them. Each species is a curated
       network: circles are genes, open squares are the phenotypes those genes give when perturbed. In 2010 that was
@@ -164,7 +169,12 @@ slides:
     section: "Phenologs on the Monarch KG"
     title: "Monarch KG for phenolog calculations"
     figure: kg_components
+    steps:                        # three slides, one panel more each time (round 2)
+      - {step: 1}                 # human networks
+      - {step: 2}                 # + model organism networks
+      - {step: 3}                 # + gene equivalence
     notes: |
+      Three clicks, one column per click.
       About 1.5 minutes. The last slide was the idea as the earlier papers laid it down. This one asks what it
       looks like in practice: which parts of the Monarch knowledge graph do we actually pull?
       Three things, one column each. Top of a column: the pattern in the graph. Middle: what is in it.
@@ -220,7 +230,11 @@ slides:
     title: "Phenologs conceptualized"
     lede: "A way to compare two different species' gene-association networks through gene orthology"
     figure: phenolog_concept
+    steps:                        # two slides (round 2)
+      - {step: 1}                 # panel a
+      - {step: 2}                 # + panel b
     notes: |
+      Two clicks: panel a, then panel b.
       About 2.5 minutes. Top half first, then the bottom half.
       Top. Two of the networks: the human gene-phenotype network
       ({human.phenotype_terms:,} HPO terms) and the mouse gene-phenotype network ({comparisons.mouse.phenotypes:,} terms). Phenologs compare them
@@ -239,7 +253,8 @@ slides:
       Guilt by association: because the link is gene overlap, it predicts. The 57 families tied to the mouse
       phenotype but not yet to the human one become candidates for rod-cone dystrophy. Those 57 families are
       {rod_cone.derivation.mouse_only_genes} mouse genes, each with one human ortholog, so {rod_cone.derivation.mouse_only_genes} human candidate genes from this one phenolog
-      ({rod_cone.derivation.mouse_only_examples} are among them). The reverse holds for the 100 human-only families and the mouse phenotype.
+      ({rod_cone.derivation.mouse_only_examples} are among them). The reverse holds for the genes within the other 100 human protein
+      families and the mouse phenotype.
       Detail if asked: {rod_cone.derivation.phenotype_genes_with_family} of the 115 mouse genes have a PANTHER family; the rest are unmapped loci.
       Numbers: dashboard, HP:0000510 against MP:0001326. Which pairs count as significant: a 5% FDR from 1,000
       randomized networks.
@@ -349,7 +364,12 @@ slides:
     title: "New scoring method: Second round hypergeometric test against backdrop of all \t\t            species gene-phenotype edges"
     title_size: 20
     figure: marbles
+    steps:                        # three slides, one panel more each time (round 2)
+      - {step: 1}
+      - {step: 2}
+      - {step: 3}
     notes: |
+      Three clicks, one panel per click.
       The main score explainer: one real gene, {bbs.score_example.gene}, worked through {bbs.label}. Every number on
       the slide is the release's own. About 2 minutes.
       1. Pool the annotations: the bag. Every gene-phenotype annotation in the seven model species is one marble:
@@ -395,46 +415,48 @@ slides:
     kind: figure
     section: "Evaluation"
     title: "Evaluation of each scoring method"
-    lede: "Predict gene–disease candidates from the 2025 version of the graph, and see how many overlap with newly added pairs from the 2026 version of the graph."
+    lede: "Compare phenolog predictions from one year ago to newly added gene–disease pairs within the Monarch KG"
+    lede_size: 16                 # one line at 16 pt; at 17 pt the last word wraps
     figure: time_split_simple
-    figure_dy: 0.094              # the lede runs to two lines
     notes: |
       About 1 minute. Disease-gene discovery is continuous, so two versions of the graph a year apart give a
       natural test.
       Compute phenologs and score candidate genes on Monarch KG {meta.kg_prior}. Then take the gene-disease pairs
-      that Monarch KG {meta.kg_release} added: {evaluation.genuine} evaluable pairs across {evaluation.genuine_diseases} diseases.
-      For each new pair, look up the gene in that disease's 2025 candidate list. The count on the next slide is how
-      many of the {evaluation.genuine} fall within the top N candidates, for naive Bayes and the hypergeometric score,
-      against a random gene.
+      that Monarch KG {meta.kg_release} added: {evaluation.genuine} of them can be evaluated, across {evaluation.genuine_diseases} diseases.
+      For each new pair, find the rank of the gene in that disease's predictions from one year ago.
+      Bottom right, the scoring methods we evaluate this way: naive Bayes (McGary 2010, Woods 2013), the
+      hypergeometric score (this work), and a random gene for comparison.
       If asked why {evaluation.genuine}: {evaluation.new_pairs} pairs were added in all. {evaluation.not_testable} are on diseases that had no gene a
       year earlier, so no phenolog could exist for them, and {evaluation.redundant} are the same gene moving to a parent, child or
-      sibling Mondo term. The breakdown is the first backup slide.
+      sibling Mondo term. The breakdown is in the backup slides.
+      Until round 2 the middle of this slide traced one new pair back to a ranked candidate list; taken off.
 
   - id: eval_results
     kind: figure
     section: "Evaluation"
-    title: "It predicts links it has never seen"
-    lede: "The top 100 candidates per disease recover 9 of {evaluation.genuine} new pairs: 23.5 times a random gene."
-    figure: eval_results
-    steps:                        # three slides, each adding to the last: click through, no animation
-      - {step: 1}                 # within a disease
-      - {step: 2}                 # + pooled across diseases
-      - {step: 3}                 # + the cross-validation note
+    title: "Can the method predict gene-disease links it has never seen?"
+    title_size: 26                # one line at 26 pt
+    figure: eval_results          # no lede: each panel's header carries its headline (round 2)
+    steps:                        # two slides: click through, no animation
+      - {step: 1}                 # within each disease
+      - {step: 2}                 # + pooled across all gene-disease pairs
     notes: |
-      About 2 minutes (preprint Fig. 3). Three clicks: the left plot, then the right plot, then the note.
-      Click 1, within a disease. The point of view: a disease is going to gain a new gene, and we ask whether that
-      gene was among the disease's top N candidates a year earlier. Recall of the 73 pairs within each disease's
-      top N. Top 10: 2 (52x random). Top 20: 3. Top 100: 9 of 73, 23.5-fold over a random gene, 95% CI 10.5 to 39.2,
-      permutation P = 2e-4. The ceiling is 41 of 73: the rest never surface in any candidate list.
+      About 2 minutes (preprint Fig. 3). Two clicks: the left plot, then the right plot.
+      Click 1, looking at genes within each of the {evaluation.genuine_diseases} diseases. The point of view: a disease is going to gain a
+      new gene, and we ask whether that gene was among the disease's top N candidates a year earlier. Recall of the
+      {evaluation.genuine} pairs within each disease's top N. Top 10: 2 (52x random). Top 20: 3. Top 100: 9 of {evaluation.genuine}, 23.5-fold
+      over a random gene, 95% CI 10.5 to 39.2, permutation P = 2e-4. The ceiling is 41 of {evaluation.genuine}: the rest never
+      surface in any candidate list.
       Within a disease hg and naive Bayes are indistinguishable (P = 0.32). Expected: same candidate pool.
-      Click 2, pooled across diseases. A different point of view: no disease chosen in advance, every candidate
-      pair from every disease in one ranked list. Only hg separates from a random ordering (AUC 0.58; naive Bayes
-      0.45). In the top 10,000 pooled pairs, 0.7% of the list, 4 confirmed against 0.3 expected.
+      The panel title says {evaluation.genuine_diseases} diseases, not {evaluation.genuine}: the {evaluation.genuine} new pairs fall on {evaluation.genuine_diseases} diseases.
+      Click 2, pooled across all gene-disease pairs. A different point of view: no disease chosen in advance, every
+      candidate pair from every disease in one ranked list. In the top 10,000 pooled pairs, 0.7% of the list,
+      4 new pairs against 0.3 expected: 14 times a random ordering. hg can rank each gene-disease association
+      across the entire set of predictions (AUC 0.58); naive Bayes cannot (0.45, below a random ordering).
       One genuinely prospective hit: FAAP100 for Fanconi anemia. Absent from the 2025 graph, ranked near the top on
-      mouse phenologs alone, human link first reported April 2025. (It was a box on this slide until round 1.)
-      Click 3. We also ran the test the earlier papers used, leave-one-out cross validation (Woods et al. 2013):
-      hide a protein family's genes, recompute, and see where they rank. That and precision-recall on known genes
-      are the backup slides.
+      mouse phenologs alone, human link first reported April 2025.
+      If asked about cross validation: leave-one-out, as in the earlier papers (Woods et al. 2013), is in the
+      supplement and the backup slides. The note saying so was taken off this slide in round 2.
       Next: what the ranking looks like for one disease.
 
   - id: bbs_model
@@ -455,6 +477,10 @@ slides:
       is 0.54. The bar is the sum, the additive score of Woods 2013.
       The eleven longest bars are all known genes, and 13 of the top 16 families hold one. They rise to the top
       because they sit on nearly all ten phenologs, of both kinds.
+      Since round 2 the left chart is drawn like the preprint's Fig. 5 (the backup slide "Additive decomposition"):
+      white ground, PANTHER family on the left, genes at the end of the bar, and the same colour per phenolog as in
+      the published figure. It shows 10 phenologs and 16 families where the paper shows 20 and 20. The coloured
+      chips in the two lists on the right are the legend.
       Right: what the ten phenotypes are, semantically similar on top. This is the same split as on the rod-cone slide.
       Two of the mouse ones name a term that is annotated to the disease itself in HPO: obese and Obesity, retina
       degeneration and Retinal dystrophy (two of the disease's {bbs.phenotypes_known} HPO terms; matched by meaning, I found no
@@ -574,6 +600,22 @@ slides:
     style: white
     label: "BACKUP"
     title: "Backup slides"
+
+  - id: fdr_plot                 # round 2 (2026-11-17): "our fdr data calculation" as a backup slide, preprint Fig. S3
+    kind: figure
+    section: "Backup"
+    title: "How we compute the cut-off P-value for the {totals.fdr_pct}% false discovery rate"
+    title_size: 24
+    figure: fdr_published
+    figure_dy: -0.245             # no lede: the figure sits higher
+    notes: |
+      Backup for "how is significance set" (preprint Fig. S3, human against mouse).
+      Blue: the P values of the real disease-phenotype pairs. Grey: the same from {totals.randomized_trials:,} permuted networks, per
+      single run. The dashed red line is the largest P value at which permuted pairs are at most {totals.fdr_pct}% of
+      real pairs, that is at least twenty times more real pairs than permuted ones.
+      For mouse: P <= 2.7e-4 keeps {sp.mouse.disease_phenologs:,} pairs; 1,959 permuted pairs pass on average, a realised FDR of {sp.mouse.realised_fdr}%.
+      The cutoff is computed separately for each species pair (McGary et al. 2010 did the same).
+      An earlier slide on this with the pipeline steps beside the plot (id fdr) is parked in deck.yaml.
 
   - id: time_split_full          # the talk's version until round 1 (2026-11-16): all 524 added pairs, broken down
     kind: figure

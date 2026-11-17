@@ -400,8 +400,8 @@ def fig_bbs_fill_gaps(D, step=None):
     c.text(0.05, c.h - 0.1, src, size=c.fit(src, lw_ - 0.1, 9, min_size=7.5), color=T.FAINT)
 
     # ---------------------------------------------------------------- right: what the model organisms hold
-    px, pw, py, ph = 6.3, c.w - 6.3, 0.05, 3.22
-    c.panel(px, py, pw, ph, title="Model organism gene–phenotype networks", title_color=T.INK)
+    px, pw, py, ph = 6.3, c.w - 6.3, 0.05, 3.12
+    c.panel(px, py, pw, ph, title="Monarch KG model organism gene–phenotype networks", title_color=T.INK)
     step_x = pw / 4
     rows = [(1.14, D.species[:4]), (2.36, D.species[4:])]
     lx = px + 3.5 * step_x - 0.38                     # legend, in the free cell at the end of the second row
@@ -444,7 +444,9 @@ def fig_bbs_fill_gaps(D, step=None):
         w = wmax * val / total
         c.box(x0, y - bh / 2, w, bh, fill=T.NAVY, edge=None, r=0.04)
         c.text(x0 + w + 0.1, y, n(val), size=12.5, weight="bold")
-    c.text(c.w, c.h - 0.2, "How can we leverage this information?", size=14, weight="bold", color=T.ACCENT_DARK, ha="right")
+    c.text(c.w, c.h - 0.43, "How can we leverage this information?", size=14, weight="bold", color=T.ACCENT_DARK, ha="right")
+    ratio = total / H.phenotype_annotations           # non-human over human gene-phenotype edges, the first two bars
+    c.text(c.w, c.h - 0.15, f"{ratio:.1f}× more model organism annotations", size=11, color=T.MUTED, ha="right")
     return c
 
 
@@ -553,6 +555,8 @@ def fig_phenolog_papers(D, step=None):
                          "in Arabidopsis (5 genes) share 2 genes; the 3 plant-only genes give candidates, and knocking "
                          "down one of them, sec23ip, in frog embryos stops neural crest cells from migrating.")
 def fig_phenolog_idea(D, step=None):
+    """Two builds: 1 the networks alone, 2 the worked example on the right, with its comparison picked out."""
+    show = step is None or step >= 2
     c = Canvas()
     rng = np.random.default_rng(3)
     m = D.history.mcgary2010
@@ -595,7 +599,7 @@ def fig_phenolog_idea(D, step=None):
              (cw - 0.95, top, "right", cap_top)]
     for mo, (x, y, ha, cap_y) in zip(m.models, spots):
         col = D.sp[mo.key].color if mo.get("key") else mo.color
-        hot = mo.name == W.model
+        hot = show and mo.name == W.model             # picked out only once the example is on the slide
         R, ng = size(m.associations[mo.name])
         G, _ = _cluster(c, x, y, R, ng, max(3, ng // 4), col, rng)
         near = sorted(G, key=lambda g: math.hypot(g[0] - hx, g[1] - hy))[:3]
@@ -635,6 +639,9 @@ def fig_phenolog_idea(D, step=None):
     c.text(hx, 4.42, ratio, size=20, weight="bold", ha="center")
     c.text(hx, 4.8, "more associations in the four\nmodel organisms than in human", size=9.5, color=T.MUTED, ha="center",
            linespacing=1.2)
+
+    if not show:
+        return c
 
     # ---- right: one comparison worked through (the paper's Fig. 4)
     px, pw, ph = cw + 0.2, c.w - cw - 0.2, c.h - 0.02
@@ -719,6 +726,8 @@ MONO = "Menlo"          # Biolink CURIEs are set in a monospace face (figures ar
                          "edges, 19,159 human genes in 7,489 protein families, and the families each species shares "
                          "with human. Under each column, the Biolink node and edge categories that select it.")
 def fig_kg_components(D, step=None):
+    """Three builds, one panel more each time: human networks, model organism networks, gene equivalence."""
+    step = 3 if step is None else step
     c = Canvas()
     H, K, B = D.human, D.kg, D.kg.biolink
     MODEL = T.CAROLINA_DARK                       # a model organism in general (the species keep their own colours)
@@ -796,6 +805,9 @@ def fig_kg_components(D, step=None):
                   (t_node(T.NAVY, False), None, B.phenotype)] +
                  [(e_line(T.NAVY), None, cat) for cat in list(B.gene_disease) + [B.gene_phenotype]])
 
+    if step < 2:
+        return c
+
     # ---- model organisms: one gene-phenotype network each
     c.panel(x2, 0, w2, ph)
     c.text(x2 + 0.2, 0.31, "Model organism networks", size=12.5, weight="bold", color=T.MUTED)
@@ -822,6 +834,9 @@ def fig_kg_components(D, step=None):
             c.text(cx, y, v, size=10.5, ha=ha)
     band(x2, w2, [(g_node(MODEL), None, B.gene), (t_node(MODEL, False), None, B.phenotype),
                   (e_line(MODEL), None, B.gene_phenotype), (None, "predicate", B.gene_phenotype_predicate)])
+
+    if step < 3:
+        return c
 
     # ---- gene equivalence: orthology edges that carry a PANTHER family
     c.panel(x3, 0, w3, ph)
@@ -860,6 +875,7 @@ def fig_kg_components(D, step=None):
                             "P = 3.8e-45, so the two are phenologs, and the 57 families seen only in mouse, 58 genes, "
                             "become candidates for the human phenotype by guilt by association.")
 def fig_phenolog_concept(D, step=None):
+    """Two builds: 1 panel a, 2 both panels."""
     c = Canvas()
     rng = np.random.default_rng(4)
     H, mouse, cm = D.human, D.sp.mouse, D.comparisons
@@ -913,6 +929,9 @@ def fig_phenolog_concept(D, step=None):
     big = f"≈ {pairs / 1e6:.0f} million"
     c.text(nx, gyt + 0.3, big, size=c.fit(big, c.w - nx - 0.1, 15, "bold"), weight="bold")
     c.text(nx, gyt + 0.55, "pairs to test", size=10, color=T.MUTED)
+
+    if step == 1:
+        return c
 
     # ------------------------------------------------------------------ b) one of those tests
     b0 = ah + 0.14
@@ -975,9 +994,10 @@ def fig_phenolog_concept(D, step=None):
     kx0 = top.right + 0.62
     c.text(kx0, ym - 0.36, f"{n(only_m)} families\n→ {n(d.mouse_only_genes)} genes", size=12.5, weight="bold",
            color=T.ACCENT_DARK, linespacing=1.2)
-    c.text(kx0, ym + 0.22, "seen only in mouse\nbecome candidates\nfor the human term", size=10, va="center", linespacing=1.25)
-    c.text(top.x, tb.bottom + 0.23, f"The reverse holds for the {n(d.families - d.shared)} human-only families.",
-           size=10, color=T.MUTED)
+    c.text(kx0, ym + 0.3, f"{n(d.mouse_only_genes)} additional\nmouse genes\nbecome candidates\nfor the human term", size=10,
+           va="center", linespacing=1.25)
+    c.text(top.x, tb.bottom + 0.23, f"The reverse holds for the genes within the\nother {n(d.families - d.shared)} human protein families.",
+           size=10, color=T.MUTED, linespacing=1.25)
     return c
 
 
