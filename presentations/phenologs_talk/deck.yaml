@@ -33,7 +33,7 @@ slides:
   # ------------------------------------------------------------------------------------------
   # The talk
   # The order is the deck's as rearranged by hand on 2026-11-16 (kept in hand_edited/), with the round 1 edits
-  # from Notion ("Presentation edits round1", 2026-11-16) and round 2 (2026-11-17) applied on top.
+  # from Notion ("Presentation edits round1", 2026-11-16) and rounds 2 and 3 (2026-11-17) applied on top.
   # ------------------------------------------------------------------------------------------
   - id: cover
     kind: cover
@@ -53,8 +53,12 @@ slides:
       no molecular diagnosis (diagnostic yield is about {problem.yield_low} to {problem.yield_high} percent, varying by cohort).
       Several reasons: the variant is hard to detect, it is found but cannot be interpreted, the gene has not been
       linked to the disease yet, or the cause is not purely genetic (environment, gene-environment interaction).
-      This talk is about the third one: we do not know all the disease genes. Many likely-monogenic diseases have
-      no causal gene at all, and diseases with many known genes can still have more.
+      This talk is about the last one: we do not know all the disease genes. Many suspected Mendelian diseases have
+      no known gene at all, and complex diseases still have incomplete gene lists (the preprint's introduction:
+      "thousands of Mendelian and complex diseases still lack a known molecular cause").
+      On "complex": the preprint also calls Bardet-Biedl syndrome a complex disease, and the next slide follows it.
+      Strictly it is a Mendelian, autosomal recessive disorder that is genetically heterogeneous (26 genes) with
+      oligogenic modifiers; "genetically heterogeneous" is the term to fall back on if someone asks.
       Where the number comes from (printed bottom left): Chung et al. 2023, Genet Med 25:100896, a meta-analysis of
       161 studies and 50,417 probands, pooled diagnostic yield 38% for exome and 34% for genome; Clark et al. 2018,
       npj Genom Med 3:16, 37 studies in children, 41% genome and 36% exome. So about 59 to 66% undiagnosed pooled.
@@ -477,10 +481,10 @@ slides:
       is 0.54. The bar is the sum, the additive score of Woods 2013.
       The eleven longest bars are all known genes, and 13 of the top 16 families hold one. They rise to the top
       because they sit on nearly all ten phenologs, of both kinds.
-      Since round 2 the left chart is drawn like the preprint's Fig. 5 (the backup slide "Additive decomposition"):
-      white ground, PANTHER family on the left, genes at the end of the bar, and the same colour per phenolog as in
-      the published figure. It shows 10 phenologs and 16 families where the paper shows 20 and 20. The coloured
-      chips in the two lists on the right are the legend.
+      The left chart is laid out like the preprint's Fig. 5 (the backup slide "Additive decomposition"): white
+      ground, PANTHER family on the left, genes at the end of the bar, a score axis. It shows 10 phenologs and 16
+      families where the paper shows 20 and 20. The blocks are in two colours, orange for non-obvious and navy for
+      semantically similar (round 3; round 2 tried the paper's one colour per phenolog, which was harder to read).
       Right: what the ten phenotypes are, semantically similar on top. This is the same split as on the rod-cone slide.
       Two of the mouse ones name a term that is annotated to the disease itself in HPO: obese and Obesity, retina
       degeneration and Retinal dystrophy (two of the disease's {bbs.phenotypes_known} HPO terms; matched by meaning, I found no

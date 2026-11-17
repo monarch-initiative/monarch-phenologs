@@ -94,6 +94,9 @@ PowerPoint look alike.
   the 73 evaluable pairs; the version with all 524 pairs is the first backup slide (`time_split_full`).
   The earlier one-slide layout of `eval_results` is the figure `eval_results_tiles`, parked as `eval_results_old`.
   The FAAP100 box is no longer on the slide; it is in the notes.
+- Round 3 (Notion, 2026-11-17): the wording of two cards on the problem slide, and the colours on `bbs_model`.
+  "Complex diseases" on the problem slide follows the preprint, which also calls Bardet-Biedl syndrome a complex
+  disease (`bbs_gaps` does the same); strictly it is Mendelian and genetically heterogeneous, see that slide's notes.
 - Round 2 of edits (Notion, 2026-11-17) is applied. Five slides are shown in steps, each slide adding to the last
   (`steps:` in `deck.yaml`, `BUILDS` in `render_figures.py`): `idea` (networks, then the worked example),
   `kg_components` (one panel per step), `concept` (panel a, then b), `hypergeom_marbles` (one panel per step) and
@@ -130,8 +133,9 @@ PowerPoint look alike.
   `paper.py` if only one panel is wanted. The leave-one-out heatmaps (Fig. S7A and B) are the backup slide `loo`.
 - `bbs_model` (figure `bbs_decomposition`) is the slide on how well the method models one disease, and why. Left:
   the dashboard's additive decomposition for Bardet-Biedl syndrome at "top phenologs = 10", 16 protein families as
-  stacked bars, drawn since round 2 in the style of the preprint's Fig. 5 (white ground, family ids on the left,
-  genes at the bar ends, score axis) with that figure's colour for each phenolog (`FIG5_COLOURS`). Right: the ten phenologs in two lists, semantically similar (mouse) on top and non-obvious
+  stacked bars, laid out since round 2 like the preprint's Fig. 5 (white ground, family ids on the left, genes at
+  the bar ends, score axis). The blocks are in two colours by kind of phenolog; round 2's one colour per phenolog
+  was dropped in round 3 as harder to read. Right: the ten phenologs in two lists, semantically similar (mouse) on top and non-obvious
   (zebrafish embryo) below, the same split as on `rodcone_tree`. Everything drawn is `bbs.decomposition` in `data.yaml`, read from the
   release's `phenologs` and `additive` tables through the dashboard's database; the block widths and bar lengths are
   computed from it. Which phenotypes are non-obvious (`obvious:`) and the two sentences in the boxes are judgement

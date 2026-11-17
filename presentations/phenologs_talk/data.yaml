@@ -31,10 +31,13 @@ problem:
   # sub may be a list: one entry per line.
   reasons:
     - head: "The variant is hard to detect"
-      sub: ["structural, non-coding, repeat expansions", "technical limitations (e.g. long-read, epigenetic)"]
+      sub: ["structural, non-coding, repeat expansions", "technical limitations"]
     - {head: "The variant can't be interpreted",         sub: "variants of uncertain significance"}
     - {head: "The cause isn't purely genetic",           sub: "environmental exposures, gene–environment interactions"}
-    - {head: "The gene isn't linked to the disease yet", sub: "many Mendelian diseases still have no known gene", focus: true}
+    # round 3: "Mendelian and complex diseases" is the pairing the preprint's introduction uses
+    - head: "The gene isn't linked to the disease yet"
+      sub: ["many suspected Mendelian diseases still have no known gene,", "and complex diseases still have incomplete gene lists"]
+      focus: true
 
 # ---------------------------------------------------------------------------------------------
 # Species, in order of divergence from human. Colours are the dashboard's (python/phenologs_release_utils.py);

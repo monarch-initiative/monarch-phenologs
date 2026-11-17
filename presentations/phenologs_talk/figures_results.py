@@ -1281,24 +1281,10 @@ def fig_bbs_ranking(D, step=None):
     return c
 
 
-# The preprint's Fig. 5 gives each phenolog a matplotlib "tab20" colour, assigned alphabetically over that figure's
-# top 20 phenologs. The ten phenologs on the talk slide are all among those twenty, so they keep the same colours.
-FIG5_COLOURS = {"gastrulation disrupted": "#ff9896", "notochord kinked": "#8c564b", "somite increased width": "#9edae5",
-                "retina degeneration": "#bcbd22", "obese": "#c49c94",
-                "anterior-posterior axis whole organism decreased length": "#ffbb78",
-                "notochord increased width": "#c5b0d5", "photoreceptor outer segment degeneration": "#f7b6d2",
-                "absent sperm flagellum": "#ff7f0e", "photoreceptor inner segment degeneration": "#e377c2"}
-
-
-def _ink_on(hex_colour):
-    """Text colour that reads on a fill: white on the dark ones, ink otherwise."""
-    r, g, b = (int(hex_colour[i:i + 2], 16) / 255 for i in (1, 3, 5))
-    return T.WHITE if 0.2126 * r + 0.7152 * g + 0.0722 * b < 0.33 else T.INK
-
-
 @figure("bbs_decomposition", "Two parts. Left, in the style of the published figure: for Bardet-Biedl syndrome, "
-                             "sixteen protein families as stacked bars on an additive score axis, one coloured "
-                             "block per top-10 phenolog that carries the family; the eleven highest bars are all known "
+                             "sixteen protein families as stacked bars on an additive score axis, one block per "
+                             "top-10 phenolog that carries the family, orange if non-obvious and navy if "
+                             "semantically similar; the eleven highest bars are all known "
                              "Bardet-Biedl genes (BBS7, BBS10, BBS1, BBS4 and others). Right: the ten phenologs in two "
                              "lists. Non-obvious, zebrafish embryo: gastrulation disrupted, notochord kinked, somite "
                              "increased width, body axis decreased length, notochord increased width. Semantically "
@@ -1310,21 +1296,26 @@ def fig_bbs_decomposition(D, step=None):
     phs = {p.rank: p for p in dec.phenologs}
     assert sorted(phs) == list(range(1, len(phs) + 1))
     weight = {r: p.shared / b.families * (1 - p.p) for r, p in phs.items()}      # the additive score's term
-    assert all(p.label in FIG5_COLOURS for p in dec.phenologs), "a phenolog has no colour from the preprint's Fig. 5"
-    colour = {r: FIG5_COLOURS[p.label] for r, p in phs.items()}
+    colour = {r: T.NAVY if p.obvious else T.ACCENT for r, p in phs.items()}     # two colours: easier to read (round 3)
     order = [p.rank for p in dec.phenologs if not p.obvious] + [p.rank for p in dec.phenologs if p.obvious]
     fams = dec.families
     totals = [sum(weight[r] for r in f.ranks) for f in fams]
     assert all(t0 >= t1 - 1e-9 for t0, t1 in zip(totals, totals[1:])), "bbs.decomposition.families is not in score order"
     y0, ph = 0.05, T.FIG_H - 0.1
 
-    # a) the decomposition, drawn like the preprint's Fig. 5 (round 2 edits): white ground, one colour per phenolog,
-    #    the family on the left and its genes at the end of the bar, with fewer phenologs and families than published
+    # a) the decomposition, laid out like the preprint's Fig. 5 (round 2): white ground, the family on the left and
+    #    its genes at the end of the bar, a score axis; fewer phenologs and families than published. The blocks are
+    #    in two colours by kind of phenolog, as before round 2, not one colour per phenolog (round 3).
     xa, wa = 0.0, 6.42
     c.box(xa + 0.01, y0, wa - 0.02, ph, fill=T.WHITE, edge=T.RULE, lw=1.2, r=0.12, zorder=0)
     c.text(xa + 0.22, y0 + 0.3, f"Additive decomposition (top {len(phs)} phenologs, top {len(fams)} protein families)",
            size=12.5, weight="bold")
-    c.text(xa + 0.22, y0 + 0.56, "number in a block: phenolog rank   ·   bold: known gene", size=10, color=T.FAINT)
+    lx = xa + 0.22
+    for lab, col in (("non-obvious", T.ACCENT), ("semantically similar", T.NAVY)):
+        c.box(lx, y0 + 0.49, 0.22, 0.14, fill=col, edge=None, r=0.03)
+        c.text(lx + 0.29, y0 + 0.56, lab, size=10.5, color=T.MUTED)
+        lx += 0.29 + c.measure(lab, 10.5)[0] + 0.22
+    c.text(xa + wa - 0.22, y0 + 0.56, "number: phenolog rank   ·   bold: known gene", size=10, color=T.FAINT, ha="right")
 
     def names(f):
         """A family's genes as (known, the rest): the known ones are set in bold."""
@@ -1357,7 +1348,7 @@ def fig_bbs_decomposition(D, step=None):
             if r in f.ranks:
                 w = weight[r] * scale
                 c.rect(x, y - bar_h / 2, w - gap, bar_h, fill=colour[r])
-                c.text(x + (w - gap) / 2, y + 0.004, str(r), size=8.5, weight="bold", color=_ink_on(colour[r]), ha="center")
+                c.text(x + (w - gap) / 2, y + 0.004, str(r), size=8.5, weight="bold", color=T.WHITE, ha="center")
                 x += w
         known, tail = names(f)
         c.text(x + 0.06, y, known, size=gs, weight="bold")
@@ -1371,7 +1362,7 @@ def fig_bbs_decomposition(D, step=None):
     wb, bgap = c.w - xb - 0.02, 0.14
     bh = (ph - bgap) / 2
     kinds = ((True, "Semantically similar", T.WHITE, T.NAVY, T.INK, T.MUTED, dec.why_similar, ""),
-             (False, "Non-obvious", T.WHITE, T.ACCENT, T.ACCENT_DARK, T.MUTED, dec.why_nonobvious, "embryo"))
+             (False, "Non-obvious", T.ACCENT_TINT, T.ACCENT, T.ACCENT_DARK, T.INK, dec.why_nonobvious, "embryo"))
     lab_w = wb - 0.7 - 0.25 - 0.45
     lab_size = min(c.fit(p.label, lab_w, 12, min_size=9.0) for p in dec.phenologs)
     lines = [c.wrap(kd[6], wb - 0.5, 11).count("\n") + 1 for kd in kinds]
@@ -1391,7 +1382,7 @@ def fig_bbs_decomposition(D, step=None):
         for j, p in enumerate(rows):
             y = by + 0.68 + j * 0.265
             c.box(xb + 0.25, y - 0.095, 0.32, 0.19, fill=colour[p.rank], edge=None, r=0.03)
-            c.text(xb + 0.41, y + 0.004, str(p.rank), size=9, weight="bold", color=_ink_on(colour[p.rank]), ha="center")
+            c.text(xb + 0.41, y + 0.004, str(p.rank), size=9, weight="bold", color=T.WHITE, ha="center")
             c.text(xb + 0.7, y, p.label, size=lab_size)
             if p.get("hpo"):                            # the disease's own HPO term for the same thing
                 c.text(xb + 0.7 + c.measure(p.label, lab_size)[0] + 0.16, y, f"↔ HPO: {p.hpo}", size=10,
